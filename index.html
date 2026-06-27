@@ -681,7 +681,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &nbsp;&bull;&nbsp; ngrdmotors@gmail.com</div></div>`;
     const keys=Object.keys(groups);
     const pages=keys.map((sup,i)=>{
-      const rows=groups[sup].map((r,n)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:6px">${n+1}</td><td style="border:1px solid #ccc;padding:6px;font-weight:600">${esc(r.part||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(r.desc)}</td><td style="border:1px solid #ccc;padding:6px">${esc(r.brand||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(r.country||'-')}</td><td style="text-align:center;border:1px solid #ccc;padding:6px">${esc(r.qty)}</td></tr>`).join('');
+      const rows=groups[sup].map((r,n)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:6px">${n+1}</td><td style="border:1px solid #ccc;padding:6px;font-weight:600">${esc(r.part||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(r.desc)}</td><td style="border:1px solid #ccc;padding:6px">${esc(r.brand||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(r.country||'-')}</td><td style="text-align:center;border:1px solid #ccc;padding:6px">${esc(r.qty)}</td><td style="border:1px solid #ccc;padding:6px;height:26px"></td><td style="border:1px solid #ccc;padding:6px"></td></tr>`).join('');
       return `<div style="page-break-after:${i<keys.length-1?'always':'auto'};padding:22px 26px;font-family:Arial,sans-serif;color:#111">
         ${head}
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px">
@@ -690,13 +690,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead><tr style="background:#0b2a4a;color:#fff">
-            <th style="padding:7px;border:1px solid #0b2a4a;width:30px">#</th>
+            <th style="padding:7px;border:1px solid #0b2a4a;width:28px">#</th>
             <th style="padding:7px;border:1px solid #0b2a4a">Part No</th>
             <th style="padding:7px;border:1px solid #0b2a4a">Item Description</th>
             <th style="padding:7px;border:1px solid #0b2a4a">Brand</th>
             <th style="padding:7px;border:1px solid #0b2a4a">Country</th>
-            <th style="padding:7px;border:1px solid #0b2a4a;width:44px">Qty</th>
-          </tr></thead><tbody>${rows}</tbody></table>
+            <th style="padding:7px;border:1px solid #0b2a4a;width:38px">Qty</th>
+            <th style="padding:7px;border:1px solid #0b2a4a;width:74px">Unit Price</th>
+            <th style="padding:7px;border:1px solid #0b2a4a;width:74px">Total</th>
+          </tr></thead><tbody>${rows}</tbody>
+          <tfoot><tr><td colspan="7" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">Grand Total</td><td style="border:1px solid #ccc;padding:8px"></td></tr></tfoot></table>
         <div style="margin-top:40px;display:flex;justify-content:space-between;font-size:12px">
           <div>__________________________<br>Authorized Signature</div>
           <div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div>
