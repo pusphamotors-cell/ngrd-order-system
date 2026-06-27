@@ -92,6 +92,15 @@
   .brow{display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid #eef1f6;font-size:13px}
   .brow:last-child{border-bottom:none}.brow .nm{flex:1;font-weight:600;min-width:0}.brow .ct{font-size:11px;color:var(--muted);white-space:nowrap}
   .brow .vl{font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .iarow{border:1px solid var(--line);border-radius:10px;margin:0 13px 8px;overflow:hidden;background:#fff}
+  .iahead{display:flex;align-items:center;gap:8px;padding:9px 11px;cursor:pointer;background:#fafbfd}
+  .iahead .ico{transition:.15s;color:var(--navy2);font-weight:800;display:inline-block}
+  .iahead.open .ico{transform:rotate(90deg)}
+  .iahead .inm{flex:1;font-size:12.5px;font-weight:600;min-width:0}
+  .iahead .ival{font-size:12px;font-weight:800;color:var(--green);white-space:nowrap}
+  .iadet{padding:10px 11px;border-top:1px solid var(--line)}
+  .iadet .fld label{font-size:9.5px}
+  .copyprev{margin-top:8px;width:100%;background:#eef1f6;border:none;border-radius:8px;padding:8px;font-size:11.5px;font-weight:700;color:var(--navy2);cursor:pointer;font-family:inherit}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -276,9 +285,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           <button class="mbtn" id="cmItems" type="button">Item-by-item cost</button>
         </div>
         <div id="costTotal" class="grid2"><div class="fld gold full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="buyIn" inputmode="decimal" placeholder="உதா: 13900"></div></div>
-        <div id="costItems" class="hide"><div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Cost (Rs)</th></tr></thead><tbody>
-          ${(p.items||[]).map((it,ix)=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td><input type="number" inputmode="decimal" class="icost" data-ix="${ix}" value="${it.cost||''}" style="width:100%;border:1px solid var(--gold);border-radius:7px;padding:6px;font-size:13px;background:#fffdf6;text-align:right"></td></tr>`).join('')}
-        </tbody></table></div></div>
+        <div id="costItems" class="hide">${itemRowsHtml(p.items)}</div>
         <div class="profitbox">
           <div class="pb sell"><div class="k">விற்றது</div><div class="v" id="pvSell">${fmt(sell)}</div></div>
           <div class="pb buy"><div class="k">வாங்கியது</div><div class="v" id="pvBuy">0</div></div>
@@ -307,13 +314,43 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('cmItems').onclick=()=>{costMode='items';$('cmItems').classList.add('on');$('cmTotal').classList.remove('on');$('costItems').classList.remove('hide');$('costTotal').classList.add('hide');recalc();};
     window._costMode=()=>costMode;
     $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);
-    Array.prototype.forEach.call(document.querySelectorAll('.icost'),el=>el.addEventListener('input',recalc));
+    wireItemCost($('costItems'),recalc);
     $('saveBtn').addEventListener('click',saveOrder);recalc();
     $('result').scrollIntoView({behavior:'smooth',block:'nearest'});
   }
   function currentBuy(){
-    if(window._costMode&&window._costMode()==='items'){let s=0;document.querySelectorAll('.icost').forEach(el=>s+=Number(el.value)||0);return s;}
+    if(window._costMode&&window._costMode()==='items'){return sumItemCost($('costItems'));}
     return Number(($('buyIn')||{}).value)||0;
+  }
+  function itemRowsHtml(items){
+    return (items||[]).map((it,ix)=>`
+      <div class="iarow">
+        <div class="iahead" data-ix="${ix}"><span class="ico">▸</span><span class="inm">${esc(it.sn)}. ${esc(it.description)}</span><span class="ival" data-iv="${ix}">${it.cost?('Rs '+fmt(it.cost)):'—'}</span></div>
+        <div class="iadet hide" data-det="${ix}">
+          <div class="grid2">
+            <div class="fld"><label>Cost (Rs)</label><input type="number" inputmode="decimal" class="itemcost" data-ix="${ix}" value="${it.cost||''}"></div>
+            <div class="fld"><label>Supplier (shop)</label><input class="itemsup" data-ix="${ix}" value="${esc(it.supplier||'')}"></div>
+            <div class="fld"><label>Brand</label><input class="itembrand" data-ix="${ix}" value="${esc(it.brand||'')}"></div>
+            <div class="fld"><label>Part No</label><input class="itempart" data-ix="${ix}" value="${esc(it.partno||'')}"></div>
+            <div class="fld"><label>Invoice No</label><input class="iteminv" data-ix="${ix}" value="${esc(it.inv_no||'')}"></div>
+            <div class="fld"><label>Invoice Date</label><input type="date" class="itemdate" data-ix="${ix}" value="${esc(it.inv_date||'')}"></div>
+          </div>
+          ${ix>0?'<button type="button" class="copyprev" data-ix="'+ix+'">⬇ மேல item-ஓட Supplier + Invoice copy (same shop)</button>':''}
+        </div>
+      </div>`).join('');
+  }
+  function sumItemCost(container){let s=0;if(container)container.querySelectorAll('.itemcost').forEach(el=>s+=Number(el.value)||0);return s;}
+  function readItemDetails(container,items){
+    return (items||[]).map((it,ix)=>{const g=cls=>{const el=container&&container.querySelector('.'+cls+'[data-ix="'+ix+'"]');return el?el.value:'';};
+      return Object.assign({},it,{cost:Number(g('itemcost'))||0,supplier:g('itemsup'),brand:g('itembrand'),partno:g('itempart'),inv_no:g('iteminv'),inv_date:g('itemdate')});});
+  }
+  function wireItemCost(container,onChange){
+    if(!container)return;
+    container.querySelectorAll('.iahead').forEach(h=>h.addEventListener('click',()=>{const ix=h.dataset.ix;const det=container.querySelector('[data-det="'+ix+'"]');h.classList.toggle('open');det.classList.toggle('hide');}));
+    container.querySelectorAll('.itemcost').forEach(el=>el.addEventListener('input',()=>{const ix=el.dataset.ix;const iv=container.querySelector('[data-iv="'+ix+'"]');if(iv)iv.textContent=el.value?('Rs '+fmt(Number(el.value)||0)):'—';if(onChange)onChange();}));
+    container.querySelectorAll('.copyprev').forEach(b=>b.addEventListener('click',()=>{const ix=+b.dataset.ix;const p=ix-1;
+      ['itemsup','iteminv','itemdate'].forEach(cls=>{const src=container.querySelector('.'+cls+'[data-ix="'+p+'"]');const dst=container.querySelector('.'+cls+'[data-ix="'+ix+'"]');if(src&&dst)dst.value=src.value;});
+    }));
   }
   function recalc(){const sell=Number($('sellIn').value)||0,buy=currentBuy();
     $('pvSell').textContent=fmt(sell);$('pvBuy').textContent=fmt(buy);
@@ -327,7 +364,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const dup=orders.find(o=>(o.order_no||'').trim().toLowerCase()===order_no.toLowerCase());
     if(dup){alert('⚠️ இந்த Order No ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\nஒரே order-க்கு ஒன்னு தான். Duplicate ஆகாது.');return;}
     const sell=Number($('sellIn').value)||0,buy=currentBuy();
-    const items=(current.items||[]).map((it,ix)=>{const el=document.querySelector('.icost[data-ix="'+ix+'"]');return Object.assign({},it,{cost:el?(Number(el.value)||0):(it.cost||0)});});
+    const items=(window._costMode&&window._costMode()==='items')?readItemDetails($('costItems'),current.items):(current.items||[]);
     const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
       items,sell,buy,profit:(buy>0?sell-buy:null),
@@ -374,7 +411,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Model',o.model)}
         ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div></div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
-      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Total</th><th class="num">Cost</th></tr></thead><tbody>${(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="ctr">${esc(it.qty)}</td><td class="num">${fmt(it.total)}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td></tr>`).join('')}</tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Total</th><th class="num">Cost</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th></tr></thead><tbody>${(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="num">${fmt(it.total)}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td><td>${esc(it.supplier||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td>${esc(it.inv_no||'—')}${it.inv_date?'<br><small>'+esc(it.inv_date)+'</small>':''}</td></tr>`).join('')}</tbody></table></div>
       <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
       <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
@@ -395,9 +432,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="mbtn ${anyCost?'on':''}" id="e_cmItems" type="button">Item-by-item</button>
       </div>
       <div id="e_costTotal" class="grid2 ${anyCost?'hide':''}"><div class="fld gold full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
-      <div id="e_costItems" class="${anyCost?'':'hide'}"><div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Cost (Rs)</th></tr></thead><tbody>
-        ${(o.items||[]).map((it,ix)=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td><input type="number" inputmode="decimal" class="e_icost" data-ix="${ix}" value="${it.cost||''}" style="width:100%;border:1px solid var(--gold);border-radius:7px;padding:6px;font-size:13px;background:#fffdf6;text-align:right"></td></tr>`).join('')}
-      </tbody></table></div></div>
+      <div id="e_costItems" class="${anyCost?'':'hide'}">${itemRowsHtml(o.items)}</div>
       <label class="toggle"><input type="checkbox" id="e_supplied" ${o.supplied?'checked':''}><span>Supply பண்ணிட்டோமா? ✓</span></label>
       <div class="grid2">
         <div class="fld"><label>Bill No</label><input id="e_billNo" value="${v(o.bill_no)}"></div>
@@ -426,10 +461,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     let eMode=(o.items||[]).some(it=>Number(it.cost)>0)?'items':'total';
     box.querySelector('#e_cmTotal').onclick=()=>{eMode='total';box.querySelector('#e_cmTotal').classList.add('on');box.querySelector('#e_cmItems').classList.remove('on');box.querySelector('#e_costTotal').classList.remove('hide');box.querySelector('#e_costItems').classList.add('hide');};
     box.querySelector('#e_cmItems').onclick=()=>{eMode='items';box.querySelector('#e_cmItems').classList.add('on');box.querySelector('#e_cmTotal').classList.remove('on');box.querySelector('#e_costItems').classList.remove('hide');box.querySelector('#e_costTotal').classList.add('hide');};
+    wireItemCost(box.querySelector('#e_costItems'),null);
     box.querySelector('#e_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
     box.querySelector('#e_save').addEventListener('click',async ()=>{
       let buy=0;
-      if(eMode==='items'){o.items=(o.items||[]).map((it,ix)=>{const el=box.querySelector('.e_icost[data-ix="'+ix+'"]');const c=el?(Number(el.value)||0):(it.cost||0);buy+=c;return Object.assign({},it,{cost:c});});}
+      if(eMode==='items'){o.items=readItemDetails(box.querySelector('#e_costItems'),o.items);buy=o.items.reduce((a,it)=>a+(Number(it.cost)||0),0);}
       else{buy=Number(box.querySelector('#e_buy').value)||0;}
       o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;
       o.supplied=box.querySelector('#e_supplied').checked;
