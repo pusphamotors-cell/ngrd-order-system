@@ -53,6 +53,7 @@
   .fld label{font-size:10.5px;font-weight:700;color:var(--navy);display:block;margin-bottom:4px}
   .fld input{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;background:#fffdf6}
   .fld input:focus{outline:none;border-color:var(--gold)}
+  .fld input[readonly]{background:#eef1f6;font-weight:800;color:var(--navy)}
   .fld select{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;background:#fffdf6}
   .fld select:focus{outline:none;border-color:var(--gold)}
   .fld.gold input{border-color:var(--gold)}
@@ -310,8 +311,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="btn gold" id="saveBtn" style="margin:13px">✅ இந்த Order-ஐ Save பண்ணு</button>
       </div>`;
     let costMode='total';
-    $('cmTotal').onclick=()=>{costMode='total';$('cmTotal').classList.add('on');$('cmItems').classList.remove('on');$('costTotal').classList.remove('hide');$('costItems').classList.add('hide');recalc();};
-    $('cmItems').onclick=()=>{costMode='items';$('cmItems').classList.add('on');$('cmTotal').classList.remove('on');$('costItems').classList.remove('hide');$('costTotal').classList.add('hide');recalc();};
+    $('cmTotal').onclick=()=>{costMode='total';$('cmTotal').classList.add('on');$('cmItems').classList.remove('on');$('costItems').classList.add('hide');$('buyIn').readOnly=false;$('buyIn').value='';recalc();};
+    $('cmItems').onclick=()=>{costMode='items';$('cmItems').classList.add('on');$('cmTotal').classList.remove('on');$('costItems').classList.remove('hide');$('buyIn').readOnly=true;recalc();};
     window._costMode=()=>costMode;
     $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);
     wireItemCost($('costItems'),recalc);
@@ -353,6 +354,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     }));
   }
   function recalc(){const sell=Number($('sellIn').value)||0,buy=currentBuy();
+    if(window._costMode&&window._costMode()==='items'&&$('buyIn'))$('buyIn').value=buy||'';
     $('pvSell').textContent=fmt(sell);$('pvBuy').textContent=fmt(buy);
     $('pvProf').textContent=buy>0?fmt(sell-buy):'—';
     $('pbProf').classList.toggle('neg',buy>0&&(sell-buy)<0);}
@@ -431,7 +433,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="mbtn ${anyCost?'':'on'}" id="e_cmTotal" type="button">மொத்த cost</button>
         <button class="mbtn ${anyCost?'on':''}" id="e_cmItems" type="button">Item-by-item</button>
       </div>
-      <div id="e_costTotal" class="grid2 ${anyCost?'hide':''}"><div class="fld gold full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
+      <div id="e_costTotal" class="grid2"><div class="fld gold full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
       <div id="e_costItems" class="${anyCost?'':'hide'}">${itemRowsHtml(o.items)}</div>
       <label class="toggle"><input type="checkbox" id="e_supplied" ${o.supplied?'checked':''}><span>Supply பண்ணிட்டோமா? ✓</span></label>
       <div class="grid2">
@@ -459,9 +461,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function wireEdit(box,o){
     let eMode=(o.items||[]).some(it=>Number(it.cost)>0)?'items':'total';
-    box.querySelector('#e_cmTotal').onclick=()=>{eMode='total';box.querySelector('#e_cmTotal').classList.add('on');box.querySelector('#e_cmItems').classList.remove('on');box.querySelector('#e_costTotal').classList.remove('hide');box.querySelector('#e_costItems').classList.add('hide');};
-    box.querySelector('#e_cmItems').onclick=()=>{eMode='items';box.querySelector('#e_cmItems').classList.add('on');box.querySelector('#e_cmTotal').classList.remove('on');box.querySelector('#e_costItems').classList.remove('hide');box.querySelector('#e_costTotal').classList.add('hide');};
-    wireItemCost(box.querySelector('#e_costItems'),null);
+    const eRecalc=()=>{if(eMode==='items'){const s=sumItemCost(box.querySelector('#e_costItems'));box.querySelector('#e_buy').value=s||'';}};
+    box.querySelector('#e_cmTotal').onclick=()=>{eMode='total';box.querySelector('#e_cmTotal').classList.add('on');box.querySelector('#e_cmItems').classList.remove('on');box.querySelector('#e_costItems').classList.add('hide');box.querySelector('#e_buy').readOnly=false;};
+    box.querySelector('#e_cmItems').onclick=()=>{eMode='items';box.querySelector('#e_cmItems').classList.add('on');box.querySelector('#e_cmTotal').classList.remove('on');box.querySelector('#e_costItems').classList.remove('hide');box.querySelector('#e_buy').readOnly=true;eRecalc();};
+    wireItemCost(box.querySelector('#e_costItems'),eRecalc);
+    if(eMode==='items'){box.querySelector('#e_buy').readOnly=true;eRecalc();}
     box.querySelector('#e_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
     box.querySelector('#e_save').addEventListener('click',async ()=>{
       let buy=0;
