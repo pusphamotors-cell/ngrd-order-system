@@ -181,7 +181,7 @@
   function profitTxt(o){const p=profitVal(o);return p===null?'—':('Rs '+fmt(p));}
   function agentRate(a){return a==='apo'?0.10:a==='clark'?0.05:0;}
   function agentName(a){return a==='apo'?'Apo (10%)':a==='clark'?'Clark (5%)':'None';}
-  function commissionVal(o){return (Number(o.sell)||0)*agentRate(o.agent);}
+  function commissionVal(o){return o.supplied?((Number(o.sell)||0)*agentRate(o.agent)):0;}
   function netProfit(o){const pv=profitVal(o);return pv===null?null:(pv-commissionVal(o));}
   let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
 
@@ -311,7 +311,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
         <button class="btn gold" id="saveBtn" style="margin:13px">✅ இந்த Order-ஐ Save பண்ணு</button>
       </div>`;
-    $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);$('agentIn').addEventListener('change',recalc);
+    $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);$('agentIn').addEventListener('change',recalc);$('supplied').addEventListener('change',recalc);
     $('saveBtn').addEventListener('click',saveOrder);recalc();
     $('result').scrollIntoView({behavior:'smooth',block:'nearest'});
   }
@@ -319,8 +319,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('pvSell').textContent=fmt(sell);$('pvBuy').textContent=fmt(buy);
     $('pvProf').textContent=buy>0?fmt(sell-buy):'—';
     $('pbProf').classList.toggle('neg',buy>0&&(sell-buy)<0);
-    const ag=($('agentIn')&&$('agentIn').value)||'none';const comm=sell*agentRate(ag);
-    if($('pvComm'))$('pvComm').textContent=fmt(comm);
+    const ag=($('agentIn')&&$('agentIn').value)||'none';const sup=$('supplied')&&$('supplied').checked;const comm=sup?sell*agentRate(ag):0;
+    if($('pvComm'))$('pvComm').textContent=sup?fmt(comm):'— (supply ஆனா)';
     if($('pvNet'))$('pvNet').textContent=buy>0?fmt((sell-buy)-comm):'—';
     if($('pbNet'))$('pbNet').classList.toggle('neg',buy>0&&((sell-buy)-comm)<0);}
 
@@ -379,7 +379,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
       <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Total</th></tr></thead><tbody>${items||''}</tbody></table></div>
       <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம் (gross)',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
-      <div class="sec">💵 Commission</div><div class="metarow">${row('Agent',agentName(o.agent))}${row('Commission',fmt(commissionVal(o)))}${row('நிஜ லாபம் (net)',netProfit(o)===null?'—':fmt(netProfit(o)))}</div>
+      <div class="sec">💵 Commission</div><div class="metarow">${row('Agent',agentName(o.agent))}${row('Commission',o.supplied?fmt(commissionVal(o)):'— (supply ஆனா)')}${row('நிஜ லாபம் (net)',netProfit(o)===null?'—':fmt(netProfit(o)))}</div>
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
       <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       <div style="padding:11px 13px;display:flex;gap:10px">
@@ -538,7 +538,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="dstat w"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்</div></div>
         <div class="dstat g"><div class="k">Paid ஆச்சு</div><div class="v">${st.d}</div><div class="s">order</div></div>
       </div>
-      <div class="dsec">💵 Commission</div>
+      <div class="dsec">💵 Commission (supply ஆன orders மட்டும்)</div>
       <div class="drow">
         <div class="dstat"><div class="k">Apo (10%)</div><div class="v">${fmt(commApo)}</div><div class="s">Rs</div></div>
         <div class="dstat"><div class="k">Clark (5%)</div><div class="v">${fmt(commClark)}</div><div class="s">Rs</div></div>
