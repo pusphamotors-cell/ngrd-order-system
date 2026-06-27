@@ -151,13 +151,17 @@
   $('pasteBox').addEventListener('input',()=>{if($('pasteBox').value.trim()){pastedImg=null;$('pastePreview').innerHTML='';}updateGo();});
 
   const PROMPT=`Extract details from this Sri Lanka Navy purchase order (PO). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
-{"order_no":"","file_no":"","naha_no":"","civil_no":"","model":"","quotation_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
+{"order_no":"","file_no":"","naha_no":"","civil_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
+
+Dates (read from the PO, do not invent):
+- po_date = the "DATE" shown at the top of the PO (e.g. 24/06/2026). This is the order date.
+- delivery_date = the date after "arrange supply of above mentioned items on or before" (e.g. 22/07/2026).
+- quotation_date = the date after "Procurement Reference Number ... Dated" (e.g. 05 June 2026).
 
 IMPORTANT - read ALL pages. The vehicle block (often on the LAST page, written in one line) contains: "Vehical No: NAHA#### Civil No <value> Vehical Type <value> Model & Type: <value> Make: <value>...". Extract from there:
 - naha_no = the "Vehical No" value (e.g. NAHA2175)
 - civil_no = the "Civil No" value (e.g. WP KQ-2647)
 - model = combine Make + Model & Type + Vehical Type into a short label (e.g. "SX4 ZXI Suzuki Car")
-- quotation_date = the date after "Procurement Reference Number ... Dated" (e.g. 05 June 2026), i.e. the date of the referenced quotation.
 buyer = the command/department at the top (e.g. Southern Naval Command - Captain Logistics Department (South)). Include ALL line items. Numbers plain, no commas. Missing text="" , missing number=0. Output only JSON.`;
 
   async function extract(){
@@ -204,15 +208,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           <div class="mc"><div class="l">Civil No</div><div class="d">${esc(p.civil_no||'—')}</div></div>
           <div class="mc"><div class="l">Vehicle / Model</div><div class="d">${esc(p.model||'—')}</div></div>
           <div class="mc"><div class="l">Quotation Date</div><div class="d">${esc(p.quotation_date||'—')}</div></div>
+          <div class="mc"><div class="l">Order Date</div><div class="d">${esc(p.po_date||'—')}</div></div>
+          <div class="mc"><div class="l">Delivery Date (on or before)</div><div class="d">${esc(p.delivery_date||'—')}</div></div>
         </div>
         <div class="sec">📦 Items (${(p.items||[]).length})</div>
         <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead><tbody>${rows||'<tr><td colspan=5 class=ctr style="padding:12px;color:#999">item இல்ல</td></tr>'}</tbody></table></div>
-
-        <div class="sec">📅 Dates</div>
-        <div class="grid2">
-          <div class="fld"><label>Received Date (order வாங்கினது)</label><input type="date" id="recDate"></div>
-          <div class="fld gold"><label>Delivery Date (1 மாசம்)</label><input type="date" id="delDate"></div>
-        </div>
 
         <div class="sec">💰 லாபம்</div>
         <div class="grid2">
@@ -243,7 +243,6 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="btn gold" id="saveBtn" style="margin:13px">✅ இந்த Order-ஐ Save பண்ணு</button>
       </div>`;
     $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);
-    $('recDate').addEventListener('change',e=>{if(!$('delDate').value)$('delDate').value=plusOneMonth(e.target.value);});
     $('saveBtn').addEventListener('click',saveOrder);recalc();
     $('result').scrollIntoView({behavior:'smooth',block:'nearest'});
   }
@@ -261,7 +260,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
       items:current.items||[],sell,buy,profit:sell-buy,
-      received_date:$('recDate').value||'',delivery_date:$('delDate').value||'',
+      order_date:current.po_date||'',delivery_date:current.delivery_date||'',
       supplied:$('supplied').checked,bill_no:$('billNo').value||'',bill_date:$('billDate').value||'',bill_amt:Number($('billAmt').value)||0,
       paid:$('paid').checked,cheque_no:$('chequeNo').value||'',pay_date:$('payDate').value||'',
       savedAt:new Date().toISOString()};
@@ -282,7 +281,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return `<div class="odetail">
       <div class="sec">📋 PO Details</div><div class="metarow">
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Model',o.model)}
-        ${row('Quotation Date',o.quotation_date)}${row('Received',o.received_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div>
+        ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div></div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
       <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Total</th></tr></thead><tbody>${items||''}</tbody></table></div>
       <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',fmt(o.buy))}${row('லாபம்',fmt(o.profit))}${row('Margin',(o.sell>0?(o.profit/o.sell*100).toFixed(1):'0')+'%')}</div>
