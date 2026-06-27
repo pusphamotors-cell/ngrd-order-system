@@ -110,11 +110,14 @@
   .gatebox input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;font-size:15px;font-family:inherit;text-align:center;margin-bottom:10px}
   .gatebox input:focus{outline:none;border-color:var(--gold)}
   .gateerr{color:var(--red);font-size:12px;margin-bottom:8px;min-height:14px}
-  body.staff [data-del]{display:none!important}
-  body.staff #tabUsers,body.staff #tabDash,body.staff #tabNew,body.staff #tabRep{display:none!important}
-  body.staff .pf{display:none!important}
-  body.staff .gcard.money{display:none!important}
-  body.staff .alert-line.payalert{display:none!important}
+  .no-del [data-del]{display:none!important}
+  .no-users #tabUsers{display:none!important}
+  .no-order #tabNew{display:none!important}
+  .no-report #tabDash,.no-report #tabRep{display:none!important}
+  .no-value #tabDash,.no-value #tabRep{display:none!important}
+  .no-value .pf{display:none!important}
+  .no-value .gcard.money{display:none!important}
+  .no-value .alert-line.payalert{display:none!important}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -215,6 +218,8 @@
         <div class="fld"><label>Password</label><input id="nuPass" placeholder="password"></div>
         <div class="fld"><label>Role</label><select id="nuRole"><option value="staff">Staff</option><option value="admin">Admin</option></select></div>
       </div>
+      <div class="sec" style="border-top:1px solid var(--line)">Permissions (Staff-க்கு மட்டும்)</div>
+      <div id="nuPerms" style="padding:4px 13px 0"></div>
       <button class="btn gold" id="nuAdd" style="margin:13px">➕ User சேர்</button>
     </div>
     <div id="userList"></div>
@@ -511,7 +516,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}}
 
   function detailHtml(o){
-    const st=isStaff();
+    const st=!can('value');const showPay=can('payment');
     const row=(l,v)=>`<div class="mc"><div class="l">${l}</div><div class="d">${esc(v||'—')}</div></div>`;
     const itemHead=st?'<th>#</th><th>Item</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th>'
                      :'<th>#</th><th>Item</th><th class="num">Total</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th>';
@@ -524,8 +529,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="tablewrap"><table><thead><tr>${itemHead}</tr></thead><tbody>${itemRows}</tbody></table></div>
       ${st?'':`<div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>`}
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row('Bill Amount',fmt(o.bill_amt))}</div>
-      ${st?'':`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
-      ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`}
+      ${showPay?`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
+      ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
       <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
         <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
@@ -535,27 +540,27 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
 
   function editForm(o){
-    const v=x=>esc(x==null?'':x);const st=isStaff();
+    const v=x=>esc(x==null?'':x);const showVal=can('value'),showPay=can('payment'),showSup=can('supply'),showPur=can('purchase');
     const anyCost=(o.items||[]).some(it=>Number(it.cost)>0);
     return `<div class="odetail">
-      <div class="sec">✏️ ${st?'Purchasing + Supply':'Edit — supply / payment / cost'}</div>
-      <div class="modetoggle" style="margin:0 13px 8px">
+      <div class="sec">✏️ Edit</div>
+      ${showPur?`<div class="modetoggle" style="margin:0 13px 8px">
         <button class="mbtn ${anyCost?'':'on'}" id="e_cmTotal" type="button">மொத்த cost</button>
         <button class="mbtn ${anyCost?'on':''}" id="e_cmItems" type="button">Item-by-item</button>
       </div>
       <div id="e_costTotal" class="grid2"><div class="fld gold full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
-      <div id="e_costItems" class="${anyCost?'':'hide'}">${itemRowsHtml(o.items)}</div>
-      <label class="toggle"><input type="checkbox" id="e_supplied" ${o.supplied?'checked':''}><span>Supply பண்ணிட்டோமா? ✓</span></label>
+      <div id="e_costItems" class="${anyCost?'':'hide'}">${itemRowsHtml(o.items)}</div>`:''}
+      ${showSup?`<label class="toggle"><input type="checkbox" id="e_supplied" ${o.supplied?'checked':''}><span>Supply பண்ணிட்டோமா? ✓</span></label>
       <div class="grid2">
         <div class="fld"><label>Bill No</label><input id="e_billNo" value="${v(o.bill_no)}"></div>
         <div class="fld"><label>Bill Date</label><input type="date" id="e_billDate" value="${v(o.bill_date)}"></div>
-        ${st?'':'<div class="fld full"><label>Bill Amount (Rs)</label><input type="number" id="e_billAmt" inputmode="decimal" value="'+(o.bill_amt||'')+'"></div>'}
-      </div>
-      ${st?'':`<label class="toggle"><input type="checkbox" id="e_paid" ${o.paid?'checked':''}><span>Payment வந்துடுச்சா? ✓</span></label>
+        ${showVal?'<div class="fld full"><label>Bill Amount (Rs)</label><input type="number" id="e_billAmt" inputmode="decimal" value="'+(o.bill_amt||'')+'"></div>':''}
+      </div>`:''}
+      ${showPay?`<label class="toggle"><input type="checkbox" id="e_paid" ${o.paid?'checked':''}><span>Payment வந்துடுச்சா? ✓</span></label>
       <div class="grid2">
         <div class="fld"><label>Cheque No</label><input id="e_chequeNo" value="${v(o.cheque_no)}"></div>
         <div class="fld"><label>Payment Date</label><input type="date" id="e_payDate" value="${v(o.pay_date)}"></div>
-      </div>`}
+      </div>`:''}
       <div style="padding:0 13px 13px;display:flex;gap:10px">
         <button class="btn" id="e_cancel" style="margin-top:0;flex:1;background:#7a8295">Cancel</button>
         <button class="btn gold" id="e_save" style="margin-top:0;flex:2">💾 Save</button>
@@ -573,19 +578,21 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function wireEdit(box,o){
     let eMode=(o.items||[]).some(it=>Number(it.cost)>0)?'items':'total';
-    const eRecalc=()=>{if(eMode==='items'){const s=sumItemCost(box.querySelector('#e_costItems'));box.querySelector('#e_buy').value=s||'';}};
-    box.querySelector('#e_cmTotal').onclick=()=>{eMode='total';box.querySelector('#e_cmTotal').classList.add('on');box.querySelector('#e_cmItems').classList.remove('on');box.querySelector('#e_costItems').classList.add('hide');box.querySelector('#e_buy').readOnly=false;};
-    box.querySelector('#e_cmItems').onclick=()=>{eMode='items';box.querySelector('#e_cmItems').classList.add('on');box.querySelector('#e_cmTotal').classList.remove('on');box.querySelector('#e_costItems').classList.remove('hide');box.querySelector('#e_buy').readOnly=true;eRecalc();};
-    wireItemCost(box.querySelector('#e_costItems'),eRecalc);
-    if(eMode==='items'){box.querySelector('#e_buy').readOnly=true;eRecalc();}
+    const hasPur=!!box.querySelector('#e_cmTotal');
+    const eRecalc=()=>{if(eMode==='items'){const ci=box.querySelector('#e_costItems');const s=sumItemCost(ci);const eb=box.querySelector('#e_buy');if(eb)eb.value=s||'';}};
+    if(hasPur){
+      box.querySelector('#e_cmTotal').onclick=()=>{eMode='total';box.querySelector('#e_cmTotal').classList.add('on');box.querySelector('#e_cmItems').classList.remove('on');box.querySelector('#e_costItems').classList.add('hide');box.querySelector('#e_buy').readOnly=false;};
+      box.querySelector('#e_cmItems').onclick=()=>{eMode='items';box.querySelector('#e_cmItems').classList.add('on');box.querySelector('#e_cmTotal').classList.remove('on');box.querySelector('#e_costItems').classList.remove('hide');box.querySelector('#e_buy').readOnly=true;eRecalc();};
+      wireItemCost(box.querySelector('#e_costItems'),eRecalc);
+      if(eMode==='items'){box.querySelector('#e_buy').readOnly=true;eRecalc();}
+    }
     box.querySelector('#e_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
     box.querySelector('#e_save').addEventListener('click',async ()=>{
-      let buy=0;
-      if(eMode==='items'){o.items=readItemDetails(box.querySelector('#e_costItems'),o.items);buy=o.items.reduce((a,it)=>a+(Number(it.cost)||0),0);}
-      else{buy=Number(box.querySelector('#e_buy').value)||0;}
-      o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;
-      o.supplied=box.querySelector('#e_supplied').checked;
-      o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';
+      if(hasPur){let buy=0;
+        if(eMode==='items'){o.items=readItemDetails(box.querySelector('#e_costItems'),o.items);buy=o.items.reduce((a,it)=>a+(Number(it.cost)||0),0);}
+        else{buy=Number(box.querySelector('#e_buy').value)||0;}
+        o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;}
+      const _sup=box.querySelector('#e_supplied');if(_sup){o.supplied=_sup.checked;o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';}
       const _ba=box.querySelector('#e_billAmt');if(_ba)o.bill_amt=Number(_ba.value)||0;
       const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail: '+e.message);return;}
@@ -722,9 +729,18 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   async function fbUsersGet(){try{const s=await firebase.database().ref('users').once('value');return s.val()||{};}catch(e){try{return JSON.parse(localStorage.getItem('__users')||'{}');}catch(_){return{};}}}
   async function fbUsersSet(obj){try{if(_fbOk)await firebase.database().ref('users').set(obj);}catch(e){}try{localStorage.setItem('__users',JSON.stringify(obj));}catch(_){}}
   function isStaff(){return !!(CURRENT&&CURRENT.role!=='admin');}
-  function applyRole(){document.body.classList.toggle('staff',isStaff());}
+  function can(p){if(!CURRENT)return false;if(CURRENT.role==='admin')return true;return !!(CURRENT.perms&&CURRENT.perms[p]);}
+  function applyRole(){const b=document.body;
+    b.classList.toggle('staff',isStaff());
+    b.classList.toggle('no-order',!can('order'));
+    b.classList.toggle('no-report',!can('report'));
+    b.classList.toggle('no-value',!can('value'));
+    b.classList.toggle('no-payment',!can('payment'));
+    b.classList.toggle('no-del',!can('del'));
+    b.classList.toggle('no-users',!CURRENT||CURRENT.role!=='admin');
+  }
   function enterApp(){$('loginGate').style.display='none';applyRole();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';
-    if(isStaff()){setTab('list');renderList();}else{setTab('dash');renderDash();}}
+    if(can('report')&&can('value')){setTab('dash');renderDash();}else{setTab('list');renderList();}}
   async function doLogin(){
     const u=($('gateUser').value||'').trim().toLowerCase(),p=($('gatePass').value||'');
     if(!u||!p){$('gateErr').textContent='Username + Password போடு';return;}
@@ -740,19 +756,40 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   $('logoutBtn').addEventListener('click',()=>{localStorage.removeItem('ngrd_user');location.reload();});
   (function(){try{const s=JSON.parse(localStorage.getItem('ngrd_user'));if(s&&s.u){CURRENT=s;enterApp();}else setTimeout(()=>$('gateUser').focus(),100);}catch(e){setTimeout(()=>$('gateUser').focus(),100);}})();
 
+  const PERM_DEFS=[['order','புது Order (AI)'],['purchase','Purchasing add'],['supply','Supply mark'],['payment','Payment add'],['value','Value/Profit பாக்க'],['report','Dashboard/Report'],['del','Delete']];
+  function permChecks(idprefix,perms){perms=perms||{};
+    return PERM_DEFS.map(([k,lbl])=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;font-weight:600;color:var(--navy)"><input type="checkbox" class="${idprefix}" data-perm="${k}" ${perms[k]?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"> ${lbl}</label>`).join('');
+  }
+  function readPerms(container,cls){const out={};container.querySelectorAll('.'+cls).forEach(c=>{out[c.dataset.perm]=c.checked;});return out;}
+  $('nuPerms').innerHTML=permChecks('nuPerm',{purchase:true,supply:true});
+
   async function renderUsers(){
     if(!CURRENT||CURRENT.role!=='admin'){$('userList').innerHTML='<div class="empty">Admin மட்டும் பாக்கலாம்</div>';return;}
-    const users=await fbUsersGet();
-    const keys=Object.keys(users);
-    $('userList').innerHTML='<div class="sec" style="background:#fafbfd;border-radius:10px">இருக்கற Users ('+keys.length+')</div>'+keys.map(u=>{const r=users[u];
-      return `<div class="orow"><div class="ohead">
+    const users=await fbUsersGet();const keys=Object.keys(users);
+    $('userList').innerHTML='<div class="sec" style="background:#fafbfd;border-radius:10px">இருக்கற Users ('+keys.length+')</div>'+keys.map((u,i)=>{const r=users[u];const permTxt=r.role==='admin'?'எல்லாம்':PERM_DEFS.filter(([k])=>r.perms&&r.perms[k]).map(([k,l])=>l).join(', ')||'ஒன்னும் இல்ல';
+      return `<div class="orow"><div class="ohead" data-uedit="${esc(u)}" style="cursor:pointer">
         <div class="left"><div class="ono">${esc(u)} <span class="badge ${r.role==='admin'?'b-paid':'b-inv'}">${r.role==='admin'?'Admin':'Staff'}</span></div>
-          <div class="meta">${esc(r.name||'')} · password: ${esc(r.pass||'')}</div></div>
-        <div class="pf"><button class="del" data-deluser="${esc(u)}" style="font-size:15px">🗑</button></div>
-      </div></div>`;}).join('');
-    $('userList').querySelectorAll('[data-deluser]').forEach(b=>b.addEventListener('click',async()=>{
-      const u=b.dataset.deluser;
-      if(u===CURRENT.u){alert('உன்னையே delete பண்ண முடியாது!');return;}
+          <div class="meta">${esc(r.name||'')} · 🔑 ${esc(r.pass||'')} · ${esc(permTxt)}</div></div>
+        <div><button class="del" data-deluser="${esc(u)}" style="font-size:15px">🗑</button></div>
+      </div><div id="udet-${i}" class="hide"></div></div>`;}).join('');
+    keys.forEach((u,i)=>{const r=users[u];
+      const head=$('userList').querySelectorAll('.ohead')[i];
+      head.addEventListener('click',e=>{if(e.target.closest('[data-deluser]'))return;const box=$('udet-'+i);
+        if(box.classList.contains('hide')){box.innerHTML=`<div class="odetail" style="padding:11px 13px">
+          <div class="fld" style="margin-bottom:8px"><label style="font-size:11px;font-weight:700">Password</label><input id="ue_pass_${i}" value="${esc(r.pass||'')}" style="width:100%;border:1.5px solid var(--line);border-radius:9px;padding:9px"></div>
+          <div class="fld" style="margin-bottom:8px"><label style="font-size:11px;font-weight:700">Role</label><select id="ue_role_${i}" style="width:100%;border:1.5px solid var(--line);border-radius:9px;padding:9px"><option value="staff" ${r.role!=='admin'?'selected':''}>Staff</option><option value="admin" ${r.role==='admin'?'selected':''}>Admin</option></select></div>
+          <div style="font-size:11px;font-weight:800;color:var(--navy);margin:6px 0">Permissions</div>
+          <div id="ue_perms_${i}">${permChecks('uePerm'+i,r.perms)}</div>
+          <button class="btn gold" id="ue_save_${i}" style="margin-top:10px">💾 Save</button></div>`;
+          box.classList.remove('hide');
+          $('ue_save_'+i).addEventListener('click',async()=>{const us=await fbUsersGet();
+            us[u]={pass:($('ue_pass_'+i).value||'').trim()||r.pass,role:$('ue_role_'+i).value,name:r.name||u,perms:readPerms($('ue_perms_'+i),'uePerm'+i)};
+            await fbUsersSet(us);alert(u+' update ஆச்சு');renderUsers();});
+        }else{box.classList.add('hide');box.innerHTML='';}
+      });
+    });
+    $('userList').querySelectorAll('[data-deluser]').forEach(b=>b.addEventListener('click',async(e)=>{e.stopPropagation();
+      const u=b.dataset.deluser;if(u===CURRENT.u){alert('உன்னையே delete பண்ண முடியாது!');return;}
       if(!confirm(u+' user-ஐ delete பண்ணவா?'))return;
       const us=await fbUsersGet();delete us[u];await fbUsersSet(us);renderUsers();
     }));
@@ -762,8 +799,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(!u||!p){alert('Username + Password வேணும்');return;}
     const users=await fbUsersGet();
     if(users[u]){if(!confirm('இந்த username ஏற்கனவே இருக்கு. மாத்தவா?'))return;}
-    users[u]={pass:p,role,name:n||u};await fbUsersSet(users);
-    $('nuUser').value='';$('nuName').value='';$('nuPass').value='';$('nuRole').value='staff';
+    users[u]={pass:p,role,name:n||u,perms:readPerms($('nuPerms'),'nuPerm')};await fbUsersSet(users);
+    $('nuUser').value='';$('nuName').value='';$('nuPass').value='';$('nuRole').value='staff';$('nuPerms').innerHTML=permChecks('nuPerm',{purchase:true,supply:true});
     renderUsers();
   });
   // ---- end user system ----</script>
