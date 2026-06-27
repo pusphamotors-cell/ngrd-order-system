@@ -146,6 +146,7 @@
       <div class="gcard w"><div class="k">Payment வரல</div><div class="v" id="gPending">0</div></div>
       <div class="gcard r"><div class="k">⚠️ LD risk</div><div class="v" id="gLD">0</div></div>
     </div>
+    <input id="searchBox" placeholder="🔍 Order No / NAHA / Buyer தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
     <div id="orderList"></div>
   </div>
 
@@ -412,12 +413,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderList(){
     const lc=$('orderList');
     if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
-    // attach alert info + sort: urgent first, then soon, then by savedAt
-    const list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
-    const rk=x=>x.al?x.al.lvl:9;
-    list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
     let tp=0,pend=0,ld=0;
     orders.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
+    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
+    const q=(($('searchBox')||{}).value||'').trim().toLowerCase();
+    let list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
+    if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')).toLowerCase().indexOf(q)>=0));
+    const rk=x=>x.al?x.al.lvl:9;
+    list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
+    if(!list.length){lc.innerHTML='<div class="empty">🔍 "'+esc(q)+'" — match ஆகல</div>';return;}
     lc.innerHTML=list.map(({o,idx,al})=>{const s=statusOf(o);
       return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span></div>
@@ -425,7 +429,6 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
       </div><div id="det-${idx}" class="hide"></div></div>`;}).join('');
-    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
     lc.querySelectorAll('.ohead').forEach(h=>h.addEventListener('click',e=>{
       const i=h.dataset.i,box=$('det-'+i);
       if(box.classList.contains('hide')){box.innerHTML=detailHtml(orders[i]);box.classList.remove('hide');wireDetail(box,orders[i]);}
@@ -527,6 +530,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('dashOrd').onclick=()=>{setTab('list');renderList();};
   }
   loadOrders().then(renderDash);
-  $('repDownload').addEventListener('click',downloadReport);</script>
+  $('repDownload').addEventListener('click',downloadReport);
+  $('searchBox').addEventListener('input',renderList);</script>
 </body>
 </html>
