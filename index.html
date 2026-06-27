@@ -111,7 +111,8 @@
   .gatebox input:focus{outline:none;border-color:var(--gold)}
   .gateerr{color:var(--red);font-size:12px;margin-bottom:8px;min-height:14px}
   body.staff [data-del]{display:none!important}
-  body.staff #tabUsers{display:none!important}
+  body.staff #tabUsers,body.staff #tabDash,body.staff #tabNew,body.staff #tabRep{display:none!important}
+  body.staff .pf{display:none!important}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -508,20 +509,23 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}}
 
   function detailHtml(o){
-    const items=(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="ctr">${esc(it.qty)}</td><td class="num">${fmt(it.total)}</td></tr>`).join('');
+    const st=isStaff();
     const row=(l,v)=>`<div class="mc"><div class="l">${l}</div><div class="d">${esc(v||'—')}</div></div>`;
+    const itemHead=st?'<th>#</th><th>Item</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th>'
+                     :'<th>#</th><th>Item</th><th class="num">Total</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th>';
+    const itemRows=(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td>${st?'':'<td class="num">'+fmt(it.total)+'</td>'}<td class="num">${it.before?fmt(it.before):'—'}</td><td class="num">${it.discount?(fmt(it.discount)+(it.disc_type==='pct'?'%':'')):'—'}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td><td>${esc(it.country||'—')}</td><td>${esc(it.supplier||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td>${esc(it.inv_no||'—')}${it.inv_date?'<br><small>'+esc(it.inv_date)+'</small>':''}</td></tr>`).join('');
     return `<div class="odetail">
       <div class="sec">📋 PO Details</div><div class="metarow">
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Model',o.model)}
-        ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div></div>
+        ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
-      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Total</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th></tr></thead><tbody>${(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="num">${fmt(it.total)}</td><td class="num">${it.before?fmt(it.before):'—'}</td><td class="num">${it.discount?(fmt(it.discount)+(it.disc_type==='pct'?'%':'')):'—'}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td><td>${esc(it.country||'—')}</td><td>${esc(it.supplier||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td>${esc(it.inv_no||'—')}${it.inv_date?'<br><small>'+esc(it.inv_date)+'</small>':''}</td></tr>`).join('')}</tbody></table></div>
-      <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
-      <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
-      <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
-      ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}
+      <div class="tablewrap"><table><thead><tr>${itemHead}</tr></thead><tbody>${itemRows}</tbody></table></div>
+      ${st?'':`<div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>`}
+      <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row('Bill Amount',fmt(o.bill_amt))}</div>
+      ${st?'':`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
+      ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`}
       <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ Edit (supply / payment / cost)</button>
+        <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
         <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
         <button class="del" data-del="${esc(o.id)}" style="font-size:16px;font-weight:700">🗑</button>
       </div>
@@ -529,10 +533,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
 
   function editForm(o){
-    const v=x=>esc(x==null?'':x);
+    const v=x=>esc(x==null?'':x);const st=isStaff();
     const anyCost=(o.items||[]).some(it=>Number(it.cost)>0);
     return `<div class="odetail">
-      <div class="sec">✏️ Edit — supply / payment / cost</div>
+      <div class="sec">✏️ ${st?'Purchasing + Supply':'Edit — supply / payment / cost'}</div>
       <div class="modetoggle" style="margin:0 13px 8px">
         <button class="mbtn ${anyCost?'':'on'}" id="e_cmTotal" type="button">மொத்த cost</button>
         <button class="mbtn ${anyCost?'on':''}" id="e_cmItems" type="button">Item-by-item</button>
@@ -543,13 +547,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="grid2">
         <div class="fld"><label>Bill No</label><input id="e_billNo" value="${v(o.bill_no)}"></div>
         <div class="fld"><label>Bill Date</label><input type="date" id="e_billDate" value="${v(o.bill_date)}"></div>
-        <div class="fld full"><label>Bill Amount (Rs)</label><input type="number" id="e_billAmt" inputmode="decimal" value="${o.bill_amt||''}"></div>
+        ${st?'':'<div class="fld full"><label>Bill Amount (Rs)</label><input type="number" id="e_billAmt" inputmode="decimal" value="'+(o.bill_amt||'')+'"></div>'}
       </div>
-      <label class="toggle"><input type="checkbox" id="e_paid" ${o.paid?'checked':''}><span>Payment வந்துடுச்சா? ✓</span></label>
+      ${st?'':`<label class="toggle"><input type="checkbox" id="e_paid" ${o.paid?'checked':''}><span>Payment வந்துடுச்சா? ✓</span></label>
       <div class="grid2">
         <div class="fld"><label>Cheque No</label><input id="e_chequeNo" value="${v(o.cheque_no)}"></div>
         <div class="fld"><label>Payment Date</label><input type="date" id="e_payDate" value="${v(o.pay_date)}"></div>
-      </div>
+      </div>`}
       <div style="padding:0 13px 13px;display:flex;gap:10px">
         <button class="btn" id="e_cancel" style="margin-top:0;flex:1;background:#7a8295">Cancel</button>
         <button class="btn gold" id="e_save" style="margin-top:0;flex:2">💾 Save</button>
@@ -579,8 +583,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       else{buy=Number(box.querySelector('#e_buy').value)||0;}
       o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;
       o.supplied=box.querySelector('#e_supplied').checked;
-      o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';o.bill_amt=Number(box.querySelector('#e_billAmt').value)||0;
-      o.paid=box.querySelector('#e_paid').checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';
+      o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';
+      const _ba=box.querySelector('#e_billAmt');if(_ba)o.bill_amt=Number(_ba.value)||0;
+      const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail: '+e.message);return;}
       renderList();
     });
@@ -714,8 +719,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   let CURRENT=null;
   async function fbUsersGet(){try{const s=await firebase.database().ref('users').once('value');return s.val()||{};}catch(e){try{return JSON.parse(localStorage.getItem('__users')||'{}');}catch(_){return{};}}}
   async function fbUsersSet(obj){try{if(_fbOk)await firebase.database().ref('users').set(obj);}catch(e){}try{localStorage.setItem('__users',JSON.stringify(obj));}catch(_){}}
-  function applyRole(){document.body.classList.toggle('staff',!CURRENT||CURRENT.role!=='admin');}
-  function enterApp(){$('loginGate').style.display='none';applyRole();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';}
+  function isStaff(){return !!(CURRENT&&CURRENT.role!=='admin');}
+  function applyRole(){document.body.classList.toggle('staff',isStaff());}
+  function enterApp(){$('loginGate').style.display='none';applyRole();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';
+    if(isStaff()){setTab('list');renderList();}else{setTab('dash');renderDash();}}
   async function doLogin(){
     const u=($('gateUser').value||'').trim().toLowerCase(),p=($('gatePass').value||'');
     if(!u||!p){$('gateErr').textContent='Username + Password போடு';return;}
