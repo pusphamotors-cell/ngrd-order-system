@@ -585,6 +585,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
       <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
+        ${can('purchase')?`<button class="btn" data-purchase="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#0b2a4a">🛒 Purchase PDF</button>`:''}
         <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
         <button class="del" data-del="${esc(o.id)}" style="font-size:16px;font-weight:700">🗑</button>
       </div>
@@ -628,6 +629,82 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(ed)ed.addEventListener('click',()=>{box.innerHTML=editForm(o);wireEdit(box,o);});
     const wa=box.querySelector('[data-wa]');
     if(wa)wa.addEventListener('click',()=>{window.open('https://wa.me/?text='+waMessage(o),'_blank');});
+    const pu=box.querySelector('[data-purchase]');
+    if(pu)pu.addEventListener('click',()=>{box.innerHTML=purchaseForm(o);wirePurchase(box,o);});
+  }
+
+  function purchaseForm(o){
+    window._partModel=o.model||'';
+    const rows=(o.items||[]).map((it,ix)=>{
+      const pm=lookupPart(o.model,it.description);
+      const part=(it.partno&&it.partno.trim())?it.partno:((pm&&pm.partno)||'');
+      return `<div style="padding:10px 12px;border-bottom:1px solid var(--line)">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:700;color:var(--navy);font-size:13px"><input type="checkbox" class="pchk" data-ix="${ix}" checked style="width:18px;height:18px;accent-color:var(--green)"> ${esc(it.sn)}. ${esc(it.description)} <span style="color:var(--muted);font-weight:600">(qty ${esc(it.qty)})</span></label>
+        <div class="grid2" style="margin-top:8px">
+          <div class="fld"><label>Supplier (கடை)</label><input class="psup" data-ix="${ix}" value="${esc(it.supplier||'')}" placeholder="கடை பேர்"></div>
+          <div class="fld"><label>Part No</label><input class="ppart" data-ix="${ix}" value="${esc(part)}"></div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="odetail">
+      <div class="sec">🛒 Purchase PDF — Supplier-வாரியா</div>
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">ஒவ்வொரு item-கும் <b>Supplier</b> + <b>Part No</b> போடு. Same supplier items ஒரே PDF-ல சேரும். விலை PDF-ல வராது.</div>
+      ${rows}
+      <div style="padding:11px 13px;display:flex;gap:10px">
+        <button class="btn" id="p_back" style="margin-top:0;flex:1;background:#7a8295">← Back</button>
+        <button class="btn gold" id="p_gen" style="margin-top:0;flex:2">📄 PDF Generate</button>
+      </div>
+    </div>`;
+  }
+  function wirePurchase(box,o){
+    box.querySelector('#p_back').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
+    box.querySelectorAll('.ppart').forEach(el=>el.addEventListener('change',()=>{const ix=el.dataset.ix;const it=(o.items||[])[ix];if(it)savePart(o.model,it.description,el.value,it.brand||'');}));
+    box.querySelector('#p_gen').addEventListener('click',async()=>{
+      const groups={};
+      (o.items||[]).forEach((it,ix)=>{
+        const chk=box.querySelector('.pchk[data-ix="'+ix+'"]');if(!chk||!chk.checked)return;
+        const sup=(box.querySelector('.psup[data-ix="'+ix+'"]').value||'').trim()||'(Supplier இல்ல)';
+        const part=(box.querySelector('.ppart[data-ix="'+ix+'"]').value||'').trim();
+        (groups[sup]=groups[sup]||[]).push({desc:it.description,qty:it.qty,part});
+      });
+      if(!Object.keys(groups).length){alert('Item select பண்ணு');return;}
+      (o.items||[]).forEach((it,ix)=>{const s=box.querySelector('.psup[data-ix="'+ix+'"]');const p=box.querySelector('.ppart[data-ix="'+ix+'"]');if(s)it.supplier=s.value;if(p)it.partno=p.value;});
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
+      openPurchasePDF(o,groups);
+    });
+  }
+  function openPurchasePDF(o,groups){
+    const today=new Date().toLocaleDateString('en-GB');
+    const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
+      <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
+      <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &nbsp;&bull;&nbsp; ngrdmotors@gmail.com</div></div>`;
+    const keys=Object.keys(groups);
+    const pages=keys.map((sup,i)=>{
+      const rows=groups[sup].map((r,n)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:6px">${n+1}</td><td style="border:1px solid #ccc;padding:6px;font-weight:600">${esc(r.part||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(r.desc)}</td><td style="text-align:center;border:1px solid #ccc;padding:6px">${esc(r.qty)}</td></tr>`).join('');
+      return `<div style="page-break-after:${i<keys.length-1?'always':'auto'};padding:22px 26px;font-family:Arial,sans-serif;color:#111">
+        ${head}
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px">
+          <div><span style="font-size:15px;font-weight:800">PURCHASE ORDER</span><br>Supplier: <b>${esc(sup)}</b></div>
+          <div style="text-align:right">Date: ${today}<br>Vehicle: ${esc(o.model||'-')}${o.naha_no?'<br>NAHA: '+esc(o.naha_no):''}${o.order_no?'<br>Ref: '+esc(o.order_no):''}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:#0b2a4a;color:#fff">
+            <th style="padding:7px;border:1px solid #0b2a4a;width:34px">#</th>
+            <th style="padding:7px;border:1px solid #0b2a4a">Part No</th>
+            <th style="padding:7px;border:1px solid #0b2a4a">Item Description</th>
+            <th style="padding:7px;border:1px solid #0b2a4a;width:48px">Qty</th>
+          </tr></thead><tbody>${rows}</tbody></table>
+        <div style="margin-top:40px;display:flex;justify-content:space-between;font-size:12px">
+          <div>__________________________<br>Authorized Signature</div>
+          <div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div>
+        </div>
+        <div style="margin-top:16px;font-size:10px;color:#777;border-top:1px solid #ccc;padding-top:6px">Kindly quote your best price for the above items. — NGRD Order System</div>
+      </div>`;
+    }).join('');
+    const w=window.open('','_blank');
+    if(!w){alert('Popup block ஆச்சு — browser-ல popup allow பண்ணி மறுபடி try பண்ணு');return;}
+    w.document.write('<html><head><title>Purchase Order '+esc(o.order_no||'')+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+pages+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.close();
   }
   function wireEdit(box,o){
     let eMode=(o.items||[]).some(it=>Number(it.cost)>0)?'items':'total';
