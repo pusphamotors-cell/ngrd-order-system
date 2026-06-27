@@ -179,10 +179,6 @@
   function hasCost(o){return (Number(o.buy)||0)>0;}
   function profitVal(o){return hasCost(o)?((Number(o.sell)||0)-(Number(o.buy)||0)):null;}
   function profitTxt(o){const p=profitVal(o);return p===null?'—':('Rs '+fmt(p));}
-  function agentRate(a){return a==='apo'?0.10:a==='clark'?0.05:0;}
-  function agentName(a){return a==='apo'?'Apo (10%)':a==='clark'?'Clark (5%)':'None';}
-  function commissionVal(o){return o.supplied?((Number(o.sell)||0)*agentRate(o.agent)):0;}
-  function netProfit(o){const pv=profitVal(o);return pv===null?null:(pv-commissionVal(o));}
   let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
 
   function setTab(tab){
@@ -273,25 +269,20 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead><tbody>${rows||'<tr><td colspan=5 class=ctr style="padding:12px;color:#999">item இல்ல</td></tr>'}</tbody></table></div>
 
         <div class="sec">💰 லாபம்</div>
-        <div class="grid2">
-          <div class="fld"><label>Navy விற்ற விலை (Rs)</label><input type="number" id="sellIn" inputmode="decimal" value="${sell}"></div>
-          <div class="fld gold"><label>நீ வாங்கின Cost (Rs)</label><input type="number" id="buyIn" inputmode="decimal" placeholder="உதா: 13900"></div>
+        <div class="sec">💰 லாபம்</div>
+        <div class="grid2"><div class="fld full"><label>Navy விற்ற விலை (Rs)</label><input type="number" id="sellIn" inputmode="decimal" value="${sell}"></div></div>
+        <div class="modetoggle">
+          <button class="mbtn on" id="cmTotal" type="button">மொத்த cost (ஒரே bill)</button>
+          <button class="mbtn" id="cmItems" type="button">Item-by-item cost</button>
         </div>
+        <div id="costTotal" class="grid2"><div class="fld gold full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="buyIn" inputmode="decimal" placeholder="உதா: 13900"></div></div>
+        <div id="costItems" class="hide"><div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Cost (Rs)</th></tr></thead><tbody>
+          ${(p.items||[]).map((it,ix)=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td><input type="number" inputmode="decimal" class="icost" data-ix="${ix}" value="${it.cost||''}" style="width:100%;border:1px solid var(--gold);border-radius:7px;padding:6px;font-size:13px;background:#fffdf6;text-align:right"></td></tr>`).join('')}
+        </tbody></table></div></div>
         <div class="profitbox">
           <div class="pb sell"><div class="k">விற்றது</div><div class="v" id="pvSell">${fmt(sell)}</div></div>
           <div class="pb buy"><div class="k">வாங்கியது</div><div class="v" id="pvBuy">0</div></div>
-          <div class="pb prof" id="pbProf"><div class="k">லாபம்</div><div class="v" id="pvProf">0</div></div>
-        </div>
-
-        <div class="sec">💵 Commission</div>
-        <div class="grid2"><div class="fld full"><label>Agent</label><select id="agentIn">
-          <option value="none">None</option>
-          <option value="apo">Apo (10%)</option>
-          <option value="clark">Clark (5%)</option>
-        </select></div></div>
-        <div class="profitbox">
-          <div class="pb buy"><div class="k">Commission</div><div class="v" id="pvComm">0</div></div>
-          <div class="pb prof" id="pbNet"><div class="k">நிஜ லாபம் (net)</div><div class="v" id="pvNet">—</div></div>
+          <div class="pb prof" id="pbProf"><div class="k">லாபம்</div><div class="v" id="pvProf">—</div></div>
         </div>
 
         <div class="sec">🚚 Supply</div>
@@ -311,18 +302,23 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
         <button class="btn gold" id="saveBtn" style="margin:13px">✅ இந்த Order-ஐ Save பண்ணு</button>
       </div>`;
-    $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);$('agentIn').addEventListener('change',recalc);$('supplied').addEventListener('change',recalc);
+    let costMode='total';
+    $('cmTotal').onclick=()=>{costMode='total';$('cmTotal').classList.add('on');$('cmItems').classList.remove('on');$('costTotal').classList.remove('hide');$('costItems').classList.add('hide');recalc();};
+    $('cmItems').onclick=()=>{costMode='items';$('cmItems').classList.add('on');$('cmTotal').classList.remove('on');$('costItems').classList.remove('hide');$('costTotal').classList.add('hide');recalc();};
+    window._costMode=()=>costMode;
+    $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);
+    Array.prototype.forEach.call(document.querySelectorAll('.icost'),el=>el.addEventListener('input',recalc));
     $('saveBtn').addEventListener('click',saveOrder);recalc();
     $('result').scrollIntoView({behavior:'smooth',block:'nearest'});
   }
-  function recalc(){const sell=Number($('sellIn').value)||0,buy=Number($('buyIn').value)||0;
+  function currentBuy(){
+    if(window._costMode&&window._costMode()==='items'){let s=0;document.querySelectorAll('.icost').forEach(el=>s+=Number(el.value)||0);return s;}
+    return Number(($('buyIn')||{}).value)||0;
+  }
+  function recalc(){const sell=Number($('sellIn').value)||0,buy=currentBuy();
     $('pvSell').textContent=fmt(sell);$('pvBuy').textContent=fmt(buy);
     $('pvProf').textContent=buy>0?fmt(sell-buy):'—';
-    $('pbProf').classList.toggle('neg',buy>0&&(sell-buy)<0);
-    const ag=($('agentIn')&&$('agentIn').value)||'none';const sup=$('supplied')&&$('supplied').checked;const comm=sup?sell*agentRate(ag):0;
-    if($('pvComm'))$('pvComm').textContent=sup?fmt(comm):'— (supply ஆனா)';
-    if($('pvNet'))$('pvNet').textContent=buy>0?fmt((sell-buy)-comm):'—';
-    if($('pbNet'))$('pbNet').classList.toggle('neg',buy>0&&((sell-buy)-comm)<0);}
+    $('pbProf').classList.toggle('neg',buy>0&&(sell-buy)<0);}
 
   async function saveOrder(){
     const order_no=(current.order_no||'').trim();
@@ -330,10 +326,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     // duplicate check
     const dup=orders.find(o=>(o.order_no||'').trim().toLowerCase()===order_no.toLowerCase());
     if(dup){alert('⚠️ இந்த Order No ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\nஒரே order-க்கு ஒன்னு தான். Duplicate ஆகாது.');return;}
-    const sell=Number($('sellIn').value)||0,buy=Number($('buyIn').value)||0;
+    const sell=Number($('sellIn').value)||0,buy=currentBuy();
+    const items=(current.items||[]).map((it,ix)=>{const el=document.querySelector('.icost[data-ix="'+ix+'"]');return Object.assign({},it,{cost:el?(Number(el.value)||0):(it.cost||0)});});
     const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
-      items:current.items||[],sell,buy,profit:(buy>0?sell-buy:null),agent:($('agentIn').value||'none'),
+      items,sell,buy,profit:(buy>0?sell-buy:null),
       order_date:current.po_date||'',delivery_date:current.delivery_date||'',
       supplied:$('supplied').checked,bill_no:$('billNo').value||'',bill_date:$('billDate').value||'',bill_amt:Number($('billAmt').value)||0,
       paid:$('paid').checked,cheque_no:$('chequeNo').value||'',pay_date:$('payDate').value||'',
@@ -377,9 +374,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Model',o.model)}
         ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div></div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
-      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Total</th></tr></thead><tbody>${items||''}</tbody></table></div>
-      <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம் (gross)',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
-      <div class="sec">💵 Commission</div><div class="metarow">${row('Agent',agentName(o.agent))}${row('Commission',o.supplied?fmt(commissionVal(o)):'— (supply ஆனா)')}${row('நிஜ லாபம் (net)',netProfit(o)===null?'—':fmt(netProfit(o)))}</div>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Total</th><th class="num">Cost</th></tr></thead><tbody>${(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="ctr">${esc(it.qty)}</td><td class="num">${fmt(it.total)}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td></tr>`).join('')}</tbody></table></div>
+      <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
       <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       <div style="padding:11px 13px;display:flex;gap:10px">
@@ -393,12 +389,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const v=x=>esc(x==null?'':x);
     return `<div class="odetail">
       <div class="sec">✏️ Edit — supply / payment / cost</div>
-      <div class="grid2"><div class="fld full"><label>நீ வாங்கின Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
-      <div class="grid2"><div class="fld full"><label>Commission Agent</label><select id="e_agent">
-        <option value="none" ${(!o.agent||o.agent==='none')?'selected':''}>None</option>
-        <option value="apo" ${o.agent==='apo'?'selected':''}>Apo (10%)</option>
-        <option value="clark" ${o.agent==='clark'?'selected':''}>Clark (5%)</option>
-      </select></div></div>
+      <div class="grid2"><div class="fld full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
       <label class="toggle"><input type="checkbox" id="e_supplied" ${o.supplied?'checked':''}><span>Supply பண்ணிட்டோமா? ✓</span></label>
       <div class="grid2">
         <div class="fld"><label>Bill No</label><input id="e_billNo" value="${v(o.bill_no)}"></div>
@@ -427,7 +418,6 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     box.querySelector('#e_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
     box.querySelector('#e_save').addEventListener('click',async ()=>{
       o.buy=Number(box.querySelector('#e_buy').value)||0;o.profit=o.buy>0?((Number(o.sell)||0)-o.buy):null;
-      o.agent=box.querySelector('#e_agent').value||'none';
       o.supplied=box.querySelector('#e_supplied').checked;
       o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';o.bill_amt=Number(box.querySelector('#e_billAmt').value)||0;
       o.paid=box.querySelector('#e_paid').checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';
@@ -494,11 +484,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function downloadReport(){
     if(!repFiltered.length){alert('Download பண்ண order இல்ல');return;}
-    const head=['Order No','File No','NAHA','Civil No','Model','Buyer','Order Date','Delivery Date','Status','Sell (Rs)','Cost (Rs)','Profit (Rs)','Agent','Commission (Rs)','Net Profit (Rs)','Bill No','Cheque No'];
+    const head=['Order No','File No','NAHA','Civil No','Model','Buyer','Order Date','Delivery Date','Status','Sell (Rs)','Cost (Rs)','Profit (Rs)','Bill No','Cheque No'];
     const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
     const lines=[head.map(q).join(',')];
     repFiltered.forEach(o=>{const sk=statusKey(o);
-      lines.push([o.order_no,o.file_no,o.naha_no,o.civil_no,o.model,o.buyer,o.order_date,o.delivery_date,sk,o.sell,o.buy,(profitVal(o)===null?'':profitVal(o)),agentName(o.agent),commissionVal(o),(netProfit(o)===null?'':netProfit(o)),o.bill_no,o.cheque_no].map(q).join(','));});
+      lines.push([o.order_no,o.file_no,o.naha_no,o.civil_no,o.model,o.buyer,o.order_date,o.delivery_date,sk,o.sell,o.buy,(profitVal(o)===null?'':profitVal(o)),o.bill_no,o.cheque_no].map(q).join(','));});
     const csv='\ufeff'+lines.join('\r\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -509,11 +499,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderDash(){
     const dw=$('dashContent');
     if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
-    let value=0,profit=0,costedVal=0,pend=0,pendAmt=0,ld=0,soon=0,commApo=0,commClark=0,net=0;
+    let value=0,profit=0,costedVal=0,pend=0,pendAmt=0,ld=0,soon=0;
     const st={p:0,i:0,d:0};const comp={},camp={};
     orders.forEach(o=>{
-      value+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null){profit+=pv;costedVal+=Number(o.sell)||0;const np=netProfit(o);if(np!==null)net+=np;}
-      const cm=commissionVal(o);if(o.agent==='apo')commApo+=cm;else if(o.agent==='clark')commClark+=cm;
+      value+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null){profit+=pv;costedVal+=Number(o.sell)||0;}
       if(!o.paid){pend++;pendAmt+=Number(o.sell)||0;}
       if(o.paid)st.d++;else if(o.supplied||o.bill_no)st.i++;else st.p++;
       const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;else if(a&&a.lvl===1)soon++;
@@ -537,15 +526,6 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="drow">
         <div class="dstat w"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்</div></div>
         <div class="dstat g"><div class="k">Paid ஆச்சு</div><div class="v">${st.d}</div><div class="s">order</div></div>
-      </div>
-      <div class="dsec">💵 Commission (supply ஆன orders மட்டும்)</div>
-      <div class="drow">
-        <div class="dstat"><div class="k">Apo (10%)</div><div class="v">${fmt(commApo)}</div><div class="s">Rs</div></div>
-        <div class="dstat"><div class="k">Clark (5%)</div><div class="v">${fmt(commClark)}</div><div class="s">Rs</div></div>
-      </div>
-      <div class="drow">
-        <div class="dstat gold"><div class="k">மொத்த Commission</div><div class="v">${fmt(commApo+commClark)}</div><div class="s">Rs</div></div>
-        <div class="dstat g"><div class="k">நிஜ லாபம் (net)</div><div class="v">${fmt(net)}</div><div class="s">Rs · commission கழிச்சு</div></div>
       </div>
       <div class="dsec">📈 Status</div>
       <div class="statusbar">${sb(st.p,'#2563b5')}${sb(st.i,'#9a6b00')}${sb(st.d,'#1f8a4c')}</div>
