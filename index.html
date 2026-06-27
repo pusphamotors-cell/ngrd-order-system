@@ -193,19 +193,26 @@
   </div>
 
   <div class="wrap hide" id="viewRep">
-    <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
-    <div class="drow">
-      <div class="fld"><label>Camp / Buyer</label><select id="repCamp"></select></div>
-      <div class="fld"><label>Status</label><select id="repStatus">
-        <option value="all">எல்லாம்</option>
-        <option value="pending">🔵 Pending (supply பண்ணல)</option>
-        <option value="invoiced">🟠 Invoiced (supply ஆச்சு)</option>
-        <option value="paid">🟢 Paid</option>
-        <option value="ld">🔴 LD risk</option>
-      </select></div>
+    <div class="modetoggle" style="margin:0 0 12px">
+      <button class="mbtn on" id="rmReport" type="button">📊 Report</button>
+      <button class="mbtn" id="rmPending" type="button">⏳ Pending</button>
     </div>
-    <button class="btn gold" id="repDownload">📥 Excel download</button>
-    <div id="repResult"></div>
+    <div id="repNormal">
+      <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
+      <div class="drow">
+        <div class="fld"><label>Camp / Buyer</label><select id="repCamp"></select></div>
+        <div class="fld"><label>Status</label><select id="repStatus">
+          <option value="all">எல்லாம்</option>
+          <option value="pending">🔵 Pending (supply பண்ணல)</option>
+          <option value="invoiced">🟠 Invoiced (supply ஆச்சு)</option>
+          <option value="paid">🟢 Paid</option>
+          <option value="ld">🔴 LD risk</option>
+        </select></div>
+      </div>
+      <button class="btn gold" id="repDownload">📥 Excel download</button>
+      <div id="repResult"></div>
+    </div>
+    <div id="repPendingWrap" class="hide"></div>
   </div>
 
   <div class="wrap hide" id="viewUsers">
@@ -768,7 +775,30 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const sel=$('repCamp');const buyers=Array.from(new Set(orders.map(o=>o.buyer||'—'))).sort();
     sel.innerHTML='<option value="all">எல்லா Camp / Buyer</option>'+buyers.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
     sel.onchange=renderReport;$('repStatus').onchange=renderReport;
+    $('rmReport').onclick=()=>{$('rmReport').classList.add('on');$('rmPending').classList.remove('on');$('repNormal').classList.remove('hide');$('repPendingWrap').classList.add('hide');renderReport();};
+    $('rmPending').onclick=()=>{$('rmPending').classList.add('on');$('rmReport').classList.remove('on');$('repNormal').classList.add('hide');$('repPendingWrap').classList.remove('hide');renderPending();};
     renderReport();
+  }
+  function renderPending(){
+    const supPend=orders.filter(o=>!o.supplied);
+    const payPend=orders.filter(o=>(o.supplied||o.bill_no)&&!o.paid);
+    const ldRisk=orders.filter(o=>{const a=deliveryAlert(o);return a&&a.lvl===0;});
+    const supVal=supPend.reduce((a,o)=>a+(Number(o.sell)||0),0);
+    const payVal=payPend.reduce((a,o)=>a+(Number(o.sell)||0),0);
+    const card=(t,n,sub,cls)=>`<div class="dstat ${cls||''}"><div class="k">${t}</div><div class="v">${n}</div><div class="s">${sub}</div></div>`;
+    const sortByDl=arr=>arr.slice().sort((a,b)=>{const x=daysLeft(a),y=daysLeft(b);return (x==null?9999:x)-(y==null?9999:y);});
+    const supRows=sortByDl(supPend).map(o=>{const a=deliveryAlert(o);return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td>${esc(o.delivery_date||'—')}</td><td>${a?a.t.replace(/<[^>]*>/g,''):'—'}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
+    const payRows=payPend.map(o=>{const a=paymentAlert(o);return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td>${esc(o.bill_date||o.delivery_date||'—')}</td><td>${a?a.t.replace(/<[^>]*>/g,''):'—'}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
+    $('repPendingWrap').innerHTML=`
+      <div class="drow">
+        ${card('🚚 Supply வரல',supPend.length,'Rs '+fmt(supVal),'')}
+        ${card('💵 Payment வரல',payPend.length,'Rs '+fmt(payVal),'gold')}
+        ${card('🔴 LD risk',ldRisk.length,'சீக்கிரம் supply','')}
+      </div>
+      <div class="sec" style="margin-top:6px">🚚 Supply ஆகாத Orders (${supPend.length})</div>
+      ${supPend.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th>Delivery</th><th>Alert</th><th class="num">Value</th></tr></thead><tbody>${supRows}</tbody></table></div></div>`:'<div class="empty">எல்லாம் supply ஆயிடுச்சு 🎉</div>'}
+      <div class="sec" style="margin-top:10px">💵 Payment வராத Orders (${payPend.length})</div>
+      ${payPend.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th>Bill/Del Date</th><th>Alert</th><th class="num">Value</th></tr></thead><tbody>${payRows}</tbody></table></div></div>`:'<div class="empty">Payment எல்லாம் வந்துடுச்சு 🎉</div>'}`;
   }
   function renderReport(){
     const camp=$('repCamp').value,status=$('repStatus').value;
