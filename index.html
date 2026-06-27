@@ -211,6 +211,7 @@
     <div class="tab on" id="tabDash">📊 Dashboard</div>
     <div class="tab" id="tabNew">➕ புது Order</div>
     <div class="tab" id="tabList">📋 Saved</div>
+    <div class="tab" id="tabTasks">👷 வேலை</div>
     <div class="tab" id="tabRep">📑 Report</div>
     <div class="tab" id="tabUsers">👤 Users</div>
   </div>
@@ -247,6 +248,11 @@
     </div>
     <input id="searchBox" placeholder="🔍 Order No / NAHA / Buyer தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
     <div id="orderList"></div>
+  </div>
+
+  <div class="wrap hide" id="viewTasks">
+    <div class="step" id="taskHead">👷 வேலை — assign ஆன orders</div>
+    <div id="taskList"></div>
   </div>
 
   <div class="wrap hide" id="viewRep">
@@ -348,12 +354,13 @@
   let chosen=null,current=null,orders=[],mode='file',pastedImgs=[];
 
   function setTab(tab){
-    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabRep').classList.toggle('on',tab==='rep');$('tabUsers').classList.toggle('on',tab==='users');
-    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');$('viewRep').classList.toggle('hide',tab!=='rep');$('viewUsers').classList.toggle('hide',tab!=='users');
+    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabTasks').classList.toggle('on',tab==='tasks');$('tabRep').classList.toggle('on',tab==='rep');$('tabUsers').classList.toggle('on',tab==='users');
+    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');$('viewTasks').classList.toggle('hide',tab!=='tasks');$('viewRep').classList.toggle('hide',tab!=='rep');$('viewUsers').classList.toggle('hide',tab!=='users');
   }
   $('tabDash').onclick=()=>{setTab('dash');renderDash();};
   $('tabNew').onclick=()=>setTab('new');
   $('tabList').onclick=()=>{setTab('list');renderList();};
+  $('tabTasks').onclick=()=>{setTab('tasks');renderTasks();};
   $('tabRep').onclick=()=>{setTab('rep');initReport();};
   $('tabUsers').onclick=()=>{setTab('users');renderUsers();};
 
@@ -668,6 +675,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
                      :'<th>#</th><th>Item</th><th class="num">Total</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th>';
     const itemRows=(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td>${st?'':'<td class="num">'+fmt(it.total)+'</td>'}<td class="num">${it.before?fmt(it.before):'—'}</td><td class="num">${it.discount?(fmt(it.discount)+(it.disc_type==='pct'?'%':'')):'—'}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td><td>${esc(it.country||'—')}</td><td>${esc(it.supplier||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td>${esc(it.inv_no||'—')}${it.inv_date?'<br><small>'+esc(it.inv_date)+'</small>':''}</td></tr>`).join('');
     return `<div class="odetail">
+      ${o.assignee?`<div style="padding:8px 13px;background:#eef4ff;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy)">👷 ${esc(o.assignee_name||o.assignee)}${o.task_date?' · 📅 '+_fmtDk(o.task_date):''} · ${o.task_done?'<span style="color:var(--green)">✓ Ready ஆச்சு</span>':'<span style="color:var(--amber)">⏳ pending</span>'}</div>`:''}
       <div class="sec">📋 PO Details</div><div class="metarow">
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Chassis No',o.chassis_no)}${row('Engine No',o.engine_no)}${row('Model',o.model)}
         ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div>
@@ -679,6 +687,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
       <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
+        ${CURRENT&&CURRENT.role==='admin'?`<button class="btn" data-assign="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#5a3fb0">👷 Assign</button>`:''}
         ${can('purchase')?`<button class="btn" data-purchase="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#0b2a4a">🛒 Purchase PDF</button>`:''}
         <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
         <button class="del" data-del="${esc(o.id)}" style="font-size:16px;font-weight:700">🗑</button>
@@ -725,6 +734,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(wa)wa.addEventListener('click',()=>{window.open('https://wa.me/?text='+waMessage(o),'_blank');});
     const pu=box.querySelector('[data-purchase]');
     if(pu)pu.addEventListener('click',()=>{box.innerHTML=purchaseForm(o);wirePurchase(box,o);});
+    const asg=box.querySelector('[data-assign]');
+    if(asg)asg.addEventListener('click',async()=>{const users=await fbUsersGet();box.innerHTML=assignForm(o,users);wireAssign(box,o);});
   }
 
   function purchaseForm(o){
@@ -1057,6 +1068,77 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   $('repDownload').addEventListener('click',downloadReport);
   $('searchBox').addEventListener('input',renderList);
 
+  // ---- Staff task assignment ----
+  function _ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function _todayKey(){return _ymd(new Date());}
+  function _fmtDk(k){const d=new Date(k);return isNaN(d)?k:d.toLocaleDateString('en-GB');}
+  function assignForm(o,users){
+    const opts=Object.keys(users).map(u=>`<option value="${esc(u)}" ${o.assignee===u?'selected':''}>${esc(users[u].name||u)} (${esc(u)})</option>`).join('');
+    return `<div class="odetail">
+      <div class="sec">👷 Staff-க்கு Assign — "இந்த order ready பண்ணு"</div>
+      <div class="grid2">
+        <div class="fld"><label>எந்த Staff</label><select id="as_user"><option value="">— தேர்வு —</option>${opts}</select></div>
+        <div class="fld"><label>எந்த நாள் ready பண்ணணும்</label><input type="date" id="as_date" value="${o.task_date||_todayKey()}"></div>
+      </div>
+      <div style="padding:6px 13px;font-size:11.5px;color:var(--muted)">Assign பண்ணா — அந்த staff-ஓட "👷 வேலை" tab-ல இந்த order வரும்.</div>
+      <div style="padding:6px 13px 13px;display:flex;gap:10px">
+        <button class="btn" id="as_cancel" style="margin-top:0;flex:1;background:#7a8295">Cancel</button>
+        <button class="btn gold" id="as_save" style="margin-top:0;flex:2">💾 Assign பண்ணு</button>
+      </div>
+      ${o.assignee?'<div style="padding:0 13px 13px"><button class="btn" id="as_clear" style="margin-top:0;background:#b3261e">✗ Assign நீக்கு</button></div>':''}
+    </div>`;
+  }
+  function wireAssign(box,o){
+    box.querySelector('#as_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
+    box.querySelector('#as_save').addEventListener('click',async()=>{
+      const u=box.querySelector('#as_user').value;if(!u){alert('Staff தேர்வு பண்ணு');return;}
+      const users=await fbUsersGet();
+      o.assignee=u;o.assignee_name=(users[u]&&users[u].name)||u;o.task_date=box.querySelector('#as_date').value||'';
+      if(o.task_done===undefined)o.task_done=false;
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
+      box.innerHTML=detailHtml(o);wireDetail(box,o);
+    });
+    const clr=box.querySelector('#as_clear');
+    if(clr)clr.addEventListener('click',async()=>{delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}box.innerHTML=detailHtml(o);wireDetail(box,o);});
+  }
+  function taskRow(o,isAdmin){
+    const right=o.task_done
+      ? '<span class="badge b-paid">✓ Done</span>'+(isAdmin?' <span data-undone="'+esc(o.id)+'" style="cursor:pointer;color:var(--muted);font-size:11px;margin-left:5px">undo</span>':'')
+      : '<button class="btn gold" data-done="'+esc(o.id)+'" style="margin:0;padding:7px 12px;width:auto;font-size:12px">✓ Ready ஆச்சு</button>'+(isAdmin?' <span data-unassign="'+esc(o.id)+'" style="cursor:pointer;color:var(--red);font-size:15px;margin-left:6px">✗</span>':'');
+    return `<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(o.buyer||'—')} · ${(o.items||[]).length} items</span>${o.task_date?'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">📅 '+_fmtDk(o.task_date)+(o.delivery_date?' · Delivery '+esc(o.delivery_date):'')+'</div>':''}</div><div style="display:flex;align-items:center;gap:3px;white-space:nowrap">${right}</div></div>`;
+  }
+  function renderTasks(){
+    const box=$('taskList');const isAdmin=CURRENT&&CURRENT.role==='admin';
+    $('taskHead').textContent=isAdmin?'👷 வேலை — யாருக்கு எந்த order assign ஆச்சு':'👷 என் வேலை — நான் ready பண்ண வேண்டிய orders';
+    const assigned=orders.filter(o=>o.assignee);
+    if(isAdmin){
+      if(!assigned.length){box.innerHTML='<div class="empty">இன்னும் order assign பண்ணல.<br>Order open → "👷 Assign" → staff + date தேர்வு பண்ணு</div>';return;}
+      const byU={};assigned.forEach(o=>{const k=o.assignee_name||o.assignee;(byU[k]=byU[k]||[]).push(o);});
+      box.innerHTML=Object.keys(byU).sort().map(u=>{const arr=byU[u].slice().sort((a,b)=>(a.task_date||'').localeCompare(b.task_date||''));const pend=arr.filter(o=>!o.task_done).length;
+        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · ${pend} pending</div><div class="dpanel">${arr.map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
+    } else {
+      const arr=orders.filter(o=>o.assignee===CURRENT.u);
+      if(!arr.length){box.innerHTML='<div class="empty">இன்னைக்கு வேலை இல்ல 🎉<br>Admin assign பண்ணா இங்க வரும்</div>';return;}
+      const today=_todayKey();const tmrw=_ymd(new Date(Date.now()+86400000));
+      const g={overdue:[],today:[],tomorrow:[],later:[],nodate:[],done:[]};
+      arr.forEach(o=>{if(o.task_done){g.done.push(o);return;}const d=o.task_date||'';if(!d)g.nodate.push(o);else if(d<today)g.overdue.push(o);else if(d===today)g.today.push(o);else if(d===tmrw)g.tomorrow.push(o);else g.later.push(o);});
+      const sortd=a=>a.sort((x,y)=>(x.task_date||'').localeCompare(y.task_date||''));
+      const sec=(t,a,cls)=>a.length?`<div class="sec" style="${cls||''}">${t} (${a.length})</div><div class="dpanel" style="margin-bottom:8px">${sortd(a).map(o=>taskRow(o,false)).join('')}</div>`:'';
+      box.innerHTML=
+        sec('🔴 தாமதம் (Overdue)',g.overdue,'color:var(--red)')+
+        sec('⭐ இன்னைக்கு',g.today,'')+
+        sec('📅 நாளைக்கு',g.tomorrow,'')+
+        sec('⏭ அப்புறம்',g.later,'')+
+        sec('📌 Date இல்ல',g.nodate,'')+
+        (g.done.length?`<div class="sec" style="color:var(--green)">✓ முடிஞ்சது (${g.done.length})</div><div class="dpanel">${g.done.map(o=>taskRow(o,false)).join('')}</div>`:'');
+    }
+    box.querySelectorAll('[data-done]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.done);if(!o)return;o.task_done=true;o.task_done_at=Date.now();try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
+    box.querySelectorAll('[data-undone]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.undone);if(!o)return;o.task_done=false;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
+    box.querySelectorAll('[data-unassign]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.unassign);if(!o)return;if(!confirm('Assign நீக்கவா?'))return;delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
+  }
+  // ---- end task assignment ----
+
   // ---- User system (Admin + Staff) ----
   let CURRENT=null;
   async function fbUsersGet(){try{const s=await firebase.database().ref('users').once('value');return s.val()||{};}catch(e){try{return JSON.parse(localStorage.getItem('__users')||'{}');}catch(_){return{};}}}
@@ -1073,7 +1155,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     b.classList.toggle('no-users',!CURRENT||CURRENT.role!=='admin');
   }
   function enterApp(){$('loginGate').style.display='none';applyRole();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';
-    if(can('report')&&can('value')){setTab('dash');renderDash();}else{setTab('list');renderList();}}
+    if(can('report')&&can('value')){setTab('dash');renderDash();}else if(isStaff()){setTab('tasks');renderTasks();}else{setTab('list');renderList();}}
   async function doLogin(){
     const u=($('gateUser').value||'').trim().toLowerCase(),p=($('gatePass').value||'');
     if(!u||!p){$('gateErr').textContent='Username + Password போடு';return;}
