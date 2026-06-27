@@ -102,6 +102,14 @@
   .iadet{padding:10px 11px;border-top:1px solid var(--line)}
   .iadet .fld label{font-size:9.5px}
   .copyprev{margin-top:8px;width:100%;background:#eef1f6;border:none;border-radius:8px;padding:8px;font-size:11.5px;font-weight:700;color:var(--navy2);cursor:pointer;font-family:inherit}
+  .gate{position:fixed;inset:0;background:linear-gradient(135deg,var(--navy),var(--navy2));z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+  .gatebox{background:#fff;border-radius:16px;padding:26px 22px;width:100%;max-width:320px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+  .gatebox .gc{width:54px;height:54px;border-radius:50%;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;margin:0 auto 12px}
+  .gatebox h2{font-size:17px;color:var(--navy);margin-bottom:4px}
+  .gatebox p{font-size:12px;color:var(--muted);margin-bottom:16px}
+  .gatebox input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;font-size:15px;font-family:inherit;text-align:center;margin-bottom:10px}
+  .gatebox input:focus{outline:none;border-color:var(--gold)}
+  .gateerr{color:var(--red);font-size:12px;margin-bottom:8px;min-height:14px}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -117,10 +125,21 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
+  <div class="gate" id="loginGate">
+    <div class="gatebox">
+      <div class="gc">NGRD</div>
+      <h2>NGRD Order System</h2>
+      <p>🔒 Password போட்டு உள்ள வாங்க</p>
+      <input type="password" id="gatePass" placeholder="Password" autocomplete="off">
+      <div class="gateerr" id="gateErr"></div>
+      <button class="btn gold" id="gateBtn" style="margin-top:0">உள்ள போ →</button>
+    </div>
+  </div>
   <div class="topbar">
     <div class="crest">NGRD</div>
     <div class="brand"><h1>NGRD ORDER SYSTEM</h1><p>PO → முழு order record + லாபம்</p></div>
     <div id="cloudBadge" style="margin-left:auto;font-size:11px;font-weight:700;color:#bff0c8;white-space:nowrap">☁️ Cloud</div>
+    <div id="logoutBtn" style="margin-left:14px;font-size:11px;font-weight:700;color:#ffffffcc;cursor:pointer;white-space:nowrap">Logout</div>
   </div>
   <div class="tabs">
     <div class="tab on" id="tabDash">📊 Dashboard</div>
@@ -448,6 +467,21 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(dl<=7)return{lvl:1,c:'al-soon',t:'🟠 இன்னும் '+dl+' நாள் — supply ready பண்ணு'};
     return{lvl:2,c:'al-safe',t:'🟢 இன்னும் '+dl+' நாள் — safe'};
   }
+  function daysSince(s){const d=parseDate(s);if(!d)return null;const t=new Date();t.setHours(0,0,0,0);d.setHours(0,0,0,0);return Math.round((t-d)/86400000);}
+  function paymentAlert(o){
+    if(o.paid)return null; // பணம் வந்தாச்சு
+    if(!(o.supplied||o.bill_no))return null; // supply ஆகல, payment due இல்ல
+    const base=o.bill_date||o.delivery_date;const ds=daysSince(base);if(ds===null)return null;
+    const left=45-ds; // Navy 45 நாள்ல cheque
+    if(left<0)return{c:'al-urgent',t:'🔴 Payment '+(-left)+' நாள் late (45 நாள் தாண்டிடுச்சு) — follow up!'};
+    if(left<=10)return{c:'al-soon',t:'🟠 Payment இன்னும் '+left+' நாள்ல வரணும்'};
+    return{c:'al-safe',t:'🟢 Payment '+left+' நாள்ல எதிர்பாக்கலாம்'};
+  }
+  function waMessage(o){
+    const st=statusOf(o).t.replace(/[🟢🟠🔵]/g,'').trim();
+    const lines=['*NGRD Order*','Order: '+(o.order_no||'—'),'Buyer: '+(o.buyer||'—'),'NAHA: '+(o.naha_no||'—'),'Items: '+((o.items||[]).length),'Value: Rs '+fmt(o.sell),'Delivery: '+(o.delivery_date||'—'),'Status: '+st];
+    return encodeURIComponent(lines.join('\n'));
+  }
 
   async function loadOrders(){try{const res=await window.storage.list('order:');const keys=(res&&res.keys)||[];const arr=[];
     for(const k of keys){try{const r=await window.storage.get(k);if(r&&r.value)arr.push(JSON.parse(r.value));}catch(e){}}
@@ -465,8 +499,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
       <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
-      <div style="padding:11px 13px;display:flex;gap:10px">
-        <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1">✏️ Edit (supply / payment / cost)</button>
+      ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}
+      <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ Edit (supply / payment / cost)</button>
+        <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
         <button class="del" data-del="${esc(o.id)}" style="font-size:16px;font-weight:700">🗑</button>
       </div>
     </div>`;
@@ -506,6 +542,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(del)del.addEventListener('click',async ()=>{if(!confirm('இந்த order-ஐ delete பண்ணவா?'))return;try{await window.storage.delete(o.id);}catch(_){}orders=orders.filter(x=>x.id!==o.id);renderList();});
     const ed=box.querySelector('[data-edit]');
     if(ed)ed.addEventListener('click',()=>{box.innerHTML=editForm(o);wireEdit(box,o);});
+    const wa=box.querySelector('[data-wa]');
+    if(wa)wa.addEventListener('click',()=>{window.open('https://wa.me/?text='+waMessage(o),'_blank');});
   }
   function wireEdit(box,o){
     let eMode=(o.items||[]).some(it=>Number(it.cost)>0)?'items':'total';
@@ -544,7 +582,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span></div>
           <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
-          ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}</div>
+          ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
+          ${paymentAlert(o)?'<div class="alert-line '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
       </div><div id="det-${idx}" class="hide"></div></div>`;}).join('');
     lc.querySelectorAll('.ohead').forEach(h=>h.addEventListener('click',e=>{
@@ -601,11 +640,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderDash(){
     const dw=$('dashContent');
     if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
-    let value=0,profit=0,costedVal=0,pend=0,pendAmt=0,ld=0,soon=0;
+    let value=0,profit=0,costedVal=0,pend=0,pendAmt=0,ld=0,soon=0,payLate=0;
     const st={p:0,i:0,d:0};const comp={},camp={};
     orders.forEach(o=>{
       value+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null){profit+=pv;costedVal+=Number(o.sell)||0;}
-      if(!o.paid){pend++;pendAmt+=Number(o.sell)||0;}
+      if(!o.paid){pend++;pendAmt+=Number(o.sell)||0;const pa=paymentAlert(o);if(pa&&pa.c==='al-urgent')payLate++;}
       if(o.paid)st.d++;else if(o.supplied||o.bill_no)st.i++;else st.p++;
       const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;else if(a&&a.lvl===1)soon++;
       const sup=(o.supplier||'').toLowerCase();const c=sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';
@@ -626,7 +665,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="dstat r"><div class="k">⚠️ LD risk</div><div class="v">${ld}</div><div class="s">${soon} order soon</div></div>
       </div>
       <div class="drow">
-        <div class="dstat w"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்</div></div>
+        <div class="dstat w"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்${payLate?' · 🔴 '+payLate+' late':''}</div></div>
         <div class="dstat g"><div class="k">Paid ஆச்சு</div><div class="v">${st.d}</div><div class="s">order</div></div>
       </div>
       <div class="dsec">📈 Status</div>
@@ -649,6 +688,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   loadOrders().then(renderDash);
   $('repDownload').addEventListener('click',downloadReport);
-  $('searchBox').addEventListener('input',renderList);</script>
+  $('searchBox').addEventListener('input',renderList);
+
+  // ---- Password lock ----
+  const APP_PASSWORD="ngrd2026";
+  function doLogin(){const v=($('gatePass').value||'').trim();
+    if(v===APP_PASSWORD){localStorage.setItem('ngrd_auth','1');$('loginGate').style.display='none';}
+    else{$('gateErr').textContent='Password தப்பு! மறுபடி try பண்ணு';}}
+  $('gateBtn').addEventListener('click',doLogin);
+  $('gatePass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+  $('logoutBtn').addEventListener('click',()=>{localStorage.removeItem('ngrd_auth');location.reload();});
+  if(localStorage.getItem('ngrd_auth')==='1'){$('loginGate').style.display='none';}else{setTimeout(()=>$('gatePass').focus(),100);}</script>
 </body>
 </html>
