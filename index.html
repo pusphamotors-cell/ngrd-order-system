@@ -175,6 +175,9 @@
   };
   const fmt=n=>(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function hasCost(o){return (Number(o.buy)||0)>0;}
+  function profitVal(o){return hasCost(o)?((Number(o.sell)||0)-(Number(o.buy)||0)):null;}
+  function profitTxt(o){const p=profitVal(o);return p===null?'—':('Rs '+fmt(p));}
   let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
 
   function setTab(tab){
@@ -297,8 +300,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('result').scrollIntoView({behavior:'smooth',block:'nearest'});
   }
   function recalc(){const sell=Number($('sellIn').value)||0,buy=Number($('buyIn').value)||0;
-    $('pvSell').textContent=fmt(sell);$('pvBuy').textContent=fmt(buy);$('pvProf').textContent=fmt(sell-buy);
-    $('pbProf').classList.toggle('neg',(sell-buy)<0);}
+    $('pvSell').textContent=fmt(sell);$('pvBuy').textContent=fmt(buy);
+    $('pvProf').textContent=buy>0?fmt(sell-buy):'—';
+    $('pbProf').classList.toggle('neg',buy>0&&(sell-buy)<0);}
 
   async function saveOrder(){
     const order_no=(current.order_no||'').trim();
@@ -309,13 +313,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const sell=Number($('sellIn').value)||0,buy=Number($('buyIn').value)||0;
     const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
-      items:current.items||[],sell,buy,profit:sell-buy,
+      items:current.items||[],sell,buy,profit:(buy>0?sell-buy:null),
       order_date:current.po_date||'',delivery_date:current.delivery_date||'',
       supplied:$('supplied').checked,bill_no:$('billNo').value||'',bill_date:$('billDate').value||'',bill_amt:Number($('billAmt').value)||0,
       paid:$('paid').checked,cheque_no:$('chequeNo').value||'',pay_date:$('payDate').value||'',
       savedAt:new Date().toISOString()};
     try{await window.storage.set(o.id,JSON.stringify(o));orders.unshift(o);current=null;
-      $('result').innerHTML='<div class="empty" style="border-color:var(--green);background:var(--green-bg);color:#155">✅ Save ஆச்சு! லாபம்: Rs '+fmt(o.profit)+'<br><small>"Saved Orders" tab-ல பாக்கலாம்</small></div>';
+      $('result').innerHTML='<div class="empty" style="border-color:var(--green);background:var(--green-bg);color:#155">✅ Save ஆச்சு! லாபம்: '+profitTxt(o)+'<br><small>"Saved Orders" tab-ல பாக்கலாம்</small></div>';
     }catch(e){$('errbox').innerHTML='<div class="err">⚠️ Save fail: '+esc(e.message)+'</div>';}
   }
 
@@ -354,7 +358,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div></div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
       <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Total</th></tr></thead><tbody>${items||''}</tbody></table></div>
-      <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',fmt(o.buy))}${row('லாபம்',fmt(o.profit))}${row('Margin',(o.sell>0?(o.profit/o.sell*100).toFixed(1):'0')+'%')}</div>
+      <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
       <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       <div style="padding:11px 13px;display:flex;gap:10px">
@@ -396,7 +400,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function wireEdit(box,o){
     box.querySelector('#e_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
     box.querySelector('#e_save').addEventListener('click',async ()=>{
-      o.buy=Number(box.querySelector('#e_buy').value)||0;o.profit=(Number(o.sell)||0)-o.buy;
+      o.buy=Number(box.querySelector('#e_buy').value)||0;o.profit=o.buy>0?((Number(o.sell)||0)-o.buy):null;
       o.supplied=box.querySelector('#e_supplied').checked;
       o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';o.bill_amt=Number(box.querySelector('#e_billAmt').value)||0;
       o.paid=box.querySelector('#e_paid').checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';
@@ -413,13 +417,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const rk=x=>x.al?x.al.lvl:9;
     list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
     let tp=0,pend=0,ld=0;
-    orders.forEach(o=>{tp+=Number(o.profit)||0;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
+    orders.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
     lc.innerHTML=list.map(({o,idx,al})=>{const s=statusOf(o);
       return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span></div>
           <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}</div>
-        <div class="pf"><div class="amt ${o.profit<0?'neg':''}">Rs ${fmt(o.profit)}</div></div>
+        <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
       </div><div id="det-${idx}" class="hide"></div></div>`;}).join('');
     $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
     lc.querySelectorAll('.ohead').forEach(h=>h.addEventListener('click',e=>{
@@ -446,9 +450,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     });
     const rr=$('repResult');
     if(!repFiltered.length){rr.innerHTML='<div class="empty">இந்த filter-க்கு order இல்ல</div>';return;}
-    let val=0,prof=0;repFiltered.forEach(o=>{val+=Number(o.sell)||0;prof+=Number(o.profit)||0;});
+    let val=0,prof=0;repFiltered.forEach(o=>{val+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null)prof+=pv;});
     const rows=repFiltered.map(o=>{const sk=statusKey(o);const lbl=sk==='paid'?'Paid':sk==='invoiced'?'Invoiced':'Pending';
-      return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.delivery_date||'—')}</td><td>${lbl}</td><td class="num">${fmt(o.sell)}</td><td class="num">${fmt(o.profit)}</td></tr>`;}).join('');
+      return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.delivery_date||'—')}</td><td>${lbl}</td><td class="num">${fmt(o.sell)}</td><td class="num">${profitVal(o)===null?'—':fmt(profitVal(o))}</td></tr>`;}).join('');
     rr.innerHTML=`
       <div class="drow" style="margin-top:14px">
         <div class="dstat"><div class="k">Orders</div><div class="v">${repFiltered.length}</div></div>
@@ -465,7 +469,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
     const lines=[head.map(q).join(',')];
     repFiltered.forEach(o=>{const sk=statusKey(o);
-      lines.push([o.order_no,o.file_no,o.naha_no,o.civil_no,o.model,o.buyer,o.order_date,o.delivery_date,sk,o.sell,o.buy,o.profit,o.bill_no,o.cheque_no].map(q).join(','));});
+      lines.push([o.order_no,o.file_no,o.naha_no,o.civil_no,o.model,o.buyer,o.order_date,o.delivery_date,sk,o.sell,o.buy,(profitVal(o)===null?'':profitVal(o)),o.bill_no,o.cheque_no].map(q).join(','));});
     const csv='\ufeff'+lines.join('\r\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -476,15 +480,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderDash(){
     const dw=$('dashContent');
     if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
-    let value=0,profit=0,pend=0,pendAmt=0,ld=0,soon=0;
+    let value=0,profit=0,costedVal=0,pend=0,pendAmt=0,ld=0,soon=0;
     const st={p:0,i:0,d:0};const comp={},camp={};
     orders.forEach(o=>{
-      value+=Number(o.sell)||0;profit+=Number(o.profit)||0;
+      value+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null){profit+=pv;costedVal+=Number(o.sell)||0;}
       if(!o.paid){pend++;pendAmt+=Number(o.sell)||0;}
       if(o.paid)st.d++;else if(o.supplied||o.bill_no)st.i++;else st.p++;
       const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;else if(a&&a.lvl===1)soon++;
       const sup=(o.supplier||'').toLowerCase();const c=sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';
-      comp[c]=comp[c]||{n:0,v:0,p:0};comp[c].n++;comp[c].v+=Number(o.sell)||0;comp[c].p+=Number(o.profit)||0;
+      comp[c]=comp[c]||{n:0,v:0,p:0};comp[c].n++;comp[c].v+=Number(o.sell)||0;if(pv!==null)comp[c].p+=pv;
       const b=o.buyer||'—';camp[b]=camp[b]||{n:0,v:0};camp[b].n++;camp[b].v+=Number(o.sell)||0;
     });
     const tot=orders.length;
@@ -497,7 +501,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="dstat gold"><div class="k">மொத்த Value</div><div class="v">${fmt(value)}</div><div class="s">Rs</div></div>
       </div>
       <div class="drow">
-        <div class="dstat g"><div class="k">மொத்த லாபம்</div><div class="v">${fmt(profit)}</div><div class="s">Rs · margin ${value>0?(profit/value*100).toFixed(1):0}%</div></div>
+        <div class="dstat g"><div class="k">மொத்த லாபம்</div><div class="v">${fmt(profit)}</div><div class="s">Rs · margin ${costedVal>0?(profit/costedVal*100).toFixed(1):0}%</div></div>
         <div class="dstat r"><div class="k">⚠️ LD risk</div><div class="v">${ld}</div><div class="s">${soon} order soon</div></div>
       </div>
       <div class="drow">
