@@ -387,9 +387,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
   function editForm(o){
     const v=x=>esc(x==null?'':x);
+    const anyCost=(o.items||[]).some(it=>Number(it.cost)>0);
     return `<div class="odetail">
       <div class="sec">✏️ Edit — supply / payment / cost</div>
-      <div class="grid2"><div class="fld full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
+      <div class="modetoggle" style="margin:0 13px 8px">
+        <button class="mbtn ${anyCost?'':'on'}" id="e_cmTotal" type="button">மொத்த cost</button>
+        <button class="mbtn ${anyCost?'on':''}" id="e_cmItems" type="button">Item-by-item</button>
+      </div>
+      <div id="e_costTotal" class="grid2 ${anyCost?'hide':''}"><div class="fld gold full"><label>நீ வாங்கின மொத்த Cost (Rs)</label><input type="number" id="e_buy" inputmode="decimal" value="${o.buy||''}"></div></div>
+      <div id="e_costItems" class="${anyCost?'':'hide'}"><div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Cost (Rs)</th></tr></thead><tbody>
+        ${(o.items||[]).map((it,ix)=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td><input type="number" inputmode="decimal" class="e_icost" data-ix="${ix}" value="${it.cost||''}" style="width:100%;border:1px solid var(--gold);border-radius:7px;padding:6px;font-size:13px;background:#fffdf6;text-align:right"></td></tr>`).join('')}
+      </tbody></table></div></div>
       <label class="toggle"><input type="checkbox" id="e_supplied" ${o.supplied?'checked':''}><span>Supply பண்ணிட்டோமா? ✓</span></label>
       <div class="grid2">
         <div class="fld"><label>Bill No</label><input id="e_billNo" value="${v(o.bill_no)}"></div>
@@ -415,9 +423,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(ed)ed.addEventListener('click',()=>{box.innerHTML=editForm(o);wireEdit(box,o);});
   }
   function wireEdit(box,o){
+    let eMode=(o.items||[]).some(it=>Number(it.cost)>0)?'items':'total';
+    box.querySelector('#e_cmTotal').onclick=()=>{eMode='total';box.querySelector('#e_cmTotal').classList.add('on');box.querySelector('#e_cmItems').classList.remove('on');box.querySelector('#e_costTotal').classList.remove('hide');box.querySelector('#e_costItems').classList.add('hide');};
+    box.querySelector('#e_cmItems').onclick=()=>{eMode='items';box.querySelector('#e_cmItems').classList.add('on');box.querySelector('#e_cmTotal').classList.remove('on');box.querySelector('#e_costItems').classList.remove('hide');box.querySelector('#e_costTotal').classList.add('hide');};
     box.querySelector('#e_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
     box.querySelector('#e_save').addEventListener('click',async ()=>{
-      o.buy=Number(box.querySelector('#e_buy').value)||0;o.profit=o.buy>0?((Number(o.sell)||0)-o.buy):null;
+      let buy=0;
+      if(eMode==='items'){o.items=(o.items||[]).map((it,ix)=>{const el=box.querySelector('.e_icost[data-ix="'+ix+'"]');const c=el?(Number(el.value)||0):(it.cost||0);buy+=c;return Object.assign({},it,{cost:c});});}
+      else{buy=Number(box.querySelector('#e_buy').value)||0;}
+      o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;
       o.supplied=box.querySelector('#e_supplied').checked;
       o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';o.bill_amt=Number(box.querySelector('#e_billAmt').value)||0;
       o.paid=box.querySelector('#e_paid').checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';
