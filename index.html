@@ -330,8 +330,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="iadet hide" data-det="${ix}">
           <div class="grid2">
             <div class="fld"><label>Before Price (Rs)</label><input type="number" inputmode="decimal" class="itembefore" data-ix="${ix}" value="${it.before!=null?it.before:(it.cost||'')}"></div>
-            <div class="fld"><label>Discount (Rs)</label><input type="number" inputmode="decimal" class="itemdisc" data-ix="${ix}" value="${it.discount||''}"></div>
-            <div class="fld"><label>Net Cost (Rs) — auto</label><input type="number" class="itemnet" data-ix="${ix}" value="${(Number(it.before!=null?it.before:(it.cost||0))||0)-(Number(it.discount||0)||0)||''}" readonly></div>
+            <div class="fld"><label>Discount</label><div style="display:flex;gap:5px"><input type="number" inputmode="decimal" class="itemdisc" data-ix="${ix}" value="${it.discount||''}" style="flex:1"><select class="itemdtype" data-ix="${ix}" style="width:62px;border:1.5px solid var(--line);border-radius:9px;background:#fffdf6;font-family:inherit;font-weight:700"><option value="rs" ${it.disc_type==='pct'?'':'selected'}>Rs</option><option value="pct" ${it.disc_type==='pct'?'selected':''}>%</option></select></div></div>
+            <div class="fld"><label>Net Cost (Rs) — auto</label><input type="number" class="itemnet" data-ix="${ix}" value="${(()=>{const b=Number(it.before!=null?it.before:(it.cost||0))||0;const d=Number(it.discount||0)||0;return (it.disc_type==='pct'?(b-b*d/100):(b-d))||'';})()}" readonly></div>
             <div class="fld"><label>Country</label><input class="itemctry" data-ix="${ix}" value="${esc(it.country||'')}"></div>
             <div class="fld"><label>Supplier (shop)</label><input class="itemsup" data-ix="${ix}" value="${esc(it.supplier||'')}"></div>
             <div class="fld"><label>Brand</label><input class="itembrand" data-ix="${ix}" value="${esc(it.brand||'')}"></div>
@@ -346,14 +346,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function sumItemCost(container){let s=0;if(container)container.querySelectorAll('.itemnet').forEach(el=>s+=Number(el.value)||0);return s;}
   function readItemDetails(container,items){
     return (items||[]).map((it,ix)=>{const g=cls=>{const el=container&&container.querySelector('.'+cls+'[data-ix="'+ix+'"]');return el?el.value:'';};
-      const before=Number(g('itembefore'))||0,disc=Number(g('itemdisc'))||0,net=before-disc;
-      return Object.assign({},it,{before,discount:disc,cost:net,supplier:g('itemsup'),brand:g('itembrand'),partno:g('itempart'),country:g('itemctry'),inv_no:g('iteminv'),inv_date:g('itemdate')});});
+      const before=Number(g('itembefore'))||0,disc=Number(g('itemdisc'))||0,dtype=g('itemdtype')||'rs',net=(dtype==='pct')?(before-before*disc/100):(before-disc);
+      return Object.assign({},it,{before,discount:disc,disc_type:dtype,cost:net,supplier:g('itemsup'),brand:g('itembrand'),partno:g('itempart'),country:g('itemctry'),inv_no:g('iteminv'),inv_date:g('itemdate')});});
   }
   function wireItemCost(container,onChange){
     if(!container)return;
     container.querySelectorAll('.iahead').forEach(h=>h.addEventListener('click',()=>{const ix=h.dataset.ix;const det=container.querySelector('[data-det="'+ix+'"]');h.classList.toggle('open');det.classList.toggle('hide');}));
-    const recompute=ix=>{const b=Number((container.querySelector('.itembefore[data-ix="'+ix+'"]')||{}).value)||0;const d=Number((container.querySelector('.itemdisc[data-ix="'+ix+'"]')||{}).value)||0;const net=b-d;const ne=container.querySelector('.itemnet[data-ix="'+ix+'"]');if(ne)ne.value=net||'';const iv=container.querySelector('[data-iv="'+ix+'"]');if(iv)iv.textContent=net?('Rs '+fmt(net)):'—';if(onChange)onChange();};
+    const recompute=ix=>{const b=Number((container.querySelector('.itembefore[data-ix="'+ix+'"]')||{}).value)||0;const d=Number((container.querySelector('.itemdisc[data-ix="'+ix+'"]')||{}).value)||0;const t=(container.querySelector('.itemdtype[data-ix="'+ix+'"]')||{}).value||'rs';const net=(t==='pct')?(b-b*d/100):(b-d);const ne=container.querySelector('.itemnet[data-ix="'+ix+'"]');if(ne)ne.value=net||'';const iv=container.querySelector('[data-iv="'+ix+'"]');if(iv)iv.textContent=net?('Rs '+fmt(net)):'—';if(onChange)onChange();};
     container.querySelectorAll('.itembefore,.itemdisc').forEach(el=>el.addEventListener('input',()=>recompute(el.dataset.ix)));
+    container.querySelectorAll('.itemdtype').forEach(el=>el.addEventListener('change',()=>recompute(el.dataset.ix)));
     container.querySelectorAll('.copyprev').forEach(b=>b.addEventListener('click',()=>{const ix=+b.dataset.ix;const p=ix-1;
       ['itemsup','itemctry','iteminv','itemdate'].forEach(cls=>{const src=container.querySelector('.'+cls+'[data-ix="'+p+'"]');const dst=container.querySelector('.'+cls+'[data-ix="'+ix+'"]');if(src&&dst)dst.value=src.value;});
     }));
@@ -418,7 +419,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Model',o.model)}
         ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div></div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
-      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Total</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th></tr></thead><tbody>${(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="num">${fmt(it.total)}</td><td class="num">${it.before?fmt(it.before):'—'}</td><td class="num">${it.discount?fmt(it.discount):'—'}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td><td>${esc(it.country||'—')}</td><td>${esc(it.supplier||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td>${esc(it.inv_no||'—')}${it.inv_date?'<br><small>'+esc(it.inv_date)+'</small>':''}</td></tr>`).join('')}</tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th class="num">Total</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th></tr></thead><tbody>${(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="num">${fmt(it.total)}</td><td class="num">${it.before?fmt(it.before):'—'}</td><td class="num">${it.discount?(fmt(it.discount)+(it.disc_type==='pct'?'%':'')):'—'}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td><td>${esc(it.country||'—')}</td><td>${esc(it.supplier||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td>${esc(it.inv_no||'—')}${it.inv_date?'<br><small>'+esc(it.inv_date)+'</small>':''}</td></tr>`).join('')}</tbody></table></div>
       <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
       <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
