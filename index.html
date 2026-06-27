@@ -748,13 +748,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     let users=await fbUsersGet();
     if(Object.keys(users).length===0){users={admin:{pass:'ngrd2026',role:'admin',name:'Admin'}};await fbUsersSet(users);}
     const rec=users[u];
-    if(rec&&String(rec.pass)===p){CURRENT={u,role:rec.role||'staff',name:rec.name||u};localStorage.setItem('ngrd_user',JSON.stringify(CURRENT));enterApp();$('gateErr').textContent='';}
+    if(rec&&String(rec.pass)===p){CURRENT={u,role:rec.role||'staff',name:rec.name||u,perms:rec.perms||{}};localStorage.setItem('ngrd_user',JSON.stringify(CURRENT));enterApp();$('gateErr').textContent='';}
     else{$('gateErr').textContent='Username illa Password தப்பு!';}
   }
   $('gateBtn').addEventListener('click',doLogin);
   $('gatePass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
   $('logoutBtn').addEventListener('click',()=>{localStorage.removeItem('ngrd_user');location.reload();});
-  (function(){try{const s=JSON.parse(localStorage.getItem('ngrd_user'));if(s&&s.u){CURRENT=s;enterApp();}else setTimeout(()=>$('gateUser').focus(),100);}catch(e){setTimeout(()=>$('gateUser').focus(),100);}})();
+  (async function(){try{const s=JSON.parse(localStorage.getItem('ngrd_user'));if(s&&s.u){CURRENT=s;enterApp();
+    try{const users=await fbUsersGet();const rec=users[s.u];
+      if(rec){CURRENT={u:s.u,role:rec.role||'staff',name:rec.name||s.u,perms:rec.perms||{}};localStorage.setItem('ngrd_user',JSON.stringify(CURRENT));applyRole();}
+      else{localStorage.removeItem('ngrd_user');location.reload();}}catch(e){}
+  }else setTimeout(()=>$('gateUser').focus(),100);}catch(e){setTimeout(()=>$('gateUser').focus(),100);}})();
 
   const PERM_DEFS=[['order','புது Order (AI)'],['purchase','Purchasing add'],['supply','Supply mark'],['payment','Payment add'],['value','Value/Profit பாக்க'],['report','Dashboard/Report'],['del','Delete']];
   function permChecks(idprefix,perms){perms=perms||{};
