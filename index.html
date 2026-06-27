@@ -173,7 +173,7 @@
       <div class="ic">📄</div><div class="big" id="dropbig">PO file தேர்ந்தெடு</div><div class="sm">Navy purchase order</div>
     </label>
     <div id="chip"></div>
-    <textarea class="pastebox hide" id="pasteBox" placeholder="PO text-ஐ paste பண்ணு... அல்லது image/PDF copy பண்ணி paste (PC-ல Ctrl+V)"></textarea>
+    <textarea class="pastebox hide" id="pasteBox" placeholder="PO text paste பண்ணு... அல்லது image-ஐ Ctrl+V — பல page இருந்தா ஒவ்வொன்னா paste பண்ணு (5-6 வரை)"></textarea>
     <div id="pastePreview" class="hide"></div>
     <button class="btn" id="go" disabled>படி 2 — Extract பண்ணு (AI)</button>
     <div class="note">AI: Order No, File No, NAHA, Civil No, Model, items + விலை தானா எடுக்கும்</div>
@@ -277,7 +277,7 @@
   function hasCost(o){return (Number(o.buy)||0)>0;}
   function profitVal(o){return hasCost(o)?((Number(o.sell)||0)-(Number(o.buy)||0)):null;}
   function profitTxt(o){const p=profitVal(o);return p===null?'—':('Rs '+fmt(p));}
-  let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
+  let chosen=null,current=null,orders=[],mode='file',pastedImgs=[];
 
   function setTab(tab){
     $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabRep').classList.toggle('on',tab==='rep');$('tabUsers').classList.toggle('on',tab==='users');
@@ -289,19 +289,27 @@
   $('tabRep').onclick=()=>{setTab('rep');initReport();};
   $('tabUsers').onclick=()=>{setTab('users');renderUsers();};
 
-  function updateGo(){$('go').disabled=(mode==='file')?!chosen:!(pastedImg||$('pasteBox').value.trim());}
+  function updateGo(){$('go').disabled=(mode==='file')?!chosen:!(pastedImgs.length||$('pasteBox').value.trim());}
   $('mFile').onclick=()=>{mode='file';$('mFile').classList.add('on');$('mPaste').classList.remove('on');$('drop').classList.remove('hide');$('chip').classList.remove('hide');$('pasteBox').classList.add('hide');$('pastePreview').classList.add('hide');updateGo();};
   $('mPaste').onclick=()=>{mode='paste';$('mPaste').classList.add('on');$('mFile').classList.remove('on');$('drop').classList.add('hide');$('chip').classList.add('hide');$('pasteBox').classList.remove('hide');$('pastePreview').classList.remove('hide');updateGo();};
 
   $('file').addEventListener('change',e=>{chosen=e.target.files[0]||null;$('errbox').innerHTML='';
     if(chosen){$('drop').classList.add('has');$('dropbig').textContent='File ready ✓';$('chip').innerHTML='<span class="filechip">📎 '+esc(chosen.name)+'</span>';}updateGo();});
   const toB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('File படிக்க முடியல'));r.readAsDataURL(f);});
-  $('pasteBox').addEventListener('paste',e=>{const items=((e.clipboardData||window.clipboardData)||{}).items||[];
-    for(const it of items){if(it.type&&(it.type.indexOf('image')===0||it.type==='application/pdf')){const blob=it.getAsFile();
-      if(blob){pastedImg=blob;e.preventDefault();const isPdf=blob.type==='application/pdf';
-        $('pastePreview').innerHTML=isPdf?'<span class="filechip">📎 PDF paste ஆச்சு ✓</span>':'<img src="'+URL.createObjectURL(blob)+'" style="max-width:100%;max-height:180px;border-radius:10px;border:1px solid var(--line);margin-top:8px">';
-        $('errbox').innerHTML='';updateGo();}return;}}setTimeout(updateGo,0);});
-  $('pasteBox').addEventListener('input',()=>{if($('pasteBox').value.trim()){pastedImg=null;$('pastePreview').innerHTML='';}updateGo();});
+  function renderPasteThumbs(){
+    if(!pastedImgs.length){$('pastePreview').innerHTML='';return;}
+    $('pastePreview').innerHTML='<div style="font-size:11px;color:var(--muted);margin-top:8px;font-weight:700">'+pastedImgs.length+' page சேர்ந்தாச்சு — இன்னும் paste பண்ணலாம் (Ctrl+V)</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'+pastedImgs.map((f,i)=>{
+      const isPdf=f.type==='application/pdf';
+      const thumb=isPdf?'<div style="width:68px;height:68px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:11px;font-weight:800;color:var(--navy)">PDF</div>':'<img src="'+URL.createObjectURL(f)+'" style="width:68px;height:68px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">';
+      return '<div style="position:relative;text-align:center">'+thumb+'<div style="position:absolute;top:-6px;right:-6px;background:#c2452f;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;cursor:pointer" data-rmimg="'+i+'">✕</div><div style="font-size:10px;color:var(--muted);margin-top:2px">Page '+(i+1)+'</div></div>';
+    }).join('')+'</div>';
+    $('pastePreview').querySelectorAll('[data-rmimg]').forEach(b=>b.addEventListener('click',()=>{pastedImgs.splice(+b.dataset.rmimg,1);renderPasteThumbs();updateGo();}));
+  }
+  $('pasteBox').addEventListener('paste',e=>{const items=((e.clipboardData||window.clipboardData)||{}).items||[];let added=false;
+    for(const it of items){if(it.type&&(it.type.indexOf('image')===0||it.type==='application/pdf')){const blob=it.getAsFile();if(blob){pastedImgs.push(blob);added=true;}}}
+    if(added){e.preventDefault();$('errbox').innerHTML='';renderPasteThumbs();}
+    setTimeout(updateGo,0);});
+  $('pasteBox').addEventListener('input',updateGo);
 
   const PROMPT=`Extract details from this Sri Lanka Navy purchase order (PO). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
 {"order_no":"","file_no":"","naha_no":"","civil_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
@@ -318,15 +326,21 @@ IMPORTANT - read ALL pages. The vehicle block (often on the LAST page, written i
 buyer = the command/department at the top (e.g. Southern Naval Command - Captain Logistics Department (South)). Include ALL line items. Numbers plain, no commas. Missing text="" , missing number=0. Output only JSON.`;
 
   async function extract(){
-    const pasteText=$('pasteBox').value.trim();const fileToUse=(mode==='file')?chosen:pastedImg;
-    if(!fileToUse&&!(mode==='paste'&&pasteText))return;
+    const pasteText=$('pasteBox').value.trim();
+    if(mode==='file'&&!chosen)return;
+    if(mode==='paste'&&!pastedImgs.length&&!pasteText)return;
     $('errbox').innerHTML='';$('go').disabled=true;$('go').innerHTML='<span class="spin"></span>PO படிக்கிறேன்...';
     try{
       let content;
-      if(mode==='paste'&&!pastedImg){content=[{type:'text',text:'Sri Lanka Navy PO text:\n\n'+pasteText+'\n\n'+PROMPT}];}
-      else{const f=fileToUse;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+      if(mode==='file'){const f=chosen;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
         const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
         content=[block,{type:'text',text:PROMPT}];}
+      else if(pastedImgs.length){
+        content=[];
+        for(const f of pastedImgs){const b64=await toB64(f);const isPdf=f.type==='application/pdf';
+          content.push(isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}});}
+        content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
+      } else {content=[{type:'text',text:'Sri Lanka Navy PO text:\n\n'+pasteText+'\n\n'+PROMPT}];}
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+'). மறுபடி try பண்ணு.');
       const data=await resp.json();
@@ -334,7 +348,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const rec=JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
       rec.items=Array.isArray(rec.items)?rec.items:[];
       current=rec;showForm();
-      chosen=null;pastedImg=null;$('file').value='';$('pasteBox').value='';$('pastePreview').innerHTML='';$('drop').classList.remove('has');$('dropbig').textContent='PO file தேர்ந்தெடு';$('chip').innerHTML='';
+      chosen=null;pastedImgs=[];$('file').value='';$('pasteBox').value='';$('pastePreview').innerHTML='';$('drop').classList.remove('has');$('dropbig').textContent='PO file தேர்ந்தெடு';$('chip').innerHTML='';
     }catch(err){$('errbox').innerHTML='<div class="err">⚠️ '+esc(err.message)+'</div>';}
     finally{$('go').innerHTML='படி 2 — Extract பண்ணு (AI)';updateGo();}
   }
