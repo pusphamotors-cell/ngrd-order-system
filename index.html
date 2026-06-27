@@ -689,6 +689,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
         ${CURRENT&&CURRENT.role==='admin'?`<button class="btn" data-assign="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#5a3fb0">👷 Assign</button>`:''}
         ${can('purchase')?`<button class="btn" data-purchase="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#0b2a4a">🛒 Purchase PDF</button>`:''}
+        ${can('value')?`<button class="btn" data-orderpdf="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1f6f8b">📄 Order PDF</button>`:''}
         <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
         <button class="del" data-del="${esc(o.id)}" style="font-size:16px;font-weight:700">🗑</button>
       </div>
@@ -736,6 +737,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(pu)pu.addEventListener('click',()=>{box.innerHTML=purchaseForm(o);wirePurchase(box,o);});
     const asg=box.querySelector('[data-assign]');
     if(asg)asg.addEventListener('click',async()=>{const users=await fbUsersGet();box.innerHTML=assignForm(o,users);wireAssign(box,o);});
+    const opdf=box.querySelector('[data-orderpdf]');
+    if(opdf)opdf.addEventListener('click',()=>openOrderPDF(o));
   }
 
   function purchaseForm(o){
@@ -779,6 +782,41 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
       openPurchasePDF(o,groups);
     });
+  }
+  function openOrderPDF(o){
+    const today=new Date().toLocaleDateString('en-GB');
+    const rows=(o.items||[]).map((it,n)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:6px">${n+1}</td><td style="border:1px solid #ccc;padding:6px">${esc(it.description)}</td><td style="text-align:center;border:1px solid #ccc;padding:6px">${esc(it.qty)}</td><td style="text-align:right;border:1px solid #ccc;padding:6px">${fmt(it.unit_price)}</td><td style="text-align:right;border:1px solid #ccc;padding:6px">${fmt(it.total)}</td></tr>`).join('');
+    const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
+      <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
+      <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &nbsp;&bull;&nbsp; ngrdmotors@gmail.com</div></div>`;
+    const meta=(l,v)=>`<tr><td style="padding:2px 8px 2px 0;color:#555;white-space:nowrap">${l}</td><td style="padding:2px 0;font-weight:600">${esc(v||'-')}</td></tr>`;
+    const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
+      ${head}
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
+        <table style="border-collapse:collapse">${meta('Order No',o.order_no)}${meta('File No',o.file_no)}${meta('NAHA',o.naha_no)}${meta('Civil No',o.civil_no)}</table>
+        <table style="border-collapse:collapse;text-align:right">${meta('Date',today)}${meta('Vehicle',o.model)}${meta('Order Date',o.order_date)}${meta('Delivery',o.delivery_date)}</table>
+      </div>
+      <div style="font-size:12px;margin-bottom:8px"><b>Buyer:</b> ${esc(o.buyer||'-')}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#0b2a4a;color:#fff">
+          <th style="padding:7px;border:1px solid #0b2a4a;width:34px">#</th>
+          <th style="padding:7px;border:1px solid #0b2a4a">Item Description</th>
+          <th style="padding:7px;border:1px solid #0b2a4a;width:48px">Qty</th>
+          <th style="padding:7px;border:1px solid #0b2a4a;width:88px">Unit Price</th>
+          <th style="padding:7px;border:1px solid #0b2a4a;width:96px">Total</th>
+        </tr></thead><tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="4" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">Grand Total (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(o.sell)}</td></tr></tfoot>
+      </table>
+      <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
+        <div>__________________________<br>Authorized Signature</div>
+        <div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div>
+      </div>
+      <div style="margin-top:16px;font-size:10px;color:#777;border-top:1px solid #ccc;padding-top:6px">NGRD Order System — Order copy</div>
+    </div>`;
+    const w=window.open('','_blank');
+    if(!w){alert('Popup block ஆச்சு — popup allow பண்ணு');return;}
+    w.document.write('<html><head><title>Order '+esc(o.order_no||'')+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.close();
   }
   function openPurchasePDF(o,groups){
     const today=new Date().toLocaleDateString('en-GB');
