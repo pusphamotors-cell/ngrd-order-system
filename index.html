@@ -113,11 +113,14 @@
   .del{background:none;border:none;color:#c2452f;font-size:15px;cursor:pointer;padding:3px 5px}
   @media(max-width:520px){.metarow,.grid2{grid-template-columns:1fr}}
 </style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
   <div class="topbar">
     <div class="crest">NGRD</div>
     <div class="brand"><h1>NGRD ORDER SYSTEM</h1><p>PO → முழு order record + லாபம்</p></div>
+    <div id="cloudBadge" style="margin-left:auto;font-size:11px;font-weight:700;color:#bff0c8;white-space:nowrap">☁️ Cloud</div>
   </div>
   <div class="tabs">
     <div class="tab on" id="tabDash">📊 Dashboard</div>
@@ -178,12 +181,51 @@
 
 <script>
   const $=id=>document.getElementById(id);
-  window.storage={
-    async set(k,v){localStorage.setItem(k,v);return{key:k,value:v};},
-    async get(k){const v=localStorage.getItem(k);return v==null?null:{key:k,value:v};},
-    async delete(k){localStorage.removeItem(k);return{deleted:true};},
-    async list(prefix){return{keys:Object.keys(localStorage).filter(x=>x.indexOf(prefix)===0)};}
+
+  // ---- Firebase (cloud storage) ----
+  const firebaseConfig={
+    apiKey:"AIzaSyAq2Q94OmW78rvKqO5LQIY-lu-Imht50uo",
+    authDomain:"ngrd-order-system.firebaseapp.com",
+    databaseURL:"https://ngrd-order-system-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:"ngrd-order-system",
+    storageBucket:"ngrd-order-system.firebasestorage.app",
+    messagingSenderId:"257143058955",
+    appId:"1:257143058955:web:b09fbdbeeeae8a9f184d0e"
   };
+  let _fbOk=false;
+  try{ firebase.initializeApp(firebaseConfig); _fbOk=true; }catch(e){ _fbOk=false; }
+  function _cloud(ok){const b=$('cloudBadge');if(!b)return;b.textContent=ok?'☁️ Cloud synced':'⚠️ Offline (local)';b.style.color=ok?'#bff0c8':'#ffd9b0';}
+
+  let _cache=null;
+  async function _loadAll(){
+    try{
+      if(!_fbOk)throw new Error('no fb');
+      const snap=await firebase.database().ref('orders').once('value');
+      let val=snap.val();
+      if(!val){ // cloud empty — migrate any old local orders up
+        const legacy=Object.keys(localStorage).filter(x=>x.indexOf('order:')===0);
+        if(legacy.length){const upd={};legacy.forEach(k=>upd[k]=localStorage.getItem(k));try{await firebase.database().ref('orders').update(upd);}catch(e){}val=upd;}
+      }
+      val=val||{};_cache={};Object.keys(val).forEach(k=>{_cache[k]=(typeof val[k]==='string')?val[k]:JSON.stringify(val[k]);});
+      try{localStorage.setItem('__orders_cache',JSON.stringify(_cache));}catch(e){}
+      _cloud(true);return _cache;
+    }catch(e){
+      _cloud(false);
+      if(_cache)return _cache;
+      try{const m=localStorage.getItem('__orders_cache');if(m){_cache=JSON.parse(m);return _cache;}}catch(_){}
+      _cache={};Object.keys(localStorage).filter(x=>x.indexOf('order:')===0).forEach(k=>_cache[k]=localStorage.getItem(k));return _cache;
+    }
+  }
+  window.storage={
+    async set(k,v){ if(!_cache)await _loadAll(); _cache[k]=v; try{localStorage.setItem(k,v);}catch(_){}
+      try{ if(_fbOk){await firebase.database().ref('orders/'+k).set(v);_cloud(true);} }catch(e){_cloud(false);} return{key:k,value:v}; },
+    async get(k){ if(!_cache)await _loadAll(); const v=_cache[k]; return v==null?null:{key:k,value:v}; },
+    async delete(k){ if(!_cache)await _loadAll(); delete _cache[k]; try{localStorage.removeItem(k);}catch(_){}
+      try{ if(_fbOk){await firebase.database().ref('orders/'+k).remove();_cloud(true);} }catch(e){_cloud(false);} return{deleted:true}; },
+    async list(prefix){ await _loadAll(); return{keys:Object.keys(_cache).filter(x=>x.indexOf(prefix)===0)}; }
+  };
+  // ---- end Firebase ----
+
   const fmt=n=>(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   function hasCost(o){return (Number(o.buy)||0)>0;}
