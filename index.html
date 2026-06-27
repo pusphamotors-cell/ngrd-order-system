@@ -473,7 +473,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dsec">🏢 Company-wise</div>
       <div class="dpanel">${compRows}</div>
       <div class="dsec">🏕️ Buyer / Camp-wise</div>
-      <div class="dpanel">${campRows}</div>`;
+      <div class="dpanel">${campRows}</div>
+      <div class="drow" style="margin-top:16px">
+        <button class="btn" id="dashRep" style="margin-top:0">📑 Report பாரு</button>
+        <button class="btn gold" id="dashOrd" style="margin-top:0">📋 Orders பாரு</button>
+      </div>`;
+    $('dashRep').onclick=()=>{setTab('rep');initReport();};
+    $('dashOrd').onclick=()=>{setTab('list');renderList();};
   }
   loadOrders().then(renderDash);
   $('repDownload').addEventListener('click',downloadReport);</script>
