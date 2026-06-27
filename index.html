@@ -164,6 +164,27 @@
   .gatebox .gc{box-shadow:0 4px 14px rgba(201,162,39,.4)}
   .wrap:not(.hide){animation:fadeup .26s ease}
   @keyframes fadeup{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  /* calendar */
+  .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .calhead .mtitle{font-size:15px;font-weight:800;color:var(--navy)}
+  .calnav{display:flex;gap:6px}
+  .calnav button{border:1px solid var(--line);background:#fff;border-radius:9px;width:36px;height:34px;font-size:16px;font-weight:800;color:var(--navy);cursor:pointer;box-shadow:var(--shadow)}
+  .calnav button:hover{background:#f4f7fd}
+  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .caldow{text-align:center;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;padding:4px 0}
+  .calcell{background:#fff;border:1px solid var(--line);border-radius:10px;min-height:54px;padding:5px 6px;cursor:pointer;transition:transform .12s,box-shadow .15s,border-color .15s;position:relative}
+  .calcell:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(16,30,54,.1);border-color:var(--navy2)}
+  .calcell.empty{background:transparent;border:none;cursor:default}
+  .calcell.empty:hover{transform:none;box-shadow:none}
+  .calcell .dn{font-size:12px;font-weight:700;color:var(--ink)}
+  .calcell.today{border-color:var(--gold);box-shadow:0 0 0 2px rgba(201,162,39,.25)}
+  .calcell.sel{border-color:var(--navy);box-shadow:0 0 0 2px rgba(20,39,74,.3)}
+  .calcell .dots{display:flex;flex-wrap:wrap;gap:2px;margin-top:3px}
+  .cdot{width:7px;height:7px;border-radius:50%}
+  .cdot.del{background:var(--blue)}.cdot.ld{background:var(--red)}.cdot.ord{background:var(--gold)}.cdot.bill{background:var(--green)}.cdot.pay{background:#7b3fb0}
+  .calcell .cnt{position:absolute;top:4px;right:5px;font-size:9px;font-weight:800;color:var(--muted)}
+  .callegend{display:flex;flex-wrap:wrap;gap:10px;margin:10px 2px;font-size:10.5px;color:var(--muted);font-weight:600}
+  .callegend span{display:inline-flex;align-items:center;gap:4px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -233,6 +254,7 @@
       <button class="mbtn on" id="rmReport" type="button">📊 Report</button>
       <button class="mbtn" id="rmPending" type="button">⏳ Pending</button>
       <button class="mbtn" id="rmDaily" type="button">📅 Day-wise</button>
+      <button class="mbtn" id="rmCal" type="button">📆 Calendar</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -251,6 +273,7 @@
     </div>
     <div id="repPendingWrap" class="hide"></div>
     <div id="repDailyWrap" class="hide"></div>
+    <div id="repCalWrap" class="hide"></div>
   </div>
 
   <div class="wrap hide" id="viewUsers">
@@ -816,11 +839,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('rmReport').onclick=()=>{setRepMode('report');renderReport();};
     $('rmPending').onclick=()=>{setRepMode('pending');renderPending();};
     $('rmDaily').onclick=()=>{setRepMode('daily');renderDaily();};
+    $('rmCal').onclick=()=>{setRepMode('cal');renderCal();};
     renderReport();
   }
   function setRepMode(m){
-    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');
+    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');$('rmCal').classList.toggle('on',m==='cal');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');
   }
   let _dailyBasis='bill';
   function renderDaily(){
@@ -848,6 +872,51 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${keys.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Date</th><th class="num">Orders</th><th class="num">Value (Rs)</th><th class="num">லாபம் (Rs)</th></tr></thead><tbody>${rows}</tbody></table></div></div>`:'<div class="empty">'+(useBill?'இன்னும் bill போட்ட order இல்ல':'Order date இல்ல')+'</div>'}`;
     $('dbBill').onclick=()=>{_dailyBasis='bill';renderDaily();};
     $('dbOrder').onclick=()=>{_dailyBasis='order';renderDaily();};
+  }
+  let _calY=null,_calM=null,_calSel=null;
+  function _dk(d){const p=parseDate(d);return p?p.getFullYear()+'-'+String(p.getMonth()+1).padStart(2,'0')+'-'+String(p.getDate()).padStart(2,'0'):null;}
+  function renderCal(){
+    const wrap=$('repCalWrap');const now=new Date();
+    if(_calY==null){_calY=now.getFullYear();_calM=now.getMonth();}
+    const del={},ord={},bill={},pay={};const add=(m,k,o)=>{if(!k)return;(m[k]=m[k]||[]).push(o);};
+    orders.forEach(o=>{add(del,_dk(o.delivery_date),o);add(ord,_dk(o.order_date),o);add(bill,_dk(o.bill_date),o);if(o.pay_date)add(pay,_dk(o.pay_date),o);});
+    const monthName=new Date(_calY,_calM,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    const first=new Date(_calY,_calM,1).getDay();const days=new Date(_calY,_calM+1,0).getDate();
+    const todK=_dk(now.toLocaleDateString('en-GB'));
+    let cells='';for(let i=0;i<first;i++)cells+='<div class="calcell empty"></div>';
+    for(let d=1;d<=days;d++){
+      const k=_calY+'-'+String(_calM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const dl=del[k]||[],or=ord[k]||[],bl=bill[k]||[],py=pay[k]||[];
+      const hasLD=dl.some(o=>!o.supplied);let dots='';
+      if(dl.length)dots+='<span class="cdot '+(hasLD?'ld':'del')+'"></span>';
+      if(or.length)dots+='<span class="cdot ord"></span>';if(bl.length)dots+='<span class="cdot bill"></span>';if(py.length)dots+='<span class="cdot pay"></span>';
+      const total=dl.length+or.length+bl.length+py.length;
+      cells+='<div class="calcell'+(k===todK?' today':'')+(k===_calSel?' sel':'')+'" data-day="'+k+'"><div class="dn">'+d+'</div>'+(total?'<div class="cnt">'+total+'</div>':'')+'<div class="dots">'+dots+'</div></div>';
+    }
+    wrap.innerHTML=`
+      <div class="calhead"><div class="mtitle">${monthName}</div><div class="calnav"><button id="calPrev">‹</button><button id="calToday" title="இந்த மாசம்">●</button><button id="calNext">›</button></div></div>
+      <div class="calgrid">${['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>'<div class="caldow">'+d+'</div>').join('')}${cells}</div>
+      <div class="callegend"><span><span class="cdot del"></span>Delivery</span><span><span class="cdot ld"></span>Delivery (வரல)</span><span><span class="cdot ord"></span>Order</span><span><span class="cdot bill"></span>Supply/Bill</span><span><span class="cdot pay"></span>Payment</span></div>
+      <div id="calDay"></div>`;
+    $('calPrev').onclick=()=>{_calM--;if(_calM<0){_calM=11;_calY--;}renderCal();};
+    $('calNext').onclick=()=>{_calM++;if(_calM>11){_calM=0;_calY++;}renderCal();};
+    $('calToday').onclick=()=>{_calY=now.getFullYear();_calM=now.getMonth();_calSel=null;renderCal();};
+    wrap.querySelectorAll('[data-day]').forEach(c=>c.addEventListener('click',()=>{_calSel=c.dataset.day;
+      wrap.querySelectorAll('.calcell').forEach(x=>x.classList.remove('sel'));c.classList.add('sel');renderCalDay(c.dataset.day,{del,ord,bill,pay});}));
+    if(_calSel)renderCalDay(_calSel,{del,ord,bill,pay});
+  }
+  function renderCalDay(k,maps){
+    const box=$('calDay');if(!box)return;
+    const dl=maps.del[k]||[],or=maps.ord[k]||[],bl=maps.bill[k]||[],py=maps.pay[k]||[];
+    const dt=new Date(k);const nice=isNaN(dt)?k:dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const sec=(t,arr,extra)=>arr.length?`<div class="sec" style="margin-top:6px">${t} (${arr.length})</div>`+arr.map(o=>`<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(o.buyer||'—')}</span></div><div class="vl">${extra(o)}</div></div>`).join(''):'';
+    let html=`<div class="dpanel" style="margin-top:12px;padding-bottom:6px"><div style="padding:10px 13px;font-weight:800;color:var(--navy);font-size:13px;border-bottom:1px solid var(--line)">📆 ${nice}</div>`;
+    if(!(dl.length||or.length||bl.length||py.length))html+='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">இந்த நாள் activity இல்ல</div>';
+    html+=sec('🚚 Deliver பண்ணணும்',dl,o=>o.supplied?'<span style="color:var(--green)">✓ ஆச்சு</span>':'<span style="color:var(--red)">⏳ வரல</span>');
+    html+=sec('📥 Order வந்தது',or,o=>'Rs '+fmt(o.sell));
+    html+=sec('🧾 Supply / Bill',bl,o=>'Rs '+fmt(o.bill_amt||o.sell));
+    html+=sec('💵 Payment வந்தது',py,o=>'<span style="color:var(--green)">✓</span>');
+    html+='</div>';box.innerHTML=html;
   }
   function renderPending(){
     const supPend=orders.filter(o=>!o.supplied);
