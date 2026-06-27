@@ -3,35 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NGRD Order & Profit System</title>
+<title>NGRD Order System</title>
 <style>
   :root{
     --navy:#14274A;--navy2:#1F3864;--gold:#C9A227;--gold-soft:#F3E7C4;
     --ink:#1b2030;--muted:#6b7385;--line:#e4e8f0;--bg:#f4f6fa;--card:#fff;
     --green:#1f8a4c;--green-bg:#e6f4ec;--red:#b3261e;--red-bg:#fbe9e7;
+    --blue:#2563b5;--blue-bg:#e8f0fb;--amber:#9a6b00;--amber-bg:#fbf1d8;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;padding-bottom:60px}
-  .topbar{background:linear-gradient(100deg,var(--navy),var(--navy2));color:#fff;padding:15px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:5}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;padding-bottom:70px}
+  .topbar{background:linear-gradient(100deg,var(--navy),var(--navy2));color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:6}
   .crest{width:38px;height:38px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:13px;flex:0 0 auto;border:2px solid #fff3}
-  .brand h1{font-size:15px;font-weight:700}.brand p{font-size:10.5px;opacity:.82;letter-spacing:.4px}
-  .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4}
+  .brand h1{font-size:15px;font-weight:700}.brand p{font-size:10.5px;opacity:.82}
+  .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
   .tab{flex:1;text-align:center;padding:12px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent}
   .tab.on{color:var(--navy);border-bottom-color:var(--gold)}
   .wrap{max-width:880px;margin:0 auto;padding:16px 14px}
   .hide{display:none}
   .step{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:2px 2px 8px}
-  .drop{background:var(--card);border:2px dashed #b9c4d6;border-radius:14px;padding:20px;text-align:center;cursor:pointer}
-  .drop:hover{border-color:var(--navy2);background:#fbfcfe}
-  .drop.has{border-style:solid;border-color:var(--green);background:var(--green-bg)}
-  .drop .ic{font-size:28px}.drop .big{font-size:14px;font-weight:700;color:var(--navy);margin-top:5px}
-  .drop .sm{font-size:11.5px;color:var(--muted);margin-top:2px}
-  .filechip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:4px 11px;font-size:12px;color:var(--navy);font-weight:600;margin-top:9px}
   .modetoggle{display:flex;gap:6px;background:#eef1f6;border-radius:10px;padding:4px;margin-bottom:10px}
   .mbtn{flex:1;border:none;background:none;padding:9px;font-size:12.5px;font-weight:700;color:var(--muted);border-radius:8px;cursor:pointer;font-family:inherit}
   .mbtn.on{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-  .pastebox{width:100%;min-height:130px;border:2px solid var(--gold);border-radius:12px;padding:12px;font-size:13px;font-family:inherit;background:#fffdf6;resize:vertical;line-height:1.5}
+  .pastebox{width:100%;min-height:120px;border:2px solid var(--gold);border-radius:12px;padding:12px;font-size:13px;font-family:inherit;background:#fffdf6;resize:vertical}
   .pastebox:focus{outline:none;border-color:var(--navy2)}
+  .drop{background:var(--card);border:2px dashed #b9c4d6;border-radius:14px;padding:20px;text-align:center;cursor:pointer}
+  .drop:hover{border-color:var(--navy2);background:#fbfcfe}.drop.has{border-style:solid;border-color:var(--green);background:var(--green-bg)}
+  .drop .ic{font-size:28px}.drop .big{font-size:14px;font-weight:700;color:var(--navy);margin-top:5px}.drop .sm{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .filechip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:4px 11px;font-size:12px;color:var(--navy);font-weight:600;margin-top:9px}
   .btn{display:block;width:100%;margin-top:12px;background:var(--navy2);color:#fff;border:none;border-radius:11px;padding:13px;font-size:14.5px;font-weight:700;cursor:pointer}
   .btn:hover{background:var(--navy)}.btn:disabled{background:#aeb6c4;cursor:not-allowed}
   .btn.gold{background:var(--gold);color:var(--navy)}.btn.gold:hover{filter:brightness(.96)}
@@ -39,63 +38,61 @@
   .err{background:var(--red-bg);color:var(--red);border:1px solid #f3c0bb;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-top:10px}
   .card{background:#fff;border:1px solid var(--line);border-radius:13px;margin-top:16px;overflow:hidden}
   .chead{background:linear-gradient(100deg,var(--navy),var(--navy2));color:#fff;padding:10px 13px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  .chead .ono{font-weight:800;font-size:14px}
-  .chead .pill{font-size:11px;background:#ffffff22;padding:2px 8px;border-radius:11px}
+  .chead .ono{font-weight:800;font-size:14px}.chead .pill{font-size:11px;background:#ffffff22;padding:2px 8px;border-radius:11px}
+  .sec{font-size:11px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;padding:11px 13px 4px;background:#fafbfd;border-top:1px solid var(--line)}
   .metarow{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
-  .mc{background:#fafbfd;padding:7px 11px}
+  .mc{background:#fff;padding:7px 12px}
   .mc .l{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:700}
   .mc .d{font-size:12.5px;font-weight:600;margin-top:1px;word-break:break-word}
   .tablewrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:12px;min-width:460px}
+  table{width:100%;border-collapse:collapse;font-size:12px;min-width:430px}
   th{text-align:left;font-size:9.5px;text-transform:uppercase;color:#fff;padding:7px;font-weight:700;background:var(--navy2);white-space:nowrap}
   td{padding:7px;border-bottom:1px solid #eef1f6;vertical-align:top}
-  .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
-  .ctr{text-align:center}
-  .field{padding:13px;border-top:1px solid var(--line)}
-  .field label{font-size:11.5px;font-weight:700;color:var(--navy);display:block;margin-bottom:5px}
-  .field input{width:100%;border:1.5px solid var(--gold);border-radius:9px;padding:11px;font-size:16px;font-family:inherit;background:#fffdf6;font-weight:700;color:var(--navy)}
-  .field input:focus{outline:none;border-color:var(--navy2)}
-  .field .hint{font-size:10.5px;color:var(--muted);margin-top:4px}
+  .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}.ctr{text-align:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:11px 13px}
+  .fld label{font-size:10.5px;font-weight:700;color:var(--navy);display:block;margin-bottom:4px}
+  .fld input{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;background:#fffdf6}
+  .fld input:focus{outline:none;border-color:var(--gold)}
+  .fld.gold input{border-color:var(--gold)}
+  .full{grid-column:1 / -1}
+  .toggle{display:flex;align-items:center;gap:8px;padding:9px 13px;cursor:pointer}
+  .toggle input{width:20px;height:20px;accent-color:var(--green)}
+  .toggle span{font-size:13px;font-weight:700;color:var(--navy)}
   .profitbox{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);border-top:1px solid var(--line)}
   .pb{background:#fafbfd;padding:11px 8px;text-align:center}
   .pb .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .pb .v{font-size:16px;font-weight:800;margin-top:3px;color:var(--navy)}
-  .pb.sell .v{color:var(--navy2)}.pb.buy .v{color:#9a6b00}.pb.prof .v{color:var(--green)}
-  .pb.prof.neg .v{color:var(--red)}
-  .margin{text-align:center;font-size:12px;color:var(--muted);padding:8px;background:#fff}
-  .margin b{color:var(--green)}
+  .pb.sell .v{color:var(--navy2)}.pb.buy .v{color:#9a6b00}.pb.prof .v{color:var(--green)}.pb.prof.neg .v{color:var(--red)}
+  .badge{display:inline-block;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px}
+  .b-pend{background:var(--blue-bg);color:var(--blue)}.b-inv{background:var(--amber-bg);color:var(--amber)}.b-paid{background:var(--green-bg);color:var(--green)}
   .empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:13px;background:#fff;border:1px solid var(--line);border-radius:13px;margin-top:16px}
   .spin{display:inline-block;width:15px;height:15px;border:2.5px solid #ffffff66;border-top-color:#fff;border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes r{to{transform:rotate(360deg)}}
-  .gtot{display:flex;gap:10px;margin-bottom:6px}
-  .gcard{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;border-left:4px solid var(--navy2)}
-  .gcard.p{border-left-color:var(--green)}
-  .gcard .k{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase}
-  .gcard .v{font-size:19px;font-weight:800;color:var(--navy);margin-top:2px}
-  .gcard.p .v{color:var(--green)}
-  .orow{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-top:9px;display:flex;align-items:center;gap:10px}
-  .orow .left{flex:1;min-width:0}
-  .orow .ono{font-weight:800;color:var(--navy2);font-size:13.5px}
-  .orow .meta{font-size:11px;color:var(--muted);margin-top:1px}
-  .orow .pf{text-align:right;white-space:nowrap}
-  .orow .pf .amt{font-weight:800;color:var(--green);font-size:14px}
-  .orow .pf .amt.neg{color:var(--red)}
-  .orow .pf .sub{font-size:10px;color:var(--muted)}
-  .orow .del{background:none;border:none;color:#c2452f;font-size:16px;cursor:pointer;padding:3px 5px}
-  @media(max-width:520px){.metarow{grid-template-columns:1fr}}
+  .gtot{display:flex;gap:9px;margin-bottom:8px;flex-wrap:wrap}
+  .gcard{flex:1;min-width:90px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;border-left:4px solid var(--navy2)}
+  .gcard.p{border-left-color:var(--green)}.gcard.w{border-left-color:var(--amber)}
+  .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
+  .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
+  .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
+  .ohead{padding:11px 13px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .ohead .left{flex:1;min-width:0}.ohead .ono{font-weight:800;color:var(--navy2);font-size:13.5px}
+  .ohead .meta{font-size:11px;color:var(--muted);margin-top:1px}
+  .ohead .pf{text-align:right;white-space:nowrap}.ohead .pf .amt{font-weight:800;color:var(--green);font-size:13px}.ohead .pf .amt.neg{color:var(--red)}
+  .odetail{border-top:1px solid var(--line);background:#fafbfd}
+  .del{background:none;border:none;color:#c2452f;font-size:15px;cursor:pointer;padding:3px 5px}
+  @media(max-width:520px){.metarow,.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
   <div class="topbar">
     <div class="crest">NGRD</div>
-    <div class="brand"><h1>NGRD ORDER & PROFIT</h1><p>PO → AI extract → லாபம் · Phase 1</p></div>
+    <div class="brand"><h1>NGRD ORDER SYSTEM</h1><p>PO → முழு order record + லாபம்</p></div>
   </div>
   <div class="tabs">
     <div class="tab on" id="tabNew">➕ புது Order</div>
     <div class="tab" id="tabList">📋 Saved Orders</div>
   </div>
 
-  <!-- NEW ORDER -->
   <div class="wrap" id="viewNew">
     <div class="step">படி 1 — PO கொடு (file illa paste)</div>
     <div class="modetoggle">
@@ -104,231 +101,211 @@
     </div>
     <label class="drop" id="drop">
       <input type="file" id="file" accept=".pdf,image/*" hidden>
-      <div class="ic">📄</div>
-      <div class="big" id="dropbig">PO file தேர்ந்தெடு</div>
-      <div class="sm">Navy purchase order</div>
+      <div class="ic">📄</div><div class="big" id="dropbig">PO file தேர்ந்தெடு</div><div class="sm">Navy purchase order</div>
     </label>
     <div id="chip"></div>
-    <textarea class="pastebox hide" id="pasteBox" placeholder="PO text-ஐ இங்க paste பண்ணு...&#10;அல்லது copy பண்ண image/PDF-ஐ இங்க paste பண்ணு (PC-ல Ctrl+V)"></textarea>
+    <textarea class="pastebox hide" id="pasteBox" placeholder="PO text-ஐ paste பண்ணு... அல்லது image/PDF copy பண்ணி paste (PC-ல Ctrl+V)"></textarea>
     <div id="pastePreview" class="hide"></div>
     <button class="btn" id="go" disabled>படி 2 — Extract பண்ணு (AI)</button>
-    <div class="note">AI எல்லா item-um விலையும் தானா எடுக்கும் · ~1–2 cents</div>
+    <div class="note">AI: Order No, File No, NAHA, Civil No, Model, items + விலை தானா எடுக்கும்</div>
     <div id="errbox"></div>
     <div id="result"></div>
   </div>
 
-  <!-- SAVED ORDERS -->
   <div class="wrap hide" id="viewList">
     <div class="gtot">
-      <div class="gcard"><div class="k">மொத்த Orders</div><div class="v" id="gCount">0</div></div>
-      <div class="gcard p"><div class="k">மொத்த லாபம் (Rs)</div><div class="v" id="gProfit">0.00</div></div>
+      <div class="gcard"><div class="k">Orders</div><div class="v" id="gCount">0</div></div>
+      <div class="gcard p"><div class="k">மொத்த லாபம்</div><div class="v" id="gProfit">0</div></div>
+      <div class="gcard w"><div class="k">Payment வரல</div><div class="v" id="gPending">0</div></div>
     </div>
     <div id="orderList"></div>
   </div>
 
 <script>
   const $=id=>document.getElementById(id);
-  // Persistent storage via browser localStorage (works on hosted site)
   window.storage={
     async set(k,v){localStorage.setItem(k,v);return{key:k,value:v};},
     async get(k){const v=localStorage.getItem(k);return v==null?null:{key:k,value:v};},
-    async delete(k){localStorage.removeItem(k);return{key:k,deleted:true};},
-    async list(prefix){const keys=Object.keys(localStorage).filter(x=>x.indexOf(prefix)===0);return{keys};}
+    async delete(k){localStorage.removeItem(k);return{deleted:true};},
+    async list(prefix){return{keys:Object.keys(localStorage).filter(x=>x.indexOf(prefix)===0)};}
   };
   const fmt=n=>(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  let chosen=null, current=null, orders=[], mode='file', pastedImg=null;
+  let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
 
-  // ---- Tabs ----
   $('tabNew').onclick=()=>{$('tabNew').classList.add('on');$('tabList').classList.remove('on');$('viewNew').classList.remove('hide');$('viewList').classList.add('hide');};
   $('tabList').onclick=()=>{$('tabList').classList.add('on');$('tabNew').classList.remove('on');$('viewList').classList.remove('hide');$('viewNew').classList.add('hide');renderList();};
 
-  // ---- Mode toggle ----
-  function updateGo(){
-    $('go').disabled = (mode==='file') ? !chosen : !(pastedImg || $('pasteBox').value.trim());
-  }
-  $('mFile').onclick=()=>{mode='file';$('mFile').classList.add('on');$('mPaste').classList.remove('on');
-    $('drop').classList.remove('hide');$('chip').classList.remove('hide');
-    $('pasteBox').classList.add('hide');$('pastePreview').classList.add('hide');updateGo();};
-  $('mPaste').onclick=()=>{mode='paste';$('mPaste').classList.add('on');$('mFile').classList.remove('on');
-    $('drop').classList.add('hide');$('chip').classList.add('hide');
-    $('pasteBox').classList.remove('hide');$('pastePreview').classList.remove('hide');updateGo();};
+  function updateGo(){$('go').disabled=(mode==='file')?!chosen:!(pastedImg||$('pasteBox').value.trim());}
+  $('mFile').onclick=()=>{mode='file';$('mFile').classList.add('on');$('mPaste').classList.remove('on');$('drop').classList.remove('hide');$('chip').classList.remove('hide');$('pasteBox').classList.add('hide');$('pastePreview').classList.add('hide');updateGo();};
+  $('mPaste').onclick=()=>{mode='paste';$('mPaste').classList.add('on');$('mFile').classList.remove('on');$('drop').classList.add('hide');$('chip').classList.add('hide');$('pasteBox').classList.remove('hide');$('pastePreview').classList.remove('hide');updateGo();};
 
-  // ---- File upload ----
-  $('file').addEventListener('change',e=>{
-    chosen=e.target.files[0]||null;$('errbox').innerHTML='';
-    if(chosen){$('drop').classList.add('has');$('dropbig').textContent='File ready ✓';
-      $('chip').innerHTML='<span class="filechip">📎 '+esc(chosen.name)+'</span>';}
-    updateGo();
-  });
-
-  // ---- Paste image / PDF / text ----
-  $('pasteBox').addEventListener('paste',e=>{
-    const items=((e.clipboardData||window.clipboardData)||{}).items||[];
-    for(const it of items){
-      if(it.type && (it.type.indexOf('image')===0 || it.type==='application/pdf')){
-        const blob=it.getAsFile();
-        if(blob){pastedImg=blob;e.preventDefault();
-          const isPdf=blob.type==='application/pdf';
-          $('pastePreview').innerHTML=isPdf
-            ? '<span class="filechip">📎 PDF paste ஆச்சு ✓</span>'
-            : '<img src="'+URL.createObjectURL(blob)+'" style="max-width:100%;max-height:200px;border-radius:10px;border:1px solid var(--line);margin-top:8px">';
-          $('errbox').innerHTML='';updateGo();
-        }
-        return;
-      }
-    }
-    setTimeout(updateGo,0);
-  });
-  $('pasteBox').addEventListener('input',()=>{
-    if($('pasteBox').value.trim()){pastedImg=null;$('pastePreview').innerHTML='';}
-    updateGo();
-  });
+  $('file').addEventListener('change',e=>{chosen=e.target.files[0]||null;$('errbox').innerHTML='';
+    if(chosen){$('drop').classList.add('has');$('dropbig').textContent='File ready ✓';$('chip').innerHTML='<span class="filechip">📎 '+esc(chosen.name)+'</span>';}updateGo();});
   const toB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('File படிக்க முடியல'));r.readAsDataURL(f);});
+  $('pasteBox').addEventListener('paste',e=>{const items=((e.clipboardData||window.clipboardData)||{}).items||[];
+    for(const it of items){if(it.type&&(it.type.indexOf('image')===0||it.type==='application/pdf')){const blob=it.getAsFile();
+      if(blob){pastedImg=blob;e.preventDefault();const isPdf=blob.type==='application/pdf';
+        $('pastePreview').innerHTML=isPdf?'<span class="filechip">📎 PDF paste ஆச்சு ✓</span>':'<img src="'+URL.createObjectURL(blob)+'" style="max-width:100%;max-height:180px;border-radius:10px;border:1px solid var(--line);margin-top:8px">';
+        $('errbox').innerHTML='';updateGo();}return;}}setTimeout(updateGo,0);});
+  $('pasteBox').addEventListener('input',()=>{if($('pasteBox').value.trim()){pastedImg=null;$('pastePreview').innerHTML='';}updateGo();});
 
-  const PROMPT=`Extract every detail from this Sri Lanka Navy purchase order (PO). Respond with ONLY valid JSON, no markdown. Read values exactly as printed; never change, round, or invent. Shape:
-{"order_no":"","file_no":"","naha_no":"","po_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","make":"","uom":"","qty":0,"unit_price":0,"total":0}]}
-buyer = the customer/command/camp the PO is from (e.g. Western Naval Command). Include ALL line items in order. total_amount = accepted total as a plain number, no commas. Missing text="" , missing number=0. Output only JSON.`;
+  const PROMPT=`Extract details from this Sri Lanka Navy purchase order (PO). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
+{"order_no":"","file_no":"","naha_no":"","civil_no":"","model":"","quotation_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
+naha_no = Vehicle NAHA number (e.g. NAHA.8388). civil_no = Civil No (e.g. WP PQ-7786). model = vehicle model/type (e.g. Bolero Single Cab). quotation_date = the date of your quotation referenced in the PO. buyer = the command/camp. Include ALL items. Numbers plain, no commas. Missing text="" , missing number=0. Output only JSON.`;
 
   async function extract(){
-    const pasteText=$('pasteBox').value.trim();
-    const fileToUse=(mode==='file')?chosen:pastedImg;
-    if(!fileToUse && !(mode==='paste'&&pasteText))return;
-    $('errbox').innerHTML='';$('go').disabled=true;
-    $('go').innerHTML='<span class="spin"></span>PO படிக்கிறேன்...';
+    const pasteText=$('pasteBox').value.trim();const fileToUse=(mode==='file')?chosen:pastedImg;
+    if(!fileToUse&&!(mode==='paste'&&pasteText))return;
+    $('errbox').innerHTML='';$('go').disabled=true;$('go').innerHTML='<span class="spin"></span>PO படிக்கிறேன்...';
     try{
       let content;
-      if(mode==='paste' && !pastedImg){
-        content=[{type:'text',text:'Sri Lanka Navy PO text:\n\n'+pasteText+'\n\n'+PROMPT}];
-      }else{
-        const f=fileToUse;
-        const b64=await toB64(f);
-        const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
-        const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}
-          :{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
-        content=[block,{type:'text',text:PROMPT}];
-      }
-      const resp=await fetch('/api/extract',{method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({content})});
+      if(mode==='paste'&&!pastedImg){content=[{type:'text',text:'Sri Lanka Navy PO text:\n\n'+pasteText+'\n\n'+PROMPT}];}
+      else{const f=fileToUse;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+        const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
+        content=[block,{type:'text',text:PROMPT}];}
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+'). மறுபடி try பண்ணு.');
       const data=await resp.json();
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
       const rec=JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
       rec.items=Array.isArray(rec.items)?rec.items:[];
-      current=rec;showResult();
-      chosen=null;pastedImg=null;$('file').value='';$('pasteBox').value='';$('pastePreview').innerHTML='';
-      $('drop').classList.remove('has');$('dropbig').textContent='PO file தேர்ந்தெடு';$('chip').innerHTML='';
+      current=rec;showForm();
+      chosen=null;pastedImg=null;$('file').value='';$('pasteBox').value='';$('pastePreview').innerHTML='';$('drop').classList.remove('has');$('dropbig').textContent='PO file தேர்ந்தெடு';$('chip').innerHTML='';
     }catch(err){$('errbox').innerHTML='<div class="err">⚠️ '+esc(err.message)+'</div>';}
     finally{$('go').innerHTML='படி 2 — Extract பண்ணு (AI)';updateGo();}
   }
   $('go').addEventListener('click',extract);
 
-  function showResult(){
+  function plusOneMonth(d){ // d = yyyy-mm-dd -> +1 month
+    if(!d)return'';const p=d.split('-');if(p.length!==3)return'';
+    let y=+p[0],m=+p[1],day=+p[2];m++;if(m>12){m=1;y++;}
+    return y+'-'+String(m).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+  }
+
+  function showForm(){
     const p=current;
-    const sell=Number(p.total_amount)||(p.items||[]).reduce((a,i)=>a+(Number(i.total)||0),0);
-    p._sell=sell;
-    const rows=(p.items||[]).map(it=>`<tr>
-      <td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td>
-      <td class="ctr">${esc(it.qty)}</td><td class="num">${fmt(it.unit_price)}</td>
-      <td class="num">${fmt(it.total)}</td></tr>`).join('');
+    const sell=Number(p.total_amount)||(p.items||[]).reduce((a,i)=>a+(Number(i.total)||0),0);p._sell=sell;
+    const rows=(p.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="ctr">${esc(it.qty)}</td><td class="num">${fmt(it.unit_price)}</td><td class="num">${fmt(it.total)}</td></tr>`).join('');
     $('result').innerHTML=`
       <div class="card">
-        <div class="chead"><span class="ono">${esc(p.order_no||'PO')}</span>
-          ${p.supplier?'<span class="pill">'+esc(p.supplier)+'</span>':''}
-          ${p.po_date?'<span class="pill">'+esc(p.po_date)+'</span>':''}</div>
+        <div class="chead"><span class="ono">${esc(p.order_no||'PO')}</span>${p.buyer?'<span class="pill">'+esc(p.buyer)+'</span>':''}</div>
+        <div class="sec">🤖 PO Details (AI எடுத்தது)</div>
         <div class="metarow">
-          <div class="mc"><div class="l">யார் வாங்கினாங்க (Buyer)</div><div class="d">${esc(p.buyer||'—')}</div></div>
+          <div class="mc"><div class="l">Order No</div><div class="d">${esc(p.order_no||'—')}</div></div>
           <div class="mc"><div class="l">File No</div><div class="d">${esc(p.file_no||'—')}</div></div>
-          <div class="mc"><div class="l">NAHA No</div><div class="d">${esc(p.naha_no||'—')}</div></div>
-          <div class="mc"><div class="l">Items</div><div class="d">${(p.items||[]).length}</div></div>
+          <div class="mc"><div class="l">Vehicle No (NAHA)</div><div class="d">${esc(p.naha_no||'—')}</div></div>
+          <div class="mc"><div class="l">Civil No</div><div class="d">${esc(p.civil_no||'—')}</div></div>
+          <div class="mc"><div class="l">Vehicle / Model</div><div class="d">${esc(p.model||'—')}</div></div>
+          <div class="mc"><div class="l">Quotation Date</div><div class="d">${esc(p.quotation_date||'—')}</div></div>
         </div>
-        <div class="tablewrap"><table>
-          <thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead>
-          <tbody>${rows||'<tr><td colspan="5" class="ctr" style="padding:12px;color:#999">item இல்ல</td></tr>'}</tbody>
-        </table></div>
-        <div class="field">
-          <label>Navy விற்ற விலை (மொத்தம்) — Rs</label>
-          <input id="sellIn" type="number" inputmode="decimal" value="${sell}">
-          <div class="hint">PO-ல இருந்து தானா வந்தது — தப்பா இருந்தா திருத்து</div>
+        <div class="sec">📦 Items (${(p.items||[]).length})</div>
+        <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead><tbody>${rows||'<tr><td colspan=5 class=ctr style="padding:12px;color:#999">item இல்ல</td></tr>'}</tbody></table></div>
+
+        <div class="sec">📅 Dates</div>
+        <div class="grid2">
+          <div class="fld"><label>Received Date (order வாங்கினது)</label><input type="date" id="recDate"></div>
+          <div class="fld gold"><label>Delivery Date (1 மாசம்)</label><input type="date" id="delDate"></div>
         </div>
-        <div class="field">
-          <label>💵 நீ கடையில கொடுத்த விலை (Purchase Cost) — Rs</label>
-          <input id="buyIn" type="number" inputmode="decimal" placeholder="உதா: 35000" value="${p._buy||''}">
-          <div class="hint">40 item ஒரே bill-ல வாங்குனாலும், மொத்த cost-ஐ இங்க போடு</div>
+
+        <div class="sec">💰 லாபம்</div>
+        <div class="grid2">
+          <div class="fld"><label>Navy விற்ற விலை (Rs)</label><input type="number" id="sellIn" inputmode="decimal" value="${sell}"></div>
+          <div class="fld gold"><label>நீ வாங்கின Cost (Rs)</label><input type="number" id="buyIn" inputmode="decimal" placeholder="உதா: 13900"></div>
         </div>
         <div class="profitbox">
           <div class="pb sell"><div class="k">விற்றது</div><div class="v" id="pvSell">${fmt(sell)}</div></div>
-          <div class="pb buy"><div class="k">வாங்கியது</div><div class="v" id="pvBuy">0.00</div></div>
-          <div class="pb prof" id="pbProf"><div class="k">லாபம்</div><div class="v" id="pvProf">0.00</div></div>
+          <div class="pb buy"><div class="k">வாங்கியது</div><div class="v" id="pvBuy">0</div></div>
+          <div class="pb prof" id="pbProf"><div class="k">லாபம்</div><div class="v" id="pvProf">0</div></div>
         </div>
-        <div class="margin" id="marginLine"></div>
-        <button class="btn gold" id="saveBtn">✅ இந்த Order-ஐ Save பண்ணு</button>
+
+        <div class="sec">🚚 Supply</div>
+        <label class="toggle"><input type="checkbox" id="supplied"><span>Supply பண்ணிட்டோமா? ✓</span></label>
+        <div class="grid2">
+          <div class="fld"><label>Bill No</label><input id="billNo" placeholder="உன் invoice no"></div>
+          <div class="fld"><label>Bill Date</label><input type="date" id="billDate"></div>
+          <div class="fld full"><label>Bill Amount (Rs)</label><input type="number" id="billAmt" inputmode="decimal"></div>
+        </div>
+
+        <div class="sec">💵 Payment</div>
+        <label class="toggle"><input type="checkbox" id="paid"><span>Payment வந்துடுச்சா? ✓</span></label>
+        <div class="grid2">
+          <div class="fld"><label>Cheque No</label><input id="chequeNo" placeholder="cheque number"></div>
+          <div class="fld"><label>Payment Date</label><input type="date" id="payDate"></div>
+        </div>
+
+        <button class="btn gold" id="saveBtn" style="margin:13px">✅ இந்த Order-ஐ Save பண்ணு</button>
       </div>`;
-    $('buyIn').addEventListener('input',recalc);
-    $('sellIn').addEventListener('input',recalc);
-    $('saveBtn').addEventListener('click',saveOrder);
-    recalc();
+    $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);
+    $('recDate').addEventListener('change',e=>{if(!$('delDate').value)$('delDate').value=plusOneMonth(e.target.value);});
+    $('saveBtn').addEventListener('click',saveOrder);recalc();
     $('result').scrollIntoView({behavior:'smooth',block:'nearest'});
   }
-
-  function recalc(){
-    const sell=Number($('sellIn').value)||0;
-    const buy=Number($('buyIn').value)||0;
-    current._sell=sell;current._buy=buy;
-    const prof=sell-buy;
-    $('pvSell').textContent=fmt(sell);
-    $('pvBuy').textContent=fmt(buy);
-    $('pvProf').textContent=fmt(prof);
-    $('pbProf').classList.toggle('neg',prof<0);
-    const m=sell>0?(prof/sell*100):0;
-    $('marginLine').innerHTML=buy>0?('Margin: <b>'+m.toFixed(1)+'%</b>'):'Purchase cost போட்டா லாபம் தெரியும்';
-  }
+  function recalc(){const sell=Number($('sellIn').value)||0,buy=Number($('buyIn').value)||0;
+    $('pvSell').textContent=fmt(sell);$('pvBuy').textContent=fmt(buy);$('pvProf').textContent=fmt(sell-buy);
+    $('pbProf').classList.toggle('neg',(sell-buy)<0);}
 
   async function saveOrder(){
-    const sell=Number($('sellIn').value)||0, buy=Number($('buyIn').value)||0;
-    if(buy<=0){if(!confirm('Purchase cost போடல — லாபம் சரியா வராது. பரவாயில்லையா?'))return;}
-    const id='order:'+Date.now();
-    const o={id,order_no:current.order_no||'PO',buyer:current.buyer||'',po_date:current.po_date||'',
-      file_no:current.file_no||'',naha_no:current.naha_no||'',items:current.items||[],
-      sell,buy,profit:sell-buy,savedAt:new Date().toISOString()};
-    try{
-      await window.storage.set(id,JSON.stringify(o),false);
-      orders.unshift(o);current=null;
+    const order_no=(current.order_no||'').trim();
+    if(!order_no){alert('Order No இல்ல — save பண்ண முடியாது');return;}
+    // duplicate check
+    const dup=orders.find(o=>(o.order_no||'').trim().toLowerCase()===order_no.toLowerCase());
+    if(dup){alert('⚠️ இந்த Order No ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\nஒரே order-க்கு ஒன்னு தான். Duplicate ஆகாது.');return;}
+    const sell=Number($('sellIn').value)||0,buy=Number($('buyIn').value)||0;
+    const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
+      model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
+      items:current.items||[],sell,buy,profit:sell-buy,
+      received_date:$('recDate').value||'',delivery_date:$('delDate').value||'',
+      supplied:$('supplied').checked,bill_no:$('billNo').value||'',bill_date:$('billDate').value||'',bill_amt:Number($('billAmt').value)||0,
+      paid:$('paid').checked,cheque_no:$('chequeNo').value||'',pay_date:$('payDate').value||'',
+      savedAt:new Date().toISOString()};
+    try{await window.storage.set(o.id,JSON.stringify(o));orders.unshift(o);current=null;
       $('result').innerHTML='<div class="empty" style="border-color:var(--green);background:var(--green-bg);color:#155">✅ Save ஆச்சு! லாபம்: Rs '+fmt(o.profit)+'<br><small>"Saved Orders" tab-ல பாக்கலாம்</small></div>';
-    }catch(e){$('errbox').innerHTML='<div class="err">⚠️ Save fail ஆச்சு: '+esc(e.message)+'</div>';}
+    }catch(e){$('errbox').innerHTML='<div class="err">⚠️ Save fail: '+esc(e.message)+'</div>';}
   }
 
-  async function loadOrders(){
-    try{
-      const res=await window.storage.list('order:',false);
-      const keys=(res&&res.keys)||[];
-      const arr=[];
-      for(const k of keys){try{const r=await window.storage.get(k,false);if(r&&r.value)arr.push(JSON.parse(r.value));}catch(e){}}
-      arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
-      orders=arr;
-    }catch(e){orders=[];}
+  function statusOf(o){if(o.paid)return{t:'Paid 🟢',c:'b-paid'};if(o.supplied||o.bill_no)return{t:'Invoiced 🟠',c:'b-inv'};return{t:'Pending 🔵',c:'b-pend'};}
+
+  async function loadOrders(){try{const res=await window.storage.list('order:');const keys=(res&&res.keys)||[];const arr=[];
+    for(const k of keys){try{const r=await window.storage.get(k);if(r&&r.value)arr.push(JSON.parse(r.value));}catch(e){}}
+    arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}}
+
+  function detailHtml(o){
+    const items=(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="ctr">${esc(it.qty)}</td><td class="num">${fmt(it.total)}</td></tr>`).join('');
+    const row=(l,v)=>`<div class="mc"><div class="l">${l}</div><div class="d">${esc(v||'—')}</div></div>`;
+    return `<div class="odetail">
+      <div class="sec">📋 PO Details</div><div class="metarow">
+        ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Model',o.model)}
+        ${row('Quotation Date',o.quotation_date)}${row('Received',o.received_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div>
+      <div class="sec">📦 Items (${(o.items||[]).length})</div>
+      <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Total</th></tr></thead><tbody>${items||''}</tbody></table></div>
+      <div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',fmt(o.buy))}${row('லாபம்',fmt(o.profit))}${row('Margin',(o.sell>0?(o.profit/o.sell*100).toFixed(1):'0')+'%')}</div>
+      <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${row('Bill Amount',fmt(o.bill_amt))}</div>
+      <div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
+      <div style="padding:11px 13px"><button class="del" data-del="${esc(o.id)}" style="font-size:13px;font-weight:700">🗑 இந்த order-ஐ delete பண்ணு</button></div>
+    </div>`;
   }
 
   function renderList(){
     const lc=$('orderList');
-    if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணி save பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0.00';return;}
-    let tp=0;
-    lc.innerHTML=orders.map(o=>{tp+=Number(o.profit)||0;return `<div class="orow">
-      <div class="left"><div class="ono">${esc(o.order_no)}</div>
-        <div class="meta">${esc(o.buyer||'—')} · ${esc(o.po_date||'')} · ${(o.items||[]).length} items</div>
-        <div class="meta">விற்றது Rs ${fmt(o.sell)} · வாங்கியது Rs ${fmt(o.buy)}</div></div>
-      <div class="pf"><div class="amt ${o.profit<0?'neg':''}">Rs ${fmt(o.profit)}</div><div class="sub">லாபம்</div></div>
-      <button class="del" data-del="${esc(o.id)}">✕</button></div>`;}).join('');
-    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);
-    lc.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',async e=>{
-      const id=e.target.dataset.del;
-      if(!confirm('இந்த order-ஐ delete பண்ணவா?'))return;
-      try{await window.storage.delete(id,false);}catch(_){}
-      orders=orders.filter(x=>x.id!==id);renderList();
+    if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';return;}
+    let tp=0,pend=0;
+    lc.innerHTML=orders.map((o,i)=>{tp+=Number(o.profit)||0;if(!o.paid)pend++;const s=statusOf(o);
+      return `<div class="orow"><div class="ohead" data-i="${i}">
+        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span></div>
+          <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div></div>
+        <div class="pf"><div class="amt ${o.profit<0?'neg':''}">Rs ${fmt(o.profit)}</div></div>
+      </div><div id="det-${i}" class="hide"></div></div>`;}).join('');
+    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;
+    lc.querySelectorAll('.ohead').forEach(h=>h.addEventListener('click',e=>{
+      const i=h.dataset.i,box=$('det-'+i);
+      if(box.classList.contains('hide')){box.innerHTML=detailHtml(orders[i]);box.classList.remove('hide');
+        box.querySelector('[data-del]').addEventListener('click',async ev=>{const id=ev.target.dataset.del;
+          if(!confirm('இந்த order-ஐ delete பண்ணவா?'))return;try{await window.storage.delete(id);}catch(_){}
+          orders=orders.filter(x=>x.id!==id);renderList();});
+      }else{box.classList.add('hide');box.innerHTML='';}
     }));
   }
-
   loadOrders();
 </script>
 </body>
