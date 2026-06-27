@@ -71,6 +71,11 @@
   .gtot{display:flex;gap:9px;margin-bottom:8px;flex-wrap:wrap}
   .gcard{flex:1;min-width:90px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;border-left:4px solid var(--navy2)}
   .gcard.p{border-left-color:var(--green)}.gcard.w{border-left-color:var(--amber)}
+  .gcard.r{border-left-color:var(--red)}.gcard.r .v{color:var(--red)}
+  .alert-line{font-size:11px;font-weight:700;margin-top:4px;padding:2px 9px;border-radius:10px;display:inline-block}
+  .al-safe{background:var(--green-bg);color:var(--green)}
+  .al-soon{background:var(--amber-bg);color:var(--amber)}
+  .al-urgent{background:var(--red-bg);color:var(--red)}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -117,6 +122,7 @@
       <div class="gcard"><div class="k">Orders</div><div class="v" id="gCount">0</div></div>
       <div class="gcard p"><div class="k">மொத்த லாபம்</div><div class="v" id="gProfit">0</div></div>
       <div class="gcard w"><div class="k">Payment வரல</div><div class="v" id="gPending">0</div></div>
+      <div class="gcard r"><div class="k">⚠️ LD risk</div><div class="v" id="gLD">0</div></div>
     </div>
     <div id="orderList"></div>
   </div>
@@ -271,6 +277,26 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
   function statusOf(o){if(o.paid)return{t:'Paid 🟢',c:'b-paid'};if(o.supplied||o.bill_no)return{t:'Invoiced 🟠',c:'b-inv'};return{t:'Pending 🔵',c:'b-pend'};}
 
+  function parseDate(s){
+    if(!s)return null;s=String(s).trim();
+    let m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if(m)return new Date(+m[3],+m[2]-1,+m[1]);
+    m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+    m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+    if(m){const mo=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(m[2].slice(0,3).toLowerCase());if(mo>=0)return new Date(+m[3],mo,+m[1]);}
+    const d=new Date(s);return isNaN(d.getTime())?null:d;
+  }
+  function daysLeft(o){const d=parseDate(o.delivery_date);if(!d)return null;const t=new Date();t.setHours(0,0,0,0);d.setHours(0,0,0,0);return Math.round((d-t)/86400000);}
+  function deliveryAlert(o){
+    if(o.supplied)return null; // supply ஆச்சு, risk இல்ல
+    const dl=daysLeft(o);if(dl===null)return null;
+    if(dl<0)return{lvl:0,c:'al-urgent',t:'🔴 Delivery '+(-dl)+' நாள் தாண்டிடுச்சு — LD risk!'};
+    if(dl<=3)return{lvl:0,c:'al-urgent',t:'🔴 இன்னும் '+dl+' நாள் — சீக்கிரம் supply! LD risk'};
+    if(dl<=7)return{lvl:1,c:'al-soon',t:'🟠 இன்னும் '+dl+' நாள் — supply ready பண்ணு'};
+    return{lvl:2,c:'al-safe',t:'🟢 இன்னும் '+dl+' நாள் — safe'};
+  }
+
   async function loadOrders(){try{const res=await window.storage.list('order:');const keys=(res&&res.keys)||[];const arr=[];
     for(const k of keys){try{const r=await window.storage.get(k);if(r&&r.value)arr.push(JSON.parse(r.value));}catch(e){}}
     arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}}
@@ -293,15 +319,21 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
   function renderList(){
     const lc=$('orderList');
-    if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';return;}
-    let tp=0,pend=0;
-    lc.innerHTML=orders.map((o,i)=>{tp+=Number(o.profit)||0;if(!o.paid)pend++;const s=statusOf(o);
-      return `<div class="orow"><div class="ohead" data-i="${i}">
+    if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
+    // attach alert info + sort: urgent first, then soon, then by savedAt
+    const list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
+    const rk=x=>x.al?x.al.lvl:9;
+    list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
+    let tp=0,pend=0,ld=0;
+    orders.forEach(o=>{tp+=Number(o.profit)||0;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
+    lc.innerHTML=list.map(({o,idx,al})=>{const s=statusOf(o);
+      return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span></div>
-          <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div></div>
+          <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
+          ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}</div>
         <div class="pf"><div class="amt ${o.profit<0?'neg':''}">Rs ${fmt(o.profit)}</div></div>
-      </div><div id="det-${i}" class="hide"></div></div>`;}).join('');
-    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;
+      </div><div id="det-${idx}" class="hide"></div></div>`;}).join('');
+    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
     lc.querySelectorAll('.ohead').forEach(h=>h.addEventListener('click',e=>{
       const i=h.dataset.i,box=$('det-'+i);
       if(box.classList.contains('hide')){box.innerHTML=detailHtml(orders[i]);box.classList.remove('hide');
