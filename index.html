@@ -359,7 +359,7 @@
   }
   $('tabDash').onclick=()=>{setTab('dash');renderDash();};
   $('tabNew').onclick=()=>setTab('new');
-  $('tabList').onclick=()=>{setTab('list');renderList();};
+  $('tabList').onclick=()=>{_listFilter=null;setTab('list');renderList();};
   $('tabTasks').onclick=()=>{setTab('tasks');renderTasks();};
   $('tabRep').onclick=()=>{setTab('rep');initReport();};
   $('tabUsers').onclick=()=>{setTab('users');renderUsers();};
@@ -842,6 +842,28 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     });
   }
 
+  let _listFilter=null;
+  function _companyOf(o){const sup=(o.supplier||'').toLowerCase();return sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';}
+  function _matchFilter(o){const f=_listFilter;if(!f)return true;
+    if(f.t==='company')return _companyOf(o)===f.v;
+    if(f.t==='buyer')return (o.buyer||'—')===f.v;
+    if(f.t==='status')return statusKey(o)===f.v;
+    if(f.t==='ld'){const a=deliveryAlert(o);return a&&a.lvl===0;}
+    if(f.t==='paypend')return !o.paid;
+    if(f.t==='paylate'){const a=paymentAlert(o);return a&&a.c==='al-urgent';}
+    if(f.t==='paid')return !!o.paid;
+    return true;}
+  function _filterLabel(){const f=_listFilter;if(!f)return '';
+    if(f.t==='company')return '🏢 '+f.v;
+    if(f.t==='buyer')return '🏕️ '+f.v;
+    if(f.t==='status')return f.v==='paid'?'🟢 Paid':f.v==='invoiced'?'🟠 Invoiced':'🔵 Pending';
+    if(f.t==='ld')return '🔴 LD risk';
+    if(f.t==='paypend')return '💵 Payment வரல';
+    if(f.t==='paylate')return '🔴 Payment late';
+    if(f.t==='paid')return '🟢 Paid';
+    return '';}
+  function gotoList(f){_listFilter=f;const sb=$('searchBox');if(sb)sb.value='';setTab('list');renderList();}
+
   function renderList(){
     const lc=$('orderList');
     if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
@@ -851,17 +873,20 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const q=(($('searchBox')||{}).value||'').trim().toLowerCase();
     let list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
     if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')).toLowerCase().indexOf(q)>=0));
+    if(_listFilter)list=list.filter(({o})=>_matchFilter(o));
+    const chip=_listFilter?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px">${esc(_filterLabel())} · ${list.length}</span><span id="fltClear" style="cursor:pointer;color:var(--red);font-size:12px;font-weight:700">✕ clear</span></div>`:'';
     const rk=x=>x.al?x.al.lvl:9;
     list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
-    if(!list.length){lc.innerHTML='<div class="empty">🔍 "'+esc(q)+'" — match ஆகல</div>';return;}
-    lc.innerHTML=list.map(({o,idx,al})=>{const s=statusOf(o);
+    if(!list.length){lc.innerHTML=chip+'<div class="empty">'+(q?'🔍 "'+esc(q)+'" — match ஆகல':'இந்த filter-க்கு order இல்ல')+'</div>';const fc=$('fltClear');if(fc)fc.onclick=()=>{_listFilter=null;renderList();};return;}
+    lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
       return `<div class="orow"><div class="ohead" data-i="${idx}">
-        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span></div>
+        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}</div>
           <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
       </div><div id="det-${idx}" class="hide"></div></div>`;}).join('');
+    const fc=$('fltClear');if(fc)fc.onclick=()=>{_listFilter=null;renderList();};
     lc.querySelectorAll('.ohead').forEach(h=>h.addEventListener('click',e=>{
       const i=h.dataset.i,box=$('det-'+i);
       if(box.classList.contains('hide')){box.innerHTML=detailHtml(orders[i]);box.classList.remove('hide');wireDetail(box,orders[i]);}
@@ -1030,27 +1055,27 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     });
     const tot=orders.length;
     const sb=(n,col)=>n>0?`<div style="flex:${n};background:${col}">${n}</div>`:'';
-    const compRows=Object.keys(comp).map(k=>`<div class="brow"><span class="nm">${esc(k)}</span><span class="ct">${comp[k].n} orders · Rs ${fmt(comp[k].v)}</span><span class="vl">Rs ${fmt(comp[k].p)}</span></div>`).join('');
-    const campRows=Object.keys(camp).sort((a,b)=>camp[b].v-camp[a].v).map(k=>`<div class="brow"><span class="nm">${esc(k)}</span><span class="ct">${camp[k].n} orders</span><span class="vl">Rs ${fmt(camp[k].v)}</span></div>`).join('');
+    const compRows=Object.keys(comp).map(k=>`<div class="brow" data-fltt="company" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${comp[k].n} orders · Rs ${fmt(comp[k].v)}</span><span class="vl">Rs ${fmt(comp[k].p)}</span></div>`).join('');
+    const campRows=Object.keys(camp).sort((a,b)=>camp[b].v-camp[a].v).map(k=>`<div class="brow" data-fltt="buyer" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${camp[k].n} orders</span><span class="vl">Rs ${fmt(camp[k].v)}</span></div>`).join('');
     dw.innerHTML=`
       <div class="drow">
-        <div class="dstat"><div class="k">மொத்த Orders</div><div class="v">${tot}</div></div>
+        <div class="dstat" data-fltt="all"><div class="k">மொத்த Orders</div><div class="v">${tot}</div></div>
         <div class="dstat gold"><div class="k">மொத்த Value</div><div class="v">${fmt(value)}</div><div class="s">Rs</div></div>
       </div>
       <div class="drow">
         <div class="dstat g"><div class="k">மொத்த லாபம்</div><div class="v">${fmt(profit)}</div><div class="s">Rs · margin ${costedVal>0?(profit/costedVal*100).toFixed(1):0}%</div></div>
-        <div class="dstat r"><div class="k">⚠️ LD risk</div><div class="v">${ld}</div><div class="s">${soon} order soon</div></div>
+        <div class="dstat r" data-fltt="ld"><div class="k">⚠️ LD risk</div><div class="v">${ld}</div><div class="s">${soon} order soon</div></div>
       </div>
       <div class="drow">
-        <div class="dstat w"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்${payLate?' · 🔴 '+payLate+' late':''}</div></div>
-        <div class="dstat g"><div class="k">Paid ஆச்சு</div><div class="v">${st.d}</div><div class="s">order</div></div>
+        <div class="dstat w" data-fltt="paypend"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்${payLate?' · 🔴 '+payLate+' late':''}</div></div>
+        <div class="dstat g" data-fltt="paid"><div class="k">Paid ஆச்சு</div><div class="v">${st.d}</div><div class="s">order</div></div>
       </div>
       <div class="dsec">📈 Status</div>
       <div class="statusbar">${sb(st.p,'#2563b5')}${sb(st.i,'#9a6b00')}${sb(st.d,'#1f8a4c')}</div>
       <div class="dpanel">
-        <div class="brow"><span class="nm">🔵 Pending</span><span class="vl">${st.p}</span></div>
-        <div class="brow"><span class="nm">🟠 Invoiced</span><span class="vl">${st.i}</span></div>
-        <div class="brow"><span class="nm">🟢 Paid</span><span class="vl">${st.d}</span></div>
+        <div class="brow" data-fltt="status" data-fltv="pending"><span class="nm">🔵 Pending</span><span class="vl">${st.p}</span></div>
+        <div class="brow" data-fltt="status" data-fltv="invoiced"><span class="nm">🟠 Invoiced</span><span class="vl">${st.i}</span></div>
+        <div class="brow" data-fltt="status" data-fltv="paid"><span class="nm">🟢 Paid</span><span class="vl">${st.d}</span></div>
       </div>
       <div class="dsec">🏢 Company-wise</div>
       <div class="dpanel">${compRows}</div>
@@ -1061,7 +1086,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="btn gold" id="dashOrd" style="margin-top:0">📋 Orders பாரு</button>
       </div>`;
     $('dashRep').onclick=()=>{setTab('rep');initReport();};
-    $('dashOrd').onclick=()=>{setTab('list');renderList();};
+    $('dashOrd').onclick=()=>{_listFilter=null;setTab('list');renderList();};
+    dw.querySelectorAll('[data-fltt]').forEach(el=>{el.style.cursor='pointer';el.title='Click → orders பாரு';
+      el.addEventListener('click',()=>{const t=el.dataset.fltt,v=el.dataset.fltv;
+        if(t==='all')gotoList(null);
+        else if(t==='status')gotoList({t:'status',v});
+        else if(t==='company')gotoList({t:'company',v});
+        else if(t==='buyer')gotoList({t:'buyer',v});
+        else gotoList({t});});});
   }
   loadOrders().then(()=>{renderDash();_loadSuppliers();});
   _loadParts();
