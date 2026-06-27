@@ -110,6 +110,8 @@
   .gatebox input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;font-size:15px;font-family:inherit;text-align:center;margin-bottom:10px}
   .gatebox input:focus{outline:none;border-color:var(--gold)}
   .gateerr{color:var(--red);font-size:12px;margin-bottom:8px;min-height:14px}
+  body.staff [data-del]{display:none!important}
+  body.staff #tabUsers{display:none!important}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -129,7 +131,8 @@
     <div class="gatebox">
       <div class="gc">NGRD</div>
       <h2>NGRD Order System</h2>
-      <p>🔒 Password போட்டு உள்ள வாங்க</p>
+      <p>🔒 Login பண்ணி உள்ள வாங்க</p>
+      <input type="text" id="gateUser" placeholder="Username" autocomplete="off" autocapitalize="off">
       <input type="password" id="gatePass" placeholder="Password" autocomplete="off">
       <div class="gateerr" id="gateErr"></div>
       <button class="btn gold" id="gateBtn" style="margin-top:0">உள்ள போ →</button>
@@ -146,6 +149,7 @@
     <div class="tab" id="tabNew">➕ புது Order</div>
     <div class="tab" id="tabList">📋 Saved</div>
     <div class="tab" id="tabRep">📑 Report</div>
+    <div class="tab" id="tabUsers">👤 Users</div>
   </div>
 
   <div class="wrap" id="viewDash">
@@ -196,6 +200,21 @@
     </div>
     <button class="btn gold" id="repDownload">📥 Excel download</button>
     <div id="repResult"></div>
+  </div>
+
+  <div class="wrap hide" id="viewUsers">
+    <div class="step">👤 Users — Admin மட்டும் manage பண்ணலாம்</div>
+    <div class="card">
+      <div class="sec">➕ புது User சேர்</div>
+      <div class="grid2">
+        <div class="fld"><label>Username</label><input id="nuUser" placeholder="உதா: darshan" autocapitalize="off"></div>
+        <div class="fld"><label>Name</label><input id="nuName" placeholder="முழு பேர்"></div>
+        <div class="fld"><label>Password</label><input id="nuPass" placeholder="password"></div>
+        <div class="fld"><label>Role</label><select id="nuRole"><option value="staff">Staff</option><option value="admin">Admin</option></select></div>
+      </div>
+      <button class="btn gold" id="nuAdd" style="margin:13px">➕ User சேர்</button>
+    </div>
+    <div id="userList"></div>
   </div>
 
 <script>
@@ -253,13 +272,14 @@
   let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
 
   function setTab(tab){
-    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabRep').classList.toggle('on',tab==='rep');
-    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');$('viewRep').classList.toggle('hide',tab!=='rep');
+    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabRep').classList.toggle('on',tab==='rep');$('tabUsers').classList.toggle('on',tab==='users');
+    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');$('viewRep').classList.toggle('hide',tab!=='rep');$('viewUsers').classList.toggle('hide',tab!=='users');
   }
   $('tabDash').onclick=()=>{setTab('dash');renderDash();};
   $('tabNew').onclick=()=>setTab('new');
   $('tabList').onclick=()=>{setTab('list');renderList();};
   $('tabRep').onclick=()=>{setTab('rep');initReport();};
+  $('tabUsers').onclick=()=>{setTab('users');renderUsers();};
 
   function updateGo(){$('go').disabled=(mode==='file')?!chosen:!(pastedImg||$('pasteBox').value.trim());}
   $('mFile').onclick=()=>{mode='file';$('mFile').classList.add('on');$('mPaste').classList.remove('on');$('drop').classList.remove('hide');$('chip').classList.remove('hide');$('pasteBox').classList.add('hide');$('pastePreview').classList.add('hide');updateGo();};
@@ -690,14 +710,53 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   $('repDownload').addEventListener('click',downloadReport);
   $('searchBox').addEventListener('input',renderList);
 
-  // ---- Password lock ----
-  const APP_PASSWORD="ngrd2026";
-  function doLogin(){const v=($('gatePass').value||'').trim();
-    if(v===APP_PASSWORD){localStorage.setItem('ngrd_auth','1');$('loginGate').style.display='none';}
-    else{$('gateErr').textContent='Password தப்பு! மறுபடி try பண்ணு';}}
+  // ---- User system (Admin + Staff) ----
+  let CURRENT=null;
+  async function fbUsersGet(){try{const s=await firebase.database().ref('users').once('value');return s.val()||{};}catch(e){try{return JSON.parse(localStorage.getItem('__users')||'{}');}catch(_){return{};}}}
+  async function fbUsersSet(obj){try{if(_fbOk)await firebase.database().ref('users').set(obj);}catch(e){}try{localStorage.setItem('__users',JSON.stringify(obj));}catch(_){}}
+  function applyRole(){document.body.classList.toggle('staff',!CURRENT||CURRENT.role!=='admin');}
+  function enterApp(){$('loginGate').style.display='none';applyRole();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';}
+  async function doLogin(){
+    const u=($('gateUser').value||'').trim().toLowerCase(),p=($('gatePass').value||'');
+    if(!u||!p){$('gateErr').textContent='Username + Password போடு';return;}
+    $('gateErr').textContent='...';
+    let users=await fbUsersGet();
+    if(Object.keys(users).length===0){users={admin:{pass:'ngrd2026',role:'admin',name:'Admin'}};await fbUsersSet(users);}
+    const rec=users[u];
+    if(rec&&String(rec.pass)===p){CURRENT={u,role:rec.role||'staff',name:rec.name||u};localStorage.setItem('ngrd_user',JSON.stringify(CURRENT));enterApp();$('gateErr').textContent='';}
+    else{$('gateErr').textContent='Username illa Password தப்பு!';}
+  }
   $('gateBtn').addEventListener('click',doLogin);
   $('gatePass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-  $('logoutBtn').addEventListener('click',()=>{localStorage.removeItem('ngrd_auth');location.reload();});
-  if(localStorage.getItem('ngrd_auth')==='1'){$('loginGate').style.display='none';}else{setTimeout(()=>$('gatePass').focus(),100);}</script>
+  $('logoutBtn').addEventListener('click',()=>{localStorage.removeItem('ngrd_user');location.reload();});
+  (function(){try{const s=JSON.parse(localStorage.getItem('ngrd_user'));if(s&&s.u){CURRENT=s;enterApp();}else setTimeout(()=>$('gateUser').focus(),100);}catch(e){setTimeout(()=>$('gateUser').focus(),100);}})();
+
+  async function renderUsers(){
+    if(!CURRENT||CURRENT.role!=='admin'){$('userList').innerHTML='<div class="empty">Admin மட்டும் பாக்கலாம்</div>';return;}
+    const users=await fbUsersGet();
+    const keys=Object.keys(users);
+    $('userList').innerHTML='<div class="sec" style="background:#fafbfd;border-radius:10px">இருக்கற Users ('+keys.length+')</div>'+keys.map(u=>{const r=users[u];
+      return `<div class="orow"><div class="ohead">
+        <div class="left"><div class="ono">${esc(u)} <span class="badge ${r.role==='admin'?'b-paid':'b-inv'}">${r.role==='admin'?'Admin':'Staff'}</span></div>
+          <div class="meta">${esc(r.name||'')} · password: ${esc(r.pass||'')}</div></div>
+        <div class="pf"><button class="del" data-deluser="${esc(u)}" style="font-size:15px">🗑</button></div>
+      </div></div>`;}).join('');
+    $('userList').querySelectorAll('[data-deluser]').forEach(b=>b.addEventListener('click',async()=>{
+      const u=b.dataset.deluser;
+      if(u===CURRENT.u){alert('உன்னையே delete பண்ண முடியாது!');return;}
+      if(!confirm(u+' user-ஐ delete பண்ணவா?'))return;
+      const us=await fbUsersGet();delete us[u];await fbUsersSet(us);renderUsers();
+    }));
+  }
+  $('nuAdd').addEventListener('click',async()=>{
+    const u=($('nuUser').value||'').trim().toLowerCase(),n=($('nuName').value||'').trim(),p=($('nuPass').value||'').trim(),role=$('nuRole').value;
+    if(!u||!p){alert('Username + Password வேணும்');return;}
+    const users=await fbUsersGet();
+    if(users[u]){if(!confirm('இந்த username ஏற்கனவே இருக்கு. மாத்தவா?'))return;}
+    users[u]={pass:p,role,name:n||u};await fbUsersSet(users);
+    $('nuUser').value='';$('nuName').value='';$('nuPass').value='';$('nuRole').value='staff';
+    renderUsers();
+  });
+  // ---- end user system ----</script>
 </body>
 </html>
