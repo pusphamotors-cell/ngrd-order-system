@@ -76,6 +76,20 @@
   .al-safe{background:var(--green-bg);color:var(--green)}
   .al-soon{background:var(--amber-bg);color:var(--amber)}
   .al-urgent{background:var(--red-bg);color:var(--red)}
+  .drow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .dstat{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px 14px;border-top:3px solid var(--navy2)}
+  .dstat.g{border-top-color:var(--green)}.dstat.gold{border-top-color:var(--gold)}.dstat.r{border-top-color:var(--red)}.dstat.w{border-top-color:var(--amber)}
+  .dstat .k{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .dstat .v{font-size:21px;font-weight:800;color:var(--navy);margin-top:3px}
+  .dstat.g .v{color:var(--green)}.dstat.r .v{color:var(--red)}.dstat.w .v{color:var(--amber)}.dstat.gold .v{color:#9a6b00}
+  .dstat .s{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .dsec{font-size:11.5px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;margin:16px 2px 8px}
+  .dpanel{background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .statusbar{display:flex;height:30px;border-radius:8px;overflow:hidden;margin-bottom:10px;border:1px solid var(--line)}
+  .statusbar div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;min-width:0}
+  .brow{display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid #eef1f6;font-size:13px}
+  .brow:last-child{border-bottom:none}.brow .nm{flex:1;font-weight:600;min-width:0}.brow .ct{font-size:11px;color:var(--muted);white-space:nowrap}
+  .brow .vl{font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;white-space:nowrap}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -94,11 +108,16 @@
     <div class="brand"><h1>NGRD ORDER SYSTEM</h1><p>PO → முழு order record + லாபம்</p></div>
   </div>
   <div class="tabs">
-    <div class="tab on" id="tabNew">➕ புது Order</div>
-    <div class="tab" id="tabList">📋 Saved Orders</div>
+    <div class="tab on" id="tabDash">📊 Dashboard</div>
+    <div class="tab" id="tabNew">➕ புது Order</div>
+    <div class="tab" id="tabList">📋 Saved</div>
   </div>
 
-  <div class="wrap" id="viewNew">
+  <div class="wrap" id="viewDash">
+    <div id="dashContent"></div>
+  </div>
+
+  <div class="wrap hide" id="viewNew">
     <div class="step">படி 1 — PO கொடு (file illa paste)</div>
     <div class="modetoggle">
       <button class="mbtn on" id="mFile">📄 File upload</button>
@@ -139,8 +158,13 @@
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
 
-  $('tabNew').onclick=()=>{$('tabNew').classList.add('on');$('tabList').classList.remove('on');$('viewNew').classList.remove('hide');$('viewList').classList.add('hide');};
-  $('tabList').onclick=()=>{$('tabList').classList.add('on');$('tabNew').classList.remove('on');$('viewList').classList.remove('hide');$('viewNew').classList.add('hide');renderList();};
+  function setTab(tab){
+    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');
+    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');
+  }
+  $('tabDash').onclick=()=>{setTab('dash');renderDash();};
+  $('tabNew').onclick=()=>setTab('new');
+  $('tabList').onclick=()=>{setTab('list');renderList();};
 
   function updateGo(){$('go').disabled=(mode==='file')?!chosen:!(pastedImg||$('pasteBox').value.trim());}
   $('mFile').onclick=()=>{mode='file';$('mFile').classList.add('on');$('mPaste').classList.remove('on');$('drop').classList.remove('hide');$('chip').classList.remove('hide');$('pasteBox').classList.add('hide');$('pastePreview').classList.add('hide');updateGo();};
@@ -343,7 +367,49 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       }else{box.classList.add('hide');box.innerHTML='';}
     }));
   }
-  loadOrders();
-</script>
+  function renderDash(){
+    const dw=$('dashContent');
+    if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
+    let value=0,profit=0,pend=0,pendAmt=0,ld=0,soon=0;
+    const st={p:0,i:0,d:0};const comp={},camp={};
+    orders.forEach(o=>{
+      value+=Number(o.sell)||0;profit+=Number(o.profit)||0;
+      if(!o.paid){pend++;pendAmt+=Number(o.sell)||0;}
+      if(o.paid)st.d++;else if(o.supplied||o.bill_no)st.i++;else st.p++;
+      const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;else if(a&&a.lvl===1)soon++;
+      const sup=(o.supplier||'').toLowerCase();const c=sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';
+      comp[c]=comp[c]||{n:0,v:0,p:0};comp[c].n++;comp[c].v+=Number(o.sell)||0;comp[c].p+=Number(o.profit)||0;
+      const b=o.buyer||'—';camp[b]=camp[b]||{n:0,v:0};camp[b].n++;camp[b].v+=Number(o.sell)||0;
+    });
+    const tot=orders.length;
+    const sb=(n,col)=>n>0?`<div style="flex:${n};background:${col}">${n}</div>`:'';
+    const compRows=Object.keys(comp).map(k=>`<div class="brow"><span class="nm">${esc(k)}</span><span class="ct">${comp[k].n} orders · Rs ${fmt(comp[k].v)}</span><span class="vl">Rs ${fmt(comp[k].p)}</span></div>`).join('');
+    const campRows=Object.keys(camp).sort((a,b)=>camp[b].v-camp[a].v).map(k=>`<div class="brow"><span class="nm">${esc(k)}</span><span class="ct">${camp[k].n} orders</span><span class="vl">Rs ${fmt(camp[k].v)}</span></div>`).join('');
+    dw.innerHTML=`
+      <div class="drow">
+        <div class="dstat"><div class="k">மொத்த Orders</div><div class="v">${tot}</div></div>
+        <div class="dstat gold"><div class="k">மொத்த Value</div><div class="v">${fmt(value)}</div><div class="s">Rs</div></div>
+      </div>
+      <div class="drow">
+        <div class="dstat g"><div class="k">மொத்த லாபம்</div><div class="v">${fmt(profit)}</div><div class="s">Rs · margin ${value>0?(profit/value*100).toFixed(1):0}%</div></div>
+        <div class="dstat r"><div class="k">⚠️ LD risk</div><div class="v">${ld}</div><div class="s">${soon} order soon</div></div>
+      </div>
+      <div class="drow">
+        <div class="dstat w"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்</div></div>
+        <div class="dstat g"><div class="k">Paid ஆச்சு</div><div class="v">${st.d}</div><div class="s">order</div></div>
+      </div>
+      <div class="dsec">📈 Status</div>
+      <div class="statusbar">${sb(st.p,'#2563b5')}${sb(st.i,'#9a6b00')}${sb(st.d,'#1f8a4c')}</div>
+      <div class="dpanel">
+        <div class="brow"><span class="nm">🔵 Pending</span><span class="vl">${st.p}</span></div>
+        <div class="brow"><span class="nm">🟠 Invoiced</span><span class="vl">${st.i}</span></div>
+        <div class="brow"><span class="nm">🟢 Paid</span><span class="vl">${st.d}</span></div>
+      </div>
+      <div class="dsec">🏢 Company-wise</div>
+      <div class="dpanel">${compRows}</div>
+      <div class="dsec">🏕️ Buyer / Camp-wise</div>
+      <div class="dpanel">${campRows}</div>`;
+  }
+  loadOrders().then(renderDash);</script>
 </body>
 </html>
