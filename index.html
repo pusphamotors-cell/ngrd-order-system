@@ -128,6 +128,42 @@
   .odetail{border-top:1px solid var(--line);background:#fafbfd}
   .del{background:none;border:none;color:#c2452f;font-size:15px;cursor:pointer;padding:3px 5px}
   @media(max-width:520px){.metarow,.grid2{grid-template-columns:1fr}}
+  /* ===== POLISH LAYER — modern SaaS look ===== */
+  html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  :root{--bg:#f5f7fb;--line:#e7ebf2;--shadow:0 1px 2px rgba(16,30,54,.04),0 2px 8px rgba(16,30,54,.05)}
+  body{letter-spacing:.1px}
+  .topbar{box-shadow:0 2px 14px rgba(20,39,74,.18)}
+  .crest{box-shadow:0 2px 8px rgba(0,0,0,.18)}
+  .tab{transition:color .15s,background .15s}
+  .tab:hover{color:var(--navy);background:#fafbff}
+  .tab.on{background:linear-gradient(180deg,#fff,#fcfaf3)}
+  .btn{transition:transform .12s ease,box-shadow .15s ease,background .15s ease,filter .15s ease;box-shadow:0 2px 6px rgba(31,56,100,.18);letter-spacing:.2px}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(31,56,100,.24)}
+  .btn:active{transform:translateY(0);box-shadow:0 1px 3px rgba(31,56,100,.2)}
+  .btn:disabled{box-shadow:none;transform:none}
+  .btn.gold{box-shadow:0 2px 6px rgba(201,162,39,.32)}
+  .btn.gold:hover{box-shadow:0 5px 16px rgba(201,162,39,.4)}
+  .mbtn{transition:background .15s,color .15s,box-shadow .15s}
+  .mbtn.on{box-shadow:0 1px 4px rgba(16,30,54,.12)}
+  .card,.dpanel,.empty{box-shadow:var(--shadow);border-color:#eef1f7}
+  .gcard,.dstat{box-shadow:var(--shadow);transition:transform .14s ease,box-shadow .16s ease}
+  .gcard:hover,.dstat:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(16,30,54,.1)}
+  .iarow{transition:box-shadow .15s;box-shadow:0 1px 2px rgba(16,30,54,.04)}
+  .iahead:hover{background:#f4f7fd}
+  .fld input,.fld select,.pastebox,.gatebox input{transition:border-color .15s,box-shadow .15s}
+  .fld input:focus,.fld select:focus{box-shadow:0 0 0 3px rgba(201,162,39,.16)}
+  .pastebox:focus{box-shadow:0 0 0 3px rgba(31,56,100,.13)}
+  .gatebox input:focus{box-shadow:0 0 0 3px rgba(201,162,39,.18)}
+  .badge,.alert-line{box-shadow:inset 0 0 0 1px rgba(0,0,0,.03)}
+  .orow{transition:box-shadow .15s}
+  .orow:hover{box-shadow:0 3px 12px rgba(16,30,54,.08)}
+  .tablewrap::-webkit-scrollbar{height:7px}
+  .tablewrap::-webkit-scrollbar-thumb{background:#cdd5e2;border-radius:8px}
+  *::selection{background:rgba(201,162,39,.25)}
+  .gatebox{box-shadow:0 20px 60px rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.2)}
+  .gatebox .gc{box-shadow:0 4px 14px rgba(201,162,39,.4)}
+  .wrap:not(.hide){animation:fadeup .26s ease}
+  @keyframes fadeup{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
