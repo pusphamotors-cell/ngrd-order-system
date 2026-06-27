@@ -113,6 +113,8 @@
   body.staff [data-del]{display:none!important}
   body.staff #tabUsers,body.staff #tabDash,body.staff #tabNew,body.staff #tabRep{display:none!important}
   body.staff .pf{display:none!important}
+  body.staff .gcard.money{display:none!important}
+  body.staff .alert-line.payalert{display:none!important}
   .gcard .k{font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase}
   .gcard .v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px}.gcard.p .v{color:var(--green)}.gcard.w .v{color:var(--amber)}
   .orow{background:#fff;border:1px solid var(--line);border-radius:12px;margin-top:9px;overflow:hidden}
@@ -179,8 +181,8 @@
   <div class="wrap hide" id="viewList">
     <div class="gtot">
       <div class="gcard"><div class="k">Orders</div><div class="v" id="gCount">0</div></div>
-      <div class="gcard p"><div class="k">மொத்த லாபம்</div><div class="v" id="gProfit">0</div></div>
-      <div class="gcard w"><div class="k">Payment வரல</div><div class="v" id="gPending">0</div></div>
+      <div class="gcard p money"><div class="k">மொத்த லாபம்</div><div class="v" id="gProfit">0</div></div>
+      <div class="gcard w money"><div class="k">Payment வரல</div><div class="v" id="gPending">0</div></div>
       <div class="gcard r"><div class="k">⚠️ LD risk</div><div class="v" id="gLD">0</div></div>
     </div>
     <input id="searchBox" placeholder="🔍 Order No / NAHA / Buyer தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
@@ -608,7 +610,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span></div>
           <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
-          ${paymentAlert(o)?'<div class="alert-line '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
+          ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
       </div><div id="det-${idx}" class="hide"></div></div>`;}).join('');
     lc.querySelectorAll('.ohead').forEach(h=>h.addEventListener('click',e=>{
