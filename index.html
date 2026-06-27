@@ -196,6 +196,7 @@
     <div class="modetoggle" style="margin:0 0 12px">
       <button class="mbtn on" id="rmReport" type="button">📊 Report</button>
       <button class="mbtn" id="rmPending" type="button">⏳ Pending</button>
+      <button class="mbtn" id="rmDaily" type="button">📅 Day-wise</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -213,6 +214,7 @@
       <div id="repResult"></div>
     </div>
     <div id="repPendingWrap" class="hide"></div>
+    <div id="repDailyWrap" class="hide"></div>
   </div>
 
   <div class="wrap hide" id="viewUsers">
@@ -775,9 +777,41 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const sel=$('repCamp');const buyers=Array.from(new Set(orders.map(o=>o.buyer||'—'))).sort();
     sel.innerHTML='<option value="all">எல்லா Camp / Buyer</option>'+buyers.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
     sel.onchange=renderReport;$('repStatus').onchange=renderReport;
-    $('rmReport').onclick=()=>{$('rmReport').classList.add('on');$('rmPending').classList.remove('on');$('repNormal').classList.remove('hide');$('repPendingWrap').classList.add('hide');renderReport();};
-    $('rmPending').onclick=()=>{$('rmPending').classList.add('on');$('rmReport').classList.remove('on');$('repNormal').classList.add('hide');$('repPendingWrap').classList.remove('hide');renderPending();};
+    $('rmReport').onclick=()=>{setRepMode('report');renderReport();};
+    $('rmPending').onclick=()=>{setRepMode('pending');renderPending();};
+    $('rmDaily').onclick=()=>{setRepMode('daily');renderDaily();};
     renderReport();
+  }
+  function setRepMode(m){
+    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');
+  }
+  let _dailyBasis='bill';
+  function renderDaily(){
+    const wrap=$('repDailyWrap');
+    const useBill=_dailyBasis==='bill';
+    const dateOf=o=>useBill?(o.bill_date||''):(o.order_date||'');
+    const map={};
+    orders.forEach(o=>{const d=dateOf(o);if(!d)return;const key=parseDate(d)?parseDate(d).toISOString().slice(0,10):d;
+      const m=map[key]||(map[key]={n:0,val:0,prof:0,raw:d});m.n++;m.val+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null)m.prof+=pv;});
+    const keys=Object.keys(map).sort((a,b)=>b.localeCompare(a)); // newest first
+    const fmtD=k=>{const dt=new Date(k);return isNaN(dt)?k:dt.toLocaleDateString('en-GB');};
+    const totN=keys.reduce((a,k)=>a+map[k].n,0),totV=keys.reduce((a,k)=>a+map[k].val,0),totP=keys.reduce((a,k)=>a+map[k].prof,0);
+    const rows=keys.map(k=>`<tr><td>${fmtD(k)}</td><td class="num">${map[k].n}</td><td class="num">${fmt(map[k].val)}</td><td class="num">${fmt(map[k].prof)}</td></tr>`).join('');
+    wrap.innerHTML=`
+      <div class="modetoggle" style="margin:0 0 10px;max-width:340px">
+        <button class="mbtn ${useBill?'on':''}" id="dbBill" type="button">💵 Bill date (sales)</button>
+        <button class="mbtn ${useBill?'':'on'}" id="dbOrder" type="button">📥 Order date</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">${useBill?'Supply/Bill date வாரியா — நிஜ sales (bill போட்ட orders மட்டும்)':'Order date வாரியா — எந்த நாள் எத்தனை PO வந்துச்சு'}</div>
+      <div class="drow">
+        <div class="dstat"><div class="k">Days</div><div class="v">${keys.length}</div></div>
+        <div class="dstat gold"><div class="k">Total Value</div><div class="v">${fmt(totV)}</div><div class="s">Rs · ${totN} orders</div></div>
+        <div class="dstat g"><div class="k">Total லாபம்</div><div class="v">${fmt(totP)}</div><div class="s">Rs</div></div>
+      </div>
+      ${keys.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Date</th><th class="num">Orders</th><th class="num">Value (Rs)</th><th class="num">லாபம் (Rs)</th></tr></thead><tbody>${rows}</tbody></table></div></div>`:'<div class="empty">'+(useBill?'இன்னும் bill போட்ட order இல்ல':'Order date இல்ல')+'</div>'}`;
+    $('dbBill').onclick=()=>{_dailyBasis='bill';renderDaily();};
+    $('dbOrder').onclick=()=>{_dailyBasis='order';renderDaily();};
   }
   function renderPending(){
     const supPend=orders.filter(o=>!o.supplied);
