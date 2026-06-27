@@ -152,7 +152,13 @@
 
   const PROMPT=`Extract details from this Sri Lanka Navy purchase order (PO). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
 {"order_no":"","file_no":"","naha_no":"","civil_no":"","model":"","quotation_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
-naha_no = Vehicle NAHA number (e.g. NAHA.8388). civil_no = Civil No (e.g. WP PQ-7786). model = vehicle model/type (e.g. Bolero Single Cab). quotation_date = the date of your quotation referenced in the PO. buyer = the command/camp. Include ALL items. Numbers plain, no commas. Missing text="" , missing number=0. Output only JSON.`;
+
+IMPORTANT - read ALL pages. The vehicle block (often on the LAST page, written in one line) contains: "Vehical No: NAHA#### Civil No <value> Vehical Type <value> Model & Type: <value> Make: <value>...". Extract from there:
+- naha_no = the "Vehical No" value (e.g. NAHA2175)
+- civil_no = the "Civil No" value (e.g. WP KQ-2647)
+- model = combine Make + Model & Type + Vehical Type into a short label (e.g. "SX4 ZXI Suzuki Car")
+- quotation_date = the date after "Procurement Reference Number ... Dated" (e.g. 05 June 2026), i.e. the date of the referenced quotation.
+buyer = the command/department at the top (e.g. Southern Naval Command - Captain Logistics Department (South)). Include ALL line items. Numbers plain, no commas. Missing text="" , missing number=0. Output only JSON.`;
 
   async function extract(){
     const pasteText=$('pasteBox').value.trim();const fileToUse=(mode==='file')?chosen:pastedImg;
