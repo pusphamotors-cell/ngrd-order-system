@@ -53,6 +53,8 @@
   .fld label{font-size:10.5px;font-weight:700;color:var(--navy);display:block;margin-bottom:4px}
   .fld input{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;background:#fffdf6}
   .fld input:focus{outline:none;border-color:var(--gold)}
+  .fld select{width:100%;border:1.5px solid var(--line);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;background:#fffdf6}
+  .fld select:focus{outline:none;border-color:var(--gold)}
   .fld.gold input{border-color:var(--gold)}
   .full{grid-column:1 / -1}
   .toggle{display:flex;align-items:center;gap:8px;padding:9px 13px;cursor:pointer}
@@ -111,6 +113,7 @@
     <div class="tab on" id="tabDash">📊 Dashboard</div>
     <div class="tab" id="tabNew">➕ புது Order</div>
     <div class="tab" id="tabList">📋 Saved</div>
+    <div class="tab" id="tabRep">📑 Report</div>
   </div>
 
   <div class="wrap" id="viewDash">
@@ -146,6 +149,22 @@
     <div id="orderList"></div>
   </div>
 
+  <div class="wrap hide" id="viewRep">
+    <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
+    <div class="drow">
+      <div class="fld"><label>Camp / Buyer</label><select id="repCamp"></select></div>
+      <div class="fld"><label>Status</label><select id="repStatus">
+        <option value="all">எல்லாம்</option>
+        <option value="pending">🔵 Pending (supply பண்ணல)</option>
+        <option value="invoiced">🟠 Invoiced (supply ஆச்சு)</option>
+        <option value="paid">🟢 Paid</option>
+        <option value="ld">🔴 LD risk</option>
+      </select></div>
+    </div>
+    <button class="btn gold" id="repDownload">📥 Excel download</button>
+    <div id="repResult"></div>
+  </div>
+
 <script>
   const $=id=>document.getElementById(id);
   window.storage={
@@ -159,12 +178,13 @@
   let chosen=null,current=null,orders=[],mode='file',pastedImg=null;
 
   function setTab(tab){
-    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');
-    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');
+    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabRep').classList.toggle('on',tab==='rep');
+    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');$('viewRep').classList.toggle('hide',tab!=='rep');
   }
   $('tabDash').onclick=()=>{setTab('dash');renderDash();};
   $('tabNew').onclick=()=>setTab('new');
   $('tabList').onclick=()=>{setTab('list');renderList();};
+  $('tabRep').onclick=()=>{setTab('rep');initReport();};
 
   function updateGo(){$('go').disabled=(mode==='file')?!chosen:!(pastedImg||$('pasteBox').value.trim());}
   $('mFile').onclick=()=>{mode='file';$('mFile').classList.add('on');$('mPaste').classList.remove('on');$('drop').classList.remove('hide');$('chip').classList.remove('hide');$('pasteBox').classList.add('hide');$('pastePreview').classList.add('hide');updateGo();};
@@ -367,6 +387,51 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       }else{box.classList.add('hide');box.innerHTML='';}
     }));
   }
+  function statusKey(o){return o.paid?'paid':(o.supplied||o.bill_no)?'invoiced':'pending';}
+  let repFiltered=[];
+  function initReport(){
+    const sel=$('repCamp');const buyers=Array.from(new Set(orders.map(o=>o.buyer||'—'))).sort();
+    sel.innerHTML='<option value="all">எல்லா Camp / Buyer</option>'+buyers.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
+    sel.onchange=renderReport;$('repStatus').onchange=renderReport;
+    renderReport();
+  }
+  function renderReport(){
+    const camp=$('repCamp').value,status=$('repStatus').value;
+    repFiltered=orders.filter(o=>{
+      if(camp!=='all'&&(o.buyer||'—')!==camp)return false;
+      if(status==='ld'){const a=deliveryAlert(o);return a&&a.lvl===0;}
+      if(status!=='all'&&statusKey(o)!==status)return false;
+      return true;
+    });
+    const rr=$('repResult');
+    if(!repFiltered.length){rr.innerHTML='<div class="empty">இந்த filter-க்கு order இல்ல</div>';return;}
+    let val=0,prof=0;repFiltered.forEach(o=>{val+=Number(o.sell)||0;prof+=Number(o.profit)||0;});
+    const rows=repFiltered.map(o=>{const sk=statusKey(o);const lbl=sk==='paid'?'Paid':sk==='invoiced'?'Invoiced':'Pending';
+      return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.delivery_date||'—')}</td><td>${lbl}</td><td class="num">${fmt(o.sell)}</td><td class="num">${fmt(o.profit)}</td></tr>`;}).join('');
+    rr.innerHTML=`
+      <div class="drow" style="margin-top:14px">
+        <div class="dstat"><div class="k">Orders</div><div class="v">${repFiltered.length}</div></div>
+        <div class="dstat gold"><div class="k">Total Value</div><div class="v">${fmt(val)}</div><div class="s">Rs</div></div>
+        <div class="dstat g"><div class="k">Total லாபம்</div><div class="v">${fmt(prof)}</div><div class="s">Rs</div></div>
+      </div>
+      <div class="dpanel"><div class="tablewrap"><table>
+        <thead><tr><th>Order No</th><th>NAHA</th><th>Delivery</th><th>Status</th><th class="num">Value</th><th class="num">லாபம்</th></tr></thead>
+        <tbody>${rows}</tbody></table></div></div>`;
+  }
+  function downloadReport(){
+    if(!repFiltered.length){alert('Download பண்ண order இல்ல');return;}
+    const head=['Order No','File No','NAHA','Civil No','Model','Buyer','Order Date','Delivery Date','Status','Sell (Rs)','Cost (Rs)','Profit (Rs)','Bill No','Cheque No'];
+    const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+    const lines=[head.map(q).join(',')];
+    repFiltered.forEach(o=>{const sk=statusKey(o);
+      lines.push([o.order_no,o.file_no,o.naha_no,o.civil_no,o.model,o.buyer,o.order_date,o.delivery_date,sk,o.sell,o.buy,o.profit,o.bill_no,o.cheque_no].map(q).join(','));});
+    const csv='\ufeff'+lines.join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='NGRD_Report_'+new Date().toISOString().slice(0,10)+'.csv';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }
+
   function renderDash(){
     const dw=$('dashContent');
     if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
@@ -410,6 +475,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dsec">🏕️ Buyer / Camp-wise</div>
       <div class="dpanel">${campRows}</div>`;
   }
-  loadOrders().then(renderDash);</script>
+  loadOrders().then(renderDash);
+  $('repDownload').addEventListener('click',downloadReport);</script>
 </body>
 </html>
