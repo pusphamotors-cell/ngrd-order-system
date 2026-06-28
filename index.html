@@ -293,6 +293,9 @@
   .egpbulk textarea{display:block;width:auto;margin:0 13px 8px;border:1px solid var(--line);border-radius:8px;padding:9px;font-size:12px;font-family:monospace;resize:vertical;box-sizing:border-box}
   .egpbulk .btn{margin:0 13px}
   .egpbulk #egpBulkResult{padding:4px 13px 12px}
+  .v3egp{border:1.5px solid var(--gold);border-radius:11px;background:linear-gradient(180deg,#fffdf6,#fff);padding:13px;margin-bottom:12px}
+  .v3egp .v3t{font-weight:800;font-size:13.5px;color:var(--navy)}
+  .v3egp .v3s{font-size:11.5px;color:var(--muted);margin:3px 0 10px;line-height:1.4}
   /* NGRD emblem watermark is now a body background layer (always behind content, iOS-safe) */
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -1230,14 +1233,45 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     }
     return {total:targets.length,marked,nomatch,miss};
   }
+  async function _v3EgpSync(){
+    let quotes;
+    try{quotes=await _fetchV3Quotes(true);}catch(e){return {err:e.message||'V3 connect ஆகல'};}
+    let marked=0,already=0,matched=0;
+    for(const q of quotes){
+      const m=_matchQuoteOrder(q);
+      if(!m)continue;matched++;
+      const o=m.o,ref=q.refNo||'';
+      if(o.egp&&(!ref||o.egp_ref===ref)){already++;continue;}
+      o.egp=true;if(ref)o.egp_ref=ref;
+      try{await window.storage.set(o.id,JSON.stringify(o));marked++;}catch(e){}
+    }
+    return {total:quotes.length,matched,marked,already};
+  }
   function _egpBulkHtml(){
-    return `<details class="egpbulk"><summary>🏛️ பழைய eGP orders — list paste பண்ணி bulk mark</summary>
+    return `<div class="v3egp">
+      <div class="v3t">🔄 V3-ல இருந்து eGP auto-detect</div>
+      <div class="v3s">V3 quote-ஓட match ஆன order எல்லாம் auto eGP-ஆ mark ஆகும் (paste வேண்டாம்)</div>
+      <button class="btn gold" id="v3EgpBtn">🔄 V3 படிச்சு eGP detect பண்ணு</button>
+      <div id="v3EgpResult" class="note" style="text-align:left;margin-top:8px"></div>
+    </div>
+    <details class="egpbulk"><summary>✍️ Manual வழி — list paste பண்ணி mark (வேணும்னா)</summary>
       <textarea id="egpBulkText" rows="5" placeholder="eGP list-ஐ இங்க paste பண்ணு (Order No + eGP Ref No உள்ள வரிகள்). உதா:&#10;Egp SNA/APO/PO/2026/0579  SNA/APO/FO/MT/2026/0924  2026041581946  52,950  NGRD"></textarea>
       <button class="btn gold" id="egpBulkBtn" style="margin-top:8px">✓ Match பண்ணி eGP mark</button>
       <div id="egpBulkResult" class="note" style="text-align:left;margin-top:8px"></div>
     </details>`;
   }
   function _wireEgpBulk(){
+    const _v3b=$('v3EgpBtn');if(_v3b)_v3b.onclick=async()=>{
+      const res=$('v3EgpResult');
+      _v3b.disabled=true;_v3b.textContent='⏳ V3 படிக்கிறேன்...';
+      const r=await _v3EgpSync();
+      if(res){
+        if(r.err)res.innerHTML=`<span style="color:var(--red)">⚠️ ${esc(r.err)}</span><br><small style="color:var(--muted)">V3 (ngrd-motors) read rules open-ஆ இருக்கணும்</small>`;
+        else res.innerHTML=`✅ <b>${r.marked}</b> order புதுசா eGP-ஆ mark ஆச்சு · ${r.already} ஏற்கனவே eGP · ${r.matched}/${r.total} V3 quote match`;
+      }
+      _v3b.disabled=false;_v3b.textContent='🔄 V3 படிச்சு eGP detect பண்ணு';
+      if(r.marked)setTimeout(renderCommission,1300);
+    };
     const _ebb=$('egpBulkBtn');if(_ebb)_ebb.onclick=async()=>{
       const txt=($('egpBulkText')||{}).value||'';const res=$('egpBulkResult');
       _ebb.disabled=true;_ebb.textContent='⏳ mark பண்றேன்...';
