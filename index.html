@@ -1143,7 +1143,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
     const rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map((o,n)=>{
       const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;
-      return `<tr><td style="text-align:center;border:1px solid #ccc;padding:6px">${n+1}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.buyer||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:6px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:6px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:6px;font-weight:600">${fmt(c)}</td></tr>`;
+      return `<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n+1}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
     }).join('');
     const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
       <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
@@ -1154,17 +1154,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)}</div>
         <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}</div>
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:#0b2a4a;color:#fff">
-          <th style="padding:7px;border:1px solid #0b2a4a;width:30px">#</th>
-          <th style="padding:7px;border:1px solid #0b2a4a">Order No</th>
-          <th style="padding:7px;border:1px solid #0b2a4a">Buyer</th>
-          <th style="padding:7px;border:1px solid #0b2a4a;width:74px">Bill Date</th>
-          <th style="padding:7px;border:1px solid #0b2a4a;width:80px">Value</th>
-          <th style="padding:7px;border:1px solid #0b2a4a;width:44px">%</th>
-          <th style="padding:7px;border:1px solid #0b2a4a;width:84px">Commission</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:26px">#</th>
+          <th style="padding:6px;border:1px solid #0b2a4a">Order No</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:72px">Vehicle No</th>
+          <th style="padding:6px;border:1px solid #0b2a4a">Vehicle</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:64px">Bill No</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:70px">Bill Date</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:72px">Value</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:38px">%</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:76px">Commission</th>
         </tr></thead><tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
+        <tfoot><tr><td colspan="8" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
       </table>
       <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
         <div>__________________________<br>Received by (${esc(name)})</div>
