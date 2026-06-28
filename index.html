@@ -976,6 +976,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="fld"><label>Delivery Date</label><input type="date" id="e_deliveryDate" value="${v(o.delivery_date)}"></div>
         <div class="fld"><label>Quotation Date</label><input type="date" id="e_qdate" value="${v(o.quotation_date)}"></div>
       </div>
+      <div class="sec">🏛️ eGP (commission தனி month-wise)</div>
+      <label class="toggle" style="margin:0 13px"><input type="checkbox" id="e_egp" ${o.egp?'checked':''}><span>இது eGP order-ஆ? ✓</span></label>
+      <div class="grid2" style="padding:0 13px 4px">
+        <div class="fld"><label>eGP Ref No</label><input id="e_egpRef" value="${v(o.egp_ref||o.proc_ref||'')}" placeholder="2026041581946"></div>
+        <div class="fld"><label>eGP Date</label><input type="date" id="e_egpDate" value="${v(o.egp_date)}"></div>
+      </div>
       ${showPur?`<div class="modetoggle" style="margin:0 13px 8px">
         <button class="mbtn ${anyCost?'':'on'}" id="e_cmTotal" type="button">மொத்த cost</button>
         <button class="mbtn ${anyCost?'on':''}" id="e_cmItems" type="button">Item-by-item</button>
@@ -1171,6 +1177,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const _od=box.querySelector('#e_orderDate');if(_od)o.order_date=_od.value||'';
       const _dd=box.querySelector('#e_deliveryDate');if(_dd)o.delivery_date=_dd.value||'';
       const _qd=box.querySelector('#e_qdate');if(_qd)o.quotation_date=_qd.value||'';
+      const _eg=box.querySelector('#e_egp');if(_eg)o.egp=_eg.checked;
+      const _egr=box.querySelector('#e_egpRef');if(_egr)o.egp_ref=_egr.value.trim();
+      const _egd=box.querySelector('#e_egpDate');if(_egd)o.egp_date=_egd.value||'';
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail: '+e.message);return;}
       renderList();
     });
@@ -1194,7 +1203,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const m=s.match(/^([A-Z]{2,4})\//);if(m){const f=_CAMPS.find(c=>c.code===m[1]);if(f)return f.name;}
     return 'மற்றவை';
   }
-  function _isEgp(o){return !!(o.egp||/E-?GP/i.test((o.egp_ref||'')+' '+(o.remark||'')));}
+  function _isEgp(o){return !!(o.egp||(o.egp_ref&&String(o.egp_ref).trim())||/E-?GP/i.test((o.remark||'')));}
   function _matchFilter(o){const f=_listFilter;if(!f)return true;
     if(f.t==='company')return _companyOf(o)===f.v;
     if(f.t==='buyer')return (o.buyer||'—')===f.v;
@@ -1436,13 +1445,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${grp('🟠 31–45 நாள்',buckets.b2,'')}
       ${grp('🟢 0–30 நாள்',buckets.b1,'')}`;
   }
-  let _commCamp='all';
+  let _commCamp='all';let _commEgp='all';
   function renderCommission(){
     const wrap=$('repCommWrap');
     const all=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
     if(!all.length){wrap.innerHTML='<div class="empty">Commission இல்ல.<br>Supply ஆன order → Edit → Apo/Clark % போடு</div>';return;}
     const camps=Array.from(new Set(all.map(o=>_campOf(o)))).sort();
-    const sup=_commCamp==='all'?all:all.filter(o=>_campOf(o)===_commCamp);
+    const sup0=_commCamp==='all'?all:all.filter(o=>_campOf(o)===_commCamp);
+    const sup=_commEgp==='all'?sup0:sup0.filter(o=>_commEgp==='egp'?_isEgp(o):!_isEgp(o));
     let apoT=0,clkT=0;
     const rows=sup.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{
       const s=Number(o.sell)||0;const ac=s*(o.apo_pct||0)/100,cc=s*(o.clark_pct||0)/100;apoT+=ac;clkT+=cc;
@@ -1451,8 +1461,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     // camp-wise summary (all)
     const byCamp={};all.forEach(o=>{const k=_campOf(o);const s=Number(o.sell)||0;const m=byCamp[k]||(byCamp[k]={a:0,c:0});m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
     const campSummary=Object.keys(byCamp).sort((a,b)=>(byCamp[b].a+byCamp[b].c)-(byCamp[a].a+byCamp[a].c)).map(k=>`<div class="brow" data-ccamp="${esc(k)}" style="cursor:pointer"><span class="nm">${esc(k)}</span><span class="ct">Apo ${fmt(byCamp[k].a)}</span><span class="vl">Clark ${fmt(byCamp[k].c)}</span></div>`).join('');
+    const egpN=sup0.filter(_isEgp).length,nonN=sup0.length-egpN;
+    const egpBtns=`<div class="modetoggle" style="margin:0 0 10px"><button class="mbtn ${_commEgp==='all'?'on':''}" data-cegp="all" type="button">எல்லாம்</button><button class="mbtn ${_commEgp==='egp'?'on':''}" data-cegp="egp" type="button">🏛️ eGP (${egpN})</button><button class="mbtn ${_commEgp==='non'?'on':''}" data-cegp="non" type="button">Non-eGP (${nonN})</button></div>`;
+    const byMonth={};sup.forEach(o=>{const d=o.egp_date||o.bill_date||o.order_date||'';const mk=(String(d).match(/\d{4}-\d{2}/)||['—'])[0];const s=Number(o.sell)||0;const m=byMonth[mk]||(byMonth[mk]={n:0,v:0,a:0,c:0});m.n++;m.v+=s;m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
+    const monthRows=Object.keys(byMonth).sort().reverse().map(mk=>`<tr><td>${esc(mk)}</td><td class="num">${byMonth[mk].n}</td><td class="num">${fmt(byMonth[mk].v)}</td><td class="num">${fmt(byMonth[mk].a)}</td><td class="num">${fmt(byMonth[mk].c)}</td></tr>`).join('');
+    const monthTitle=_commEgp==='egp'?'🏛️ eGP — Month-wise':_commEgp==='non'?'Non-eGP — Month-wise':'📅 Month-wise (எல்லாம்)';
     wrap.innerHTML=`
       <div class="fld" style="margin-bottom:10px"><label>Camp / Buyer</label><select id="commCampSel"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      ${egpBtns}
       <div class="drow">
         <div class="dstat gold"><div class="k">🤝 Apo${_commCamp==='all'?'':' ('+esc(_commCamp.slice(0,14))+')'}</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
         <div class="dstat gold"><div class="k">🤝 Clark</div><div class="v">${fmt(clkT)}</div><div class="s">Rs</div></div>
@@ -1464,10 +1480,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       </div>
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>
+      <div class="dsec">${monthTitle}</div>
+      <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${monthRows||'<tr><td colspan=5 style="text-align:center;color:var(--muted);padding:10px">இல்ல</td></tr>'}</tbody></table></div></div>
       <div class="dsec">🏕️ Camp-wise Commission (எல்லாம்)</div>
       <div style="font-size:11px;color:var(--muted);margin:0 2px 6px">Camp click பண்ணா அந்த camp மட்டும் filter ஆகும்</div>
       <div class="dpanel">${campSummary}</div>`;
     $('commCampSel').onchange=e=>{_commCamp=e.target.value;renderCommission();};
+    wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
     $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup,_commCamp);
     $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup,_commCamp);
@@ -1781,12 +1800,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const supLine=supplied
       ? `<div class="supL ok">✅ Supply ஆச்சு${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''}</div>`
       : `<div class="supL no">⏳ இன்னும் supply ஆகல</div>`;
-    const meta=[['File No',o.file_no],['Vehicle / NAHA',o.naha_no],['Civil No',o.civil_no],['Model',o.model],['Camp',_campOf(o)],['Company',_companyOf(o)],['Order Date',o.order_date],['Delivery',o.delivery_date],['Value','Rs '+fmt(o.sell)],['Paid',o.paid?('✅ '+(o.pay_date||'ஆச்சு')):'—']]
+    const meta=[['File No',o.file_no],['Vehicle / NAHA',o.naha_no],['Civil No',o.civil_no],['Model',o.model],['Camp',_campOf(o)],['Company',_companyOf(o)],['Order Date',o.order_date],['Delivery',o.delivery_date]].concat(_isEgp(o)?[['🏛️ eGP Ref',o.egp_ref||o.proc_ref||'—'],['🏛️ eGP Date',o.egp_date||'—']]:[]).concat([['Value','Rs '+fmt(o.sell)],['Paid',o.paid?('✅ '+(o.pay_date||'ஆச்சு')):'—']])
       .filter(m=>m[1]!=null&&m[1]!=='').map(m=>`<div><div class="k">${m[0]}</div><div class="v">${esc(m[1])}</div></div>`).join('');
     const items=(o.items||[]);
     const rows=items.length?items.map((it,n)=>`<tr><td class="ctr">${n+1}</td><td>${esc(it.description||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td class="num">${esc(it.qty||'')}</td><td class="num">${it.unit_price?fmt(it.unit_price):'—'}</td><td class="num">${it.total?fmt(it.total):'—'}</td></tr>`).join('')
       :'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:12px">Item details இல்ல</td></tr>';
-    return `<div class="ocard"><div class="ohd"><span class="on">${esc(o.order_no||'—')}</span>${badge}</div>${supLine}<div class="meta">${meta}</div><div class="itbl"><div class="tablewrap"><table><thead><tr><th class="ctr">#</th><th>Item</th><th>Brand</th><th>Part No</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="oact"><button class="oedit" data-eo="${esc(o.id||o.order_no)}">✏️ இந்த order திருத்து / Edit</button></div></div>`;
+    return `<div class="ocard"><div class="ohd"><span class="on">${esc(o.order_no||'—')}</span>${_isEgp(o)?'<span class="sb" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${badge}</div>${supLine}<div class="meta">${meta}</div><div class="itbl"><div class="tablewrap"><table><thead><tr><th class="ctr">#</th><th>Item</th><th>Brand</th><th>Part No</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="oact"><button class="oedit" data-eo="${esc(o.id||o.order_no)}">✏️ இந்த order திருத்து / Edit</button></div></div>`;
   }
   function _chipState(q){const box=$('dashCustChips');if(box)box.querySelectorAll('.cchip').forEach(el=>el.classList.toggle('on',(el.dataset.c||'').toLowerCase()===q));}
   function _renderCustChips(){
