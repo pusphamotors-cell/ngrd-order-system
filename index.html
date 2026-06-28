@@ -16,9 +16,15 @@
   .topbar{background:linear-gradient(100deg,var(--navy),var(--navy2));color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:6}
   .crest{width:38px;height:38px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:13px;flex:0 0 auto;border:2px solid #fff3}
   .brand h1{font-size:15px;font-weight:700}.brand p{font-size:10.5px;opacity:.82}
-  .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-  .tab{flex:1;text-align:center;padding:12px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent}
-  .tab.on{color:var(--navy);border-bottom-color:var(--gold)}
+  .tabs{display:flex;gap:1px;background:linear-gradient(180deg,#ffffff,#fbfcfe);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;box-shadow:0 2px 7px rgba(20,39,74,.05)}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:1 0 auto;min-width:76px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 11px 7px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:color .15s ease,background .15s ease;-webkit-tap-highlight-color:transparent}
+  .tab .ti{display:flex;align-items:center;justify-content:center}
+  .tab .ti svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .tab .tl{font-size:10.5px;letter-spacing:.1px;line-height:1}
+  .tab:hover{color:var(--navy2)}
+  .tab.on{color:var(--navy);border-bottom-color:var(--gold);background:linear-gradient(180deg,var(--gold-soft),#ffffff)}
+  .tab.on .ti svg{stroke-width:2.2}
   .wrap{max-width:880px;margin:0 auto;padding:16px 14px}
   .hide{display:none}
   .step{font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:2px 2px 8px}
@@ -88,6 +94,17 @@
   .dstat .s{font-size:10.5px;color:var(--muted);margin-top:2px}
   .dsec{font-size:11.5px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;margin:16px 2px 8px}
   .dpanel{background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden}
+  .brandcard{margin:26px 0 4px;border-radius:18px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:24px 20px 22px;text-align:center;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(20,39,74,.20)}
+  .brandcard::before{content:"";position:absolute;top:-40%;right:-20%;width:70%;height:160%;background:radial-gradient(circle,rgba(201,162,39,.20),transparent 60%);pointer-events:none}
+  .brandcard::after{content:"";position:absolute;inset:0;border-radius:18px;border:1px solid rgba(201,162,39,.22);pointer-events:none}
+  .brandcard .bcrest{width:62px;height:62px;border-radius:50%;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;letter-spacing:.5px;margin:0 auto 12px;border:3px solid rgba(255,255,255,.28);box-shadow:0 5px 14px rgba(0,0,0,.30);position:relative}
+  .brandcard h2{font-size:22px;font-weight:800;letter-spacing:2px;margin:0;position:relative}
+  .brandcard .bsub{font-size:10.5px;font-weight:700;color:var(--gold-soft);letter-spacing:.7px;text-transform:uppercase;margin-top:4px;position:relative}
+  .brandcard .bdiv{width:52px;height:2px;background:var(--gold);margin:14px auto;border-radius:2px;opacity:.9;position:relative}
+  .brandcard .bco{font-size:13px;font-weight:700;color:#fff;letter-spacing:.3px;position:relative}
+  .brandcard .baddr{font-size:11px;color:#cbd5ea;line-height:1.55;margin-top:5px;position:relative}
+  .brandcard .btel{font-size:11px;color:#cbd5ea;margin-top:7px;font-variant-numeric:tabular-nums;position:relative}
+  .brandcard .btag{margin-top:13px;font-size:9.5px;color:#94a6c6;letter-spacing:.6px;text-transform:uppercase;position:relative}
   .statusbar{display:flex;height:30px;border-radius:8px;overflow:hidden;margin-bottom:10px;border:1px solid var(--line)}
   .statusbar div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;min-width:0}
   .brow{display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid #eef1f6;font-size:13px}
@@ -211,13 +228,13 @@
     <div id="logoutBtn" style="margin-left:14px;font-size:11px;font-weight:700;color:#ffffffcc;cursor:pointer;white-space:nowrap">Logout</div>
   </div>
   <div class="tabs">
-    <div class="tab on" id="tabDash">📊 Dashboard</div>
-    <div class="tab" id="tabNew">➕ புது Order</div>
-    <div class="tab" id="tabList">📋 Saved</div>
-    <div class="tab" id="tabTasks">👷 வேலை</div>
-    <div class="tab" id="tabRep">📑 Report</div>
-    <div class="tab" id="tabSettle">🏦 Settle</div>
-    <div class="tab" id="tabUsers">👤 Users</div>
+    <div class="tab on" id="tabDash"><span class="ti"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg></span><span class="tl">Dashboard</span></div>
+    <div class="tab" id="tabNew"><span class="ti"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></span><span class="tl">புது Order</span></div>
+    <div class="tab" id="tabList"><span class="ti"><svg viewBox="0 0 24 24"><path d="M19 21l-7-4.5L5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span><span class="tl">Saved</span></div>
+    <div class="tab" id="tabTasks"><span class="ti"><svg viewBox="0 0 24 24"><polyline points="9 11 11.5 13.5 16 8"/><path d="M20 13v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></span><span class="tl">வேலை</span></div>
+    <div class="tab" id="tabRep"><span class="ti"><svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="20"/><line x1="7" y1="20" x2="7" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="17" y1="20" x2="17" y2="11"/></svg></span><span class="tl">Report</span></div>
+    <div class="tab" id="tabSettle"><span class="ti"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15v-5"/><path d="M19 11a2 2 0 0 0 0 5h3v-5z"/></svg></span><span class="tl">Settle</span></div>
+    <div class="tab" id="tabUsers"><span class="ti"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="tl">Users</span></div>
   </div>
 
   <div class="wrap" id="viewDash">
@@ -1611,6 +1628,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="drow" style="margin-top:16px">
         <button class="btn" id="dashRep" style="margin-top:0">📑 Report பாரு</button>
         <button class="btn gold" id="dashOrd" style="margin-top:0">📋 Orders பாரு</button>
+      </div>
+      <div class="brandcard">
+        <div class="bcrest">NGRD</div>
+        <h2>NGRD MOTORS</h2>
+        <div class="bsub">Automobile Spare Parts · Govt &amp; Military Supply</div>
+        <div class="bdiv"></div>
+        <div class="bco">N.G.R.D. Motors &nbsp;·&nbsp; Puspha Motors</div>
+        <div class="baddr">202/17B &amp; 202/19A Mohideen Masjid Road,<br>Panchikawatta, Colombo&nbsp;10, Sri&nbsp;Lanka</div>
+        <div class="btel">☎ 011&nbsp;244&nbsp;9385 · 076&nbsp;688&nbsp;6526</div>
+        <div class="btag">அரசு tender spare parts · Panchikawatta</div>
       </div>`;
     $('dashRep').onclick=()=>{setTab('rep');initReport();};
     $('dashOrd').onclick=()=>{_listFilter=null;setTab('list');renderList();};
