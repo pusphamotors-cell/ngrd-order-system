@@ -261,6 +261,7 @@
       <button class="mbtn" id="rmPending" type="button">⏳ Pending</button>
       <button class="mbtn" id="rmDaily" type="button">📅 Day-wise</button>
       <button class="mbtn" id="rmCal" type="button">📆 Calendar</button>
+      <button class="mbtn" id="rmOut" type="button">💵 Outstanding</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -280,6 +281,7 @@
     <div id="repPendingWrap" class="hide"></div>
     <div id="repDailyWrap" class="hide"></div>
     <div id="repCalWrap" class="hide"></div>
+    <div id="repOutWrap" class="hide"></div>
   </div>
 
   <div class="wrap hide" id="viewUsers">
@@ -941,11 +943,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('rmPending').onclick=()=>{setRepMode('pending');renderPending();};
     $('rmDaily').onclick=()=>{setRepMode('daily');renderDaily();};
     $('rmCal').onclick=()=>{setRepMode('cal');renderCal();};
+    $('rmOut').onclick=()=>{setRepMode('out');renderOutstanding();};
     renderReport();
   }
   function setRepMode(m){
-    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');$('rmCal').classList.toggle('on',m==='cal');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');
+    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');$('rmCal').classList.toggle('on',m==='cal');$('rmOut').classList.toggle('on',m==='out');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');
   }
   let _dailyBasis='bill';
   function renderDaily(){
@@ -1019,6 +1022,30 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     html+=sec('💵 Payment வந்தது',py,o=>'<span style="color:var(--green)">✓</span>');
     html+='</div>';box.innerHTML=html;
   }
+  function renderOutstanding(){
+    const wrap=$('repOutWrap');
+    const due=orders.filter(o=>(o.supplied||o.bill_no)&&!o.paid);
+    if(!due.length){wrap.innerHTML='<div class="empty">வராத பணம் இல்ல 🎉<br>Supply ஆன எல்லா orders-um paid</div>';return;}
+    const buckets={b1:[],b2:[],b3:[]}; // 0-30, 31-45, 45+
+    let total=0;
+    due.forEach(o=>{const base=o.bill_date||o.delivery_date;const ds=daysSince(base);const days=ds==null?0:ds;total+=Number(o.sell)||0;
+      if(days<=30)buckets.b1.push({o,days});else if(days<=45)buckets.b2.push({o,days});else buckets.b3.push({o,days});});
+    const sum=arr=>arr.reduce((a,x)=>a+(Number(x.o.sell)||0),0);
+    const v1=sum(buckets.b1),v2=sum(buckets.b2),v3=sum(buckets.b3);
+    const grp=(title,arr,cls)=>{if(!arr.length)return '';
+      arr.sort((a,b)=>b.days-a.days);
+      return `<div class="sec ${cls}" style="margin-top:8px">${title} — ${arr.length} order · Rs ${fmt(sum(arr))}</div><div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th>Bill/Del Date</th><th class="num">நாள்</th><th class="num">Rs வரல</th></tr></thead><tbody>${arr.map(({o,days})=>`<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td>${esc(o.bill_date||o.delivery_date||'—')}</td><td class="num">${days}</td><td class="num">${fmt(o.sell)}</td></tr>`).join('')}</tbody></table></div></div>`;};
+    wrap.innerHTML=`
+      <div class="dstat gold" style="margin-bottom:10px"><div class="k">💵 மொத்த வராத பணம் (Outstanding)</div><div class="v">${fmt(total)}</div><div class="s">Rs · ${due.length} orders</div></div>
+      <div class="drow">
+        <div class="dstat g"><div class="k">🟢 0–30 நாள்</div><div class="v">${fmt(v1)}</div><div class="s">${buckets.b1.length} order</div></div>
+        <div class="dstat w"><div class="k">🟠 31–45 நாள்</div><div class="v">${fmt(v2)}</div><div class="s">${buckets.b2.length} order</div></div>
+      </div>
+      <div class="dstat r" style="margin:8px 0"><div class="k">🔴 45+ நாள் — Overdue! உடனே follow up</div><div class="v">${fmt(v3)}</div><div class="s">${buckets.b3.length} order</div></div>
+      ${grp('🔴 45+ நாள் (Overdue)',buckets.b3,'')}
+      ${grp('🟠 31–45 நாள்',buckets.b2,'')}
+      ${grp('🟢 0–30 நாள்',buckets.b1,'')}`;
+  }
   function renderPending(){
     const supPend=orders.filter(o=>!o.supplied);
     const payPend=orders.filter(o=>(o.supplied||o.bill_no)&&!o.paid);
@@ -1077,6 +1104,25 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     document.body.appendChild(a);a.click();document.body.removeChild(a);
   }
 
+  function _barChart(data,color){
+    const w=340,h=150,pad=22;const max=Math.max(1,...data.map(d=>d.value));const bw=(w-pad*2)/data.length;
+    const bars=data.map((d,i)=>{const bh=(d.value/max)*(h-pad*2);const x=pad+i*bw+bw*0.15;const y=h-pad-bh;
+      const kv=d.value>=1000?(Math.round(d.value/1000)+'k'):(d.value?Math.round(d.value):'');
+      return `<rect x="${x}" y="${y}" width="${bw*0.7}" height="${Math.max(0,bh)}" rx="3" fill="${color}"></rect>`+
+        (d.value?`<text x="${x+bw*0.35}" y="${y-3}" font-size="8.5" text-anchor="middle" fill="#0b2a4a" font-weight="700">${kv}</text>`:'')+
+        `<text x="${x+bw*0.35}" y="${h-pad+12}" font-size="9" text-anchor="middle" fill="#6b7280">${esc(d.label)}</text>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;max-height:160px"><line x1="${pad}" y1="${h-pad}" x2="${w-pad/2}" y2="${h-pad}" stroke="#e5e9f0"/>${bars}</svg>`;
+  }
+  function _hbarChart(data,color){
+    const w=340,rowH=27,h=data.length*rowH+6;const max=Math.max(1,...data.map(d=>d.value));
+    const rows=data.map((d,i)=>{const bw=(d.value/max)*(w*0.5);const y=i*rowH+4;
+      return `<text x="0" y="${y+13}" font-size="10" fill="#0b2a4a" font-weight="600">${esc(String(d.label).slice(0,16))}</text>`+
+        `<rect x="${w*0.46}" y="${y+3}" width="${Math.max(2,bw)}" height="14" rx="3" fill="${color}"></rect>`+
+        `<text x="${w*0.46+Math.max(2,bw)+4}" y="${y+14}" font-size="8.5" fill="#6b7280">${fmt(d.value)}</text>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto">${rows}</svg>`;
+  }
   function renderDash(){
     const dw=$('dashContent');
     if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
@@ -1095,6 +1141,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const sb=(n,col)=>n>0?`<div style="flex:${n};background:${col}">${n}</div>`:'';
     const compRows=Object.keys(comp).map(k=>`<div class="brow" data-fltt="company" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${comp[k].n} orders · Rs ${fmt(comp[k].v)}</span><span class="vl">Rs ${fmt(comp[k].p)}</span></div>`).join('');
     const campRows=Object.keys(camp).sort((a,b)=>camp[b].v-camp[a].v).map(k=>`<div class="brow" data-fltt="buyer" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${camp[k].n} orders</span><span class="vl">Rs ${fmt(camp[k].v)}</span></div>`).join('');
+    // chart data: last 6 months sales (bill date else order date)
+    const months=[];const now=new Date();
+    for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:d.toLocaleDateString('en-GB',{month:'short'}),value:0});}
+    const mIdx={};months.forEach((m,i)=>mIdx[m.key]=i);
+    orders.forEach(o=>{const bd=parseDate(o.bill_date||o.order_date);if(!bd)return;const key=bd.getFullYear()+'-'+String(bd.getMonth()+1).padStart(2,'0');if(mIdx[key]!=null)months[mIdx[key]].value+=Number(o.sell)||0;});
+    const topCamps=Object.keys(camp).map(k=>({label:k,value:camp[k].v})).sort((a,b)=>b.value-a.value).slice(0,5);
+    const chartsHtml=`
+      <div class="dsec">📊 Sales — கடைசி 6 மாசம்</div>
+      <div class="dpanel" style="padding:12px 10px 6px">${_barChart(months,'#c9a227')}</div>
+      <div class="dsec">🏕️ Top Camps (value)</div>
+      <div class="dpanel" style="padding:12px 12px 8px">${_hbarChart(topCamps,'#1f3864')}</div>`;
     dw.innerHTML=`
       <div class="drow">
         <div class="dstat" data-fltt="all"><div class="k">மொத்த Orders</div><div class="v">${tot}</div></div>
@@ -1115,6 +1172,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="brow" data-fltt="status" data-fltv="invoiced"><span class="nm">🟠 Invoiced</span><span class="vl">${st.i}</span></div>
         <div class="brow" data-fltt="status" data-fltv="paid"><span class="nm">🟢 Paid</span><span class="vl">${st.d}</span></div>
       </div>
+      ${chartsHtml}
       <div class="dsec">🏢 Company-wise</div>
       <div class="dpanel">${compRows}</div>
       <div class="dsec">🏕️ Buyer / Camp-wise</div>
