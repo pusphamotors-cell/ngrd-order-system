@@ -2195,7 +2195,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         if(amt&&Math.abs(net-amt)<=1)kind='net';else if(amt&&Math.abs(gross-amt)<=1)kind='gross';
         if(!kind)return;
         const sd=parseDate(r.date);let dd=999;if(cd&&sd)dd=Math.abs((cd-sd)/86400000);
-        const score=dd+(kind==='gross'?0.4:0)+(r.bank==='HNB'?0:6);
+        const score=dd+(kind==='gross'?0.4:0)+(_bankByAcc(r.acc).bank==='HNB'?0:6);
         if(score<bestScore){bestScore=score;best={r,kind,dd};}
       });
       if(best)used[best.r.id]=true;
@@ -2234,24 +2234,30 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       blocks.push({type:'text',text:'STATEMENT TEXT:\n'+txt});
       $('recReadTxt').disabled=true;$('recReadTxt').innerHTML='<span class="spin"></span>படிக்கிறேன்...';
     }
-    let all=[],errs=0;
+    let all=[],errMsgs=[];
     try{
       for(let i=0;i<blocks.length;i++){
-        msg.innerHTML='<span style="color:var(--muted)"><span class="spin"></span> படிக்கிறேன் '+(i+1)+'/'+blocks.length+'...</span>';
-        try{
-          const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[blocks[i],{type:'text',text:REC_PROMPT}]})});
-          if(!resp.ok)throw new Error('AI '+resp.status);
-          const data=await resp.json();
-          const text=(data.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
-          const rec=_parseAIjson(text);
-          const lines=Array.isArray(rec.lines)?rec.lines.filter(l=>Number(l.credit)>0):[];
-          all=all.concat(lines);
-        }catch(e){errs++;}
+        let ok=false,lastErr='';
+        for(let att=0;att<2&&!ok;att++){
+          msg.innerHTML='<span style="color:var(--muted)"><span class="spin"></span> படிக்கிறேன் '+(i+1)+'/'+blocks.length+(att?' (retry)':'')+'...</span>';
+          try{
+            const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[blocks[i],{type:'text',text:REC_PROMPT}]})});
+            if(!resp.ok){let t='';try{t=await resp.text();}catch(e){}lastErr='HTTP '+resp.status+(t?' · '+t.replace(/\s+/g,' ').slice(0,160):'');throw 0;}
+            const data=await resp.json();
+            const text=(data.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+            const rec=_parseAIjson(text);
+            const lines=Array.isArray(rec.lines)?rec.lines.filter(l=>Number(l.credit)>0):[];
+            all=all.concat(lines);ok=true;
+          }catch(e){if(e&&e.message)lastErr=e.message;}
+        }
+        if(!ok)errMsgs.push('page '+(i+1)+': '+lastErr);
       }
       const seen={},merged=[];
       all.forEach(l=>{const k=(l.date||'')+'|'+Math.round(Number(l.credit)||0)+'|'+(l.ref||'');if(!seen[k]){seen[k]=1;merged.push(l);}});
-      _recExtracted=merged;_recFiles=[];if($('recFile'))$('recFile').value='';
-      msg.innerHTML='<span style="color:var(--green);font-weight:700">✅ '+merged.length+' credit line ('+blocks.length+' page)</span>'+(errs?' <span style="color:var(--red)">('+errs+' page fail — மறுபடி try)</span>':'');
+      _recExtracted=merged;_recFiles=[];if(merged.length&&$('recFile'))$('recFile').value='';
+      let m='<span style="color:var(--green);font-weight:700">✅ '+merged.length+' credit line ('+blocks.length+' page)</span>';
+      if(errMsgs.length)m+='<div style="color:var(--red);margin-top:4px;font-size:11px;word-break:break-word">⚠️ '+esc(errMsgs.join(' || '))+'</div>';
+      msg.innerHTML=m;
       renderRecResult();
     }catch(err){msg.innerHTML='<span style="color:var(--red)">⚠️ '+esc(err.message)+'</span>';}
     finally{const a=$('recRead');if(a){a.disabled=false;a.innerHTML='🤖 Statement படி (AI)';}const b=$('recReadTxt');if(b){b.disabled=false;b.innerHTML='📋 Paste படி (AI)';}}
