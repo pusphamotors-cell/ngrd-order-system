@@ -12,7 +12,7 @@
     --blue:#2563b5;--blue-bg:#e8f0fb;--amber:#9a6b00;--amber-bg:#fbf1d8;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;padding-bottom:70px}
+  body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;padding-bottom:70px;overflow-x:clip}
   .topbar{background:linear-gradient(100deg,var(--navy),var(--navy2));color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:6}
   .crest{width:38px;height:38px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:13px;flex:0 0 auto;border:2px solid #fff3}
   .brand h1{font-size:15px;font-weight:700}.brand p{font-size:10.5px;opacity:.82}
@@ -94,9 +94,9 @@
   .dstat .s{font-size:10.5px;color:var(--muted);margin-top:2px}
   .dsec{font-size:11.5px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;margin:16px 2px 8px}
   .dpanel{background:#fff;border:1px solid var(--line);border-radius:13px;overflow:hidden}
-  .brandcard{margin:26px 0 4px;border-radius:18px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:24px 20px 22px;text-align:center;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(20,39,74,.20)}
-  .brandcard::before{content:"";position:absolute;top:-40%;right:-20%;width:70%;height:160%;background:radial-gradient(circle,rgba(201,162,39,.20),transparent 60%);pointer-events:none}
-  .brandcard::after{content:"";position:absolute;inset:0;border-radius:18px;border:1px solid rgba(201,162,39,.22);pointer-events:none}
+  .brandcard{width:100vw;margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);margin-top:26px;margin-bottom:-70px;border-radius:0;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:44px 22px calc(46px + 70px);text-align:center;position:relative;overflow:hidden;box-shadow:0 -7px 24px rgba(20,39,74,.16)}
+  .brandcard::before{content:"";position:absolute;top:-30%;right:-8%;width:55%;height:170%;background:radial-gradient(circle,rgba(201,162,39,.18),transparent 62%);pointer-events:none}
+  .brandcard::after{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);pointer-events:none}
   .brandcard .bcrest{width:62px;height:62px;border-radius:50%;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;letter-spacing:.5px;margin:0 auto 12px;border:3px solid rgba(255,255,255,.28);box-shadow:0 5px 14px rgba(0,0,0,.30);position:relative}
   .brandcard h2{font-size:22px;font-weight:800;letter-spacing:2px;margin:0;position:relative}
   .brandcard .bsub{font-size:10.5px;font-weight:700;color:var(--gold-soft);letter-spacing:.7px;text-transform:uppercase;margin-top:4px;position:relative}
