@@ -33,7 +33,7 @@
   .mbtn.on{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.08)}
   .pastebox{width:100%;min-height:120px;border:2px solid var(--gold);border-radius:12px;padding:12px;font-size:13px;font-family:inherit;background:#fffdf6;resize:vertical}
   .pastebox:focus{outline:none;border-color:var(--navy2)}
-  .drop{background:var(--card);border:2px dashed #b9c4d6;border-radius:14px;padding:20px;text-align:center;cursor:pointer}
+  .drop{display:block;background:var(--card);border:2px dashed #b9c4d6;border-radius:14px;padding:20px;text-align:center;cursor:pointer}
   .drop:hover{border-color:var(--navy2);background:#fbfcfe}.drop.has{border-style:solid;border-color:var(--green);background:var(--green-bg)}
   .drop .ic{font-size:28px}.drop .big{font-size:14px;font-weight:700;color:var(--navy);margin-top:5px}.drop .sm{font-size:11.5px;color:var(--muted);margin-top:2px}
   .filechip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:4px 11px;font-size:12px;color:var(--navy);font-weight:600;margin-top:9px}
@@ -207,7 +207,7 @@
   .modalbox h3{font-size:15px;color:var(--navy);margin-bottom:10px}
   /* ===== FULL BLUE THEME — navy page + nav bar, white cards float ===== */
   :root{--bg:#13243f}
-  body{background:linear-gradient(165deg,#11203a 0%,#172a4d 52%,#1f3864 100%);background-color:#162a4d;min-height:100vh}
+  body{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NDAgNDQwIj48ZyBvcGFjaXR5PSIwLjA1IiBzdHJva2U9IiNjOWEyMjciIGZpbGw9IiNjOWEyMjciPjxjaXJjbGUgY3g9IjIyMCIgY3k9IjIyMCIgcj0iMjAyIiBzdHJva2Utd2lkdGg9IjUiIGZpbGw9Im5vbmUiLz48Y2lyY2xlIGN4PSIyMjAiIGN5PSIyMjAiIHI9IjE4MCIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiLz48dGV4dCB4PSIyMjAiIHk9IjIzOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXNpemU9IjExOCIgbGV0dGVyLXNwYWNpbmc9IjMiIHN0cm9rZT0ibm9uZSI+TkdSRDwvdGV4dD48dGV4dCB4PSIyMjAiIHk9IjI5OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNzAwIiBmb250LXNpemU9IjMzIiBsZXR0ZXItc3BhY2luZz0iMTEiIHN0cm9rZT0ibm9uZSI+TU9UT1JTPC90ZXh0PjwvZz48L3N2Zz4=") center 45%/min(560px,82vw) no-repeat, linear-gradient(165deg,#11203a 0%,#172a4d 52%,#1f3864 100%);background-color:#162a4d;min-height:100vh}
   /* nav bar -> navy to match topbar (full blue, no white strip) */
   .tabs{background:linear-gradient(180deg,#1b3055,#14264a);border-bottom:1px solid rgba(201,162,39,.30);box-shadow:0 3px 12px rgba(8,16,33,.38)}
   .tab{color:#9fb0cc}
@@ -228,15 +228,12 @@
   .btn:hover{background:#2f5ea6}
   /* branding band blends into the navy page (no seam) — keep gold hairline + glow */
   .brandcard{background:transparent;box-shadow:none}
-  /* faint NGRD emblem watermark behind everything (shows in navy areas, hidden by white cards) */
-  .bgwm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:-1;pointer-events:none;opacity:.07;color:var(--gold)}
-  .bgwm svg{width:min(580px,82vw);height:auto;display:block;filter:drop-shadow(0 0 1px rgba(201,162,39,.2))}
+  /* NGRD emblem watermark is now a body background layer (always behind content, iOS-safe) */
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
-  <div class="bgwm" aria-hidden="true"><svg viewBox="0 0 440 440" fill="none"><circle cx="220" cy="220" r="202" stroke="currentColor" stroke-width="5"/><circle cx="220" cy="220" r="180" stroke="currentColor" stroke-width="1.5"/><text x="220" y="238" text-anchor="middle" font-family="'Segoe UI',Arial,sans-serif" font-weight="800" font-size="118" letter-spacing="3" fill="currentColor">NGRD</text><text x="220" y="298" text-anchor="middle" font-family="'Segoe UI',Arial,sans-serif" font-weight="700" font-size="33" letter-spacing="11" fill="currentColor">MOTORS</text></svg></div>
   <div class="gate" id="loginGate">
     <div class="gatebox">
       <div class="gc">NGRD</div>
