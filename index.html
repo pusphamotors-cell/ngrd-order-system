@@ -343,6 +343,12 @@
       <div id="payResult" style="padding:0 13px 13px"></div>
     </div>
     <div class="card" style="margin-top:14px">
+      <div class="sec">🔍 Duplicate Bill No — typo checker</div>
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">ஒரே invoice/bill no பல order-ல இருந்தா இங்க காட்டும். Entry typo கண்டுபிடிச்சு சரி பண்ண. (Bill no number part வச்சு check.)</div>
+      <div style="padding:4px 13px 13px"><button class="btn" id="dupCheck" style="margin-top:0;background:#9a6b00">🔍 Check பண்ணு</button></div>
+      <div id="dupResult" style="padding:0 13px 13px"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
       <div class="sec">💾 Backup — Data safety</div>
       <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Data already cloud-ல safe. இது extra copy — உன் PC-ல save பண்ணி வச்சுக்க. ஏதாவது நடந்தா restore பண்ணலாம்.</div>
       <div style="padding:4px 13px 13px;display:flex;gap:10px;flex-wrap:wrap">
@@ -1871,6 +1877,25 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('payText').value='';_payStaged=null;$('payDo').textContent='✅ Paid mark பண்ணு';
   });
   // ---- end bulk payment ----
+  // ---- Duplicate Bill No checker ----
+  const _dupC=$('dupCheck');if(_dupC)_dupC.addEventListener('click',()=>{
+    const map={};
+    orders.forEach(o=>{if(!o.bill_no)return;_billNums(o).forEach(n=>{(map[n]=map[n]||[]).push(o);});});
+    const dups=Object.keys(map).filter(n=>{
+      // unique orders only (a bill like 2884/2883 counts each number once per order)
+      const uniq=Array.from(new Set(map[n].map(o=>o.id)));
+      return uniq.length>1;
+    }).sort();
+    if(!dups.length){$('dupResult').innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ Duplicate இல்ல! எல்லா bill no unique.</div>';return;}
+    let html='<div class="dpanel" style="padding:10px 13px;font-size:13px;color:var(--red);font-weight:700">⚠️ '+dups.length+' duplicate bill no கண்டுபிடிச்சேன் — check பண்ணு:</div>';
+    dups.forEach(n=>{
+      const seen={};const list=map[n].filter(o=>{if(seen[o.id])return false;seen[o.id]=1;return true;});
+      html+='<div class="dpanel" style="margin-top:6px"><div style="padding:8px 13px;font-weight:700;background:#fff8e6;color:#9a6b00">🔁 Bill No: '+esc(n)+' — '+list.length+' orders</div><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Full Bill No</th><th class="num">Amount</th></tr></thead><tbody>'+list.map(o=>`<tr><td>${esc(o.order_no)}</td><td>${esc(o.bill_no)}</td><td class="num">${fmt(o.sell)}</td></tr>`).join('')+'</tbody></table></div></div>';
+    });
+    html+='<div style="font-size:12px;color:var(--muted);margin-top:8px;padding:0 4px">💡 சரியான order-ஐ Saved tab-ல open பண்ணி → ✏️ Edit → Bill No சரி பண்ணு → Save</div>';
+    $('dupResult').innerHTML=html;
+  });
+  // ---- end dup checker ----
   // ---- end user system ----</script>
 </body>
 </html>
