@@ -329,6 +329,20 @@
       <div id="impResult" style="padding:0 13px 13px"></div>
     </div>
     <div class="card" style="margin-top:14px">
+      <div class="sec">💵 Bulk Payment — Navy slip-ல இருந்து</div>
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Navy settlement slip-ல invoice no போட்டு paste பண்ணு (ஒரு வரிக்கு ஒரு invoice, illa comma). Match ஆகி payment ✓ ஆகும். Default: Slip (bank transfer).</div>
+      <div style="padding:4px 13px"><div class="grid2">
+        <div class="fld"><label>Payment Date</label><input type="date" id="payBulkDate"></div>
+        <div class="fld"><label>Method / Ref</label><input id="payBulkRef" value="Slip (Bank Transfer)"></div>
+      </div></div>
+      <div style="padding:4px 13px"><textarea id="payText" placeholder="Invoice no paste:&#10;2889&#10;2890&#10;4498, 4494, 4493" style="width:100%;min-height:80px;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-size:13px;font-family:monospace"></textarea></div>
+      <div style="padding:4px 13px 13px;display:flex;gap:10px">
+        <button class="btn" id="payPreview" style="margin-top:0;flex:1;background:#1f8a4c">🔍 Preview</button>
+        <button class="btn gold" id="payDo" style="margin-top:0;flex:1" disabled>✅ Paid mark பண்ணு</button>
+      </div>
+      <div id="payResult" style="padding:0 13px 13px"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
       <div class="sec">💾 Backup — Data safety</div>
       <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Data already cloud-ல safe. இது extra copy — உன் PC-ல save பண்ணி வச்சுக்க. ஏதாவது நடந்தா restore பண்ணலாம்.</div>
       <div style="padding:4px 13px 13px;display:flex;gap:10px;flex-wrap:wrap">
@@ -1808,6 +1822,55 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('impText').value='';_impStaged=null;$('impDo').textContent='✅ Import பண்ணு';
   });
   // ---- end import ----
+  // ---- Bulk Payment (Navy slip) ----
+  function _billNums(o){
+    // extract numeric invoice tokens from bill_no, ignoring [WNA/...] refs
+    const raw=(o.bill_no||'');
+    const cleaned=raw.replace(/\[[^\]]*\]/g,' '); // drop [WNA/0158]
+    const nums=cleaned.match(/\d{3,}/g)||[];
+    return nums;
+  }
+  function _parsePayTokens(text){
+    // split by newline/comma/space, keep 3+ digit numbers
+    return Array.from(new Set((text.match(/\d{3,}/g)||[])));
+  }
+  let _payStaged=null;
+  const _pP=$('payPreview');if(_pP)_pP.addEventListener('click',()=>{
+    const toks=_parsePayTokens($('payText').value||'');
+    if(!toks.length){$('payResult').innerHTML='<div class="err">⚠️ Invoice no போடு</div>';$('payDo').disabled=true;return;}
+    // build map: invoice number -> order
+    const matched=[],notFound=[],already=[];
+    toks.forEach(t=>{
+      const o=orders.find(o=>_billNums(o).indexOf(t)>=0);
+      if(!o){notFound.push(t);return;}
+      if(o.paid){already.push({t,o});return;}
+      if(matched.find(m=>m.o.id===o.id)){return;}
+      matched.push({t,o});
+    });
+    _payStaged=matched;
+    let html='<div class="dpanel" style="padding:10px 13px;font-size:13px">';
+    html+='✅ Match ஆச்சு: <b>'+matched.length+'</b>';
+    if(already.length)html+=' · 🟢 already paid: '+already.length;
+    if(notFound.length)html+=' · ❌ கண்டுபிடிக்கல: '+notFound.length;
+    html+='</div>';
+    if(matched.length)html+='<div class="dpanel" style="margin-top:6px"><div class="tablewrap"><table><thead><tr><th>Invoice</th><th>Order No</th><th class="num">Amount</th></tr></thead><tbody>'+matched.map(m=>`<tr><td>${esc(m.t)}</td><td>${esc(m.o.order_no)}</td><td class="num">${fmt(m.o.sell)}</td></tr>`).join('')+'</tbody></table></div></div>';
+    if(notFound.length)html+='<div style="font-size:12px;color:var(--red);margin-top:6px">❌ Match ஆகல: '+notFound.map(esc).join(', ')+'<br><span style="color:var(--muted)">(supply/bill போடலையோ, illa invoice no தப்போ பாரு)</span></div>';
+    $('payResult').innerHTML=html;
+    $('payDo').disabled=matched.length===0;
+  });
+  const _pD=$('payDo');if(_pD)_pD.addEventListener('click',async()=>{
+    if(!_payStaged||!_payStaged.length){alert('முதல்ல Preview பண்ணு');return;}
+    const dt=$('payBulkDate').value||'';const ref=($('payBulkRef').value||'Slip (Bank Transfer)').trim();
+    if(!confirm(_payStaged.length+' orders paid mark பண்ணவா?'))return;
+    $('payDo').disabled=true;$('payDo').textContent='Update ஆகுது...';
+    let n=0;
+    for(const m of _payStaged){const o=m.o;o.paid=true;o.pay_date=dt||o.pay_date||'';o.cheque_no=o.cheque_no||ref;
+      try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}}
+    await loadOrders();
+    $('payResult').innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ '+n+' orders payment ✓ ஆச்சு!</div>';
+    $('payText').value='';_payStaged=null;$('payDo').textContent='✅ Paid mark பண்ணு';
+  });
+  // ---- end bulk payment ----
   // ---- end user system ----</script>
 </body>
 </html>
