@@ -425,6 +425,14 @@
 
   const fmt=n=>(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function _parseAIjson(text){
+    let t=(text||'').replace(/```json/gi,'').replace(/```/g,'').trim();
+    try{return JSON.parse(t);}catch(e){}
+    // pull the first {...} block (AI sometimes adds prose like "Looking at...")
+    const s=t.indexOf('{'),end=t.lastIndexOf('}');
+    if(s>=0&&end>s){const sub=t.slice(s,end+1);try{return JSON.parse(sub);}catch(e){}}
+    throw new Error('AI படிச்சது சரியில்ல — மறுபடி try பண்ணு');
+  }
   function hasCost(o){return (Number(o.buy)||0)>0;}
   function profitVal(o){return hasCost(o)?((Number(o.sell)||0)-(Number(o.buy)||0)):null;}
   function profitTxt(o){const p=profitVal(o);return p===null?'—':('Rs '+fmt(p));}
@@ -500,7 +508,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       if(!resp.ok)throw new Error('AI fail ('+resp.status+'). மறுபடி try பண்ணு.');
       const data=await resp.json();
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
-      const rec=JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
+      const rec=_parseAIjson(text);
       rec.items=Array.isArray(rec.items)?rec.items:[];
       current=rec;showForm();
       chosen=null;pastedImgs=[];$('file').value='';$('pasteBox').value='';$('pastePreview').innerHTML='';$('drop').classList.remove('has');$('dropbig').textContent='PO file தேர்ந்தெடு';$('chip').innerHTML='';
@@ -1959,7 +1967,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
       const data=await resp.json();
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
-      const rec=JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
+      const rec=_parseAIjson(text);
       const lines=Array.isArray(rec.lines)?rec.lines:[];
       if(!lines.length)throw new Error('Slip-ல bill கண்டுபிடிக்கல');
       $('payText').value=lines.map(l=>l.invoice+(l.amount!=null?'  '+l.amount:'')).join('\n');
@@ -2042,12 +2050,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     try{
       const f=_setSlipFile;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
       const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
-      const P='This is a Sri Lanka Navy "Settlement of Bills" payment slip. Return ONLY JSON, no markdown: {"date":"yyyy-mm-dd","account":"the account number money paid to","method":"Slip or Cheque","gross":53900,"deduction":2720,"net":51180,"bills":[{"invoice":"RAG/0193","amount":53900}]}. date = the settlement date (on ...). account = the "to your account to" number. gross = sum of bill amounts (the bottom total). net = the "Amount to Rs" figure paid (after deductions). deduction = gross minus net. bills = each invoice line with its amount (numeric, no commas). Invoice cells like "4495,4496,4497" → one bill object with invoice "4495,4496,4497" and its amount.';
+      const P='You are a JSON extractor. Output ONLY a single JSON object and nothing else — no explanation, no "Looking at", no markdown. This is a Sri Lanka Navy "Settlement of Bills" payment slip. JSON shape: {"date":"yyyy-mm-dd","account":"account number money paid to","method":"Slip or Cheque","gross":53900,"deduction":2720,"net":51180,"bills":[{"invoice":"RAG/0193","amount":53900}]}. date = settlement date (the "on ..." date). account = the "to your account to" number. gross = bottom total of bill amounts. net = the "Amount to Rs" figure paid after deductions. deduction = gross minus net. bills = each invoice line with amount (number only, no commas). Invoice cells like "4495,4496,4497" → one bill object with invoice "4495,4496,4497" and its amount. Respond with the JSON object only.';
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[block,{type:'text',text:P}]})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
       const data=await resp.json();
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
-      const rec=JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
+      const rec=_parseAIjson(text);
       _setStaged=rec;_setSlipFile=null;$('setSlipFile').value='';
       $('setSlipMsg').innerHTML='<span style="color:var(--green);font-weight:700">✅ படிச்சேன் — கீழ பாத்து Save பண்ணு</span>';
       showSettlementForm(rec);
