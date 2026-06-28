@@ -265,6 +265,7 @@
       <button class="mbtn" id="rmDaily" type="button">📅 Day-wise</button>
       <button class="mbtn" id="rmCal" type="button">📆 Calendar</button>
       <button class="mbtn" id="rmOut" type="button">💵 Outstanding</button>
+      <button class="mbtn" id="rmComm" type="button">🤝 Commission</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -285,6 +286,7 @@
     <div id="repDailyWrap" class="hide"></div>
     <div id="repCalWrap" class="hide"></div>
     <div id="repOutWrap" class="hide"></div>
+    <div id="repCommWrap" class="hide"></div>
   </div>
 
   <div class="wrap hide" id="viewUsers">
@@ -722,6 +724,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row('Bill Amount',fmt(o.bill_amt))}</div>
       ${showPay?`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
+      ${(!st&&(o.apo_pct!=null||o.clark_pct!=null))?`<div class="sec">🤝 Commission</div><div class="metarow">${row('Apo',(o.apo_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.apo_pct||0)/100))}${row('Clark',(o.clark_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.clark_pct||0)/100))}</div>`:''}
       <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
         ${CURRENT&&CURRENT.role==='admin'?`<button class="btn" data-assign="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#5a3fb0">👷 Assign</button>`:''}
@@ -756,7 +759,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="fld"><label>Cheque No</label><input id="e_chequeNo" value="${v(o.cheque_no)}"></div>
         <div class="fld"><label>Payment Date</label><input type="date" id="e_payDate" value="${v(o.pay_date)}"></div>
       </div>`:''}
-      <div style="padding:0 13px 13px;display:flex;gap:10px">
+      ${showVal?`<div class="sec">🤝 Commission — Order value மேல % (order-க்கு order மாத்தலாம்)</div>
+      <div class="grid2" style="padding:0 13px">
+        <div class="fld"><label>Apo %</label><div style="display:flex;gap:8px;align-items:center"><input type="number" inputmode="decimal" id="e_apoPct" value="${o.apo_pct!=null?o.apo_pct:''}" placeholder="10" style="flex:1"><span style="font-size:12px;color:var(--muted);white-space:nowrap">Rs <b id="e_apoRs" style="color:var(--navy)">0</b></span></div></div>
+        <div class="fld"><label>Clark %</label><div style="display:flex;gap:8px;align-items:center"><input type="number" inputmode="decimal" id="e_clarkPct" value="${o.clark_pct!=null?o.clark_pct:''}" placeholder="5" style="flex:1"><span style="font-size:12px;color:var(--muted);white-space:nowrap">Rs <b id="e_clarkRs" style="color:var(--navy)">0</b></span></div></div>
+      </div>
+      <div style="padding:4px 13px 0;font-size:11px;color:var(--muted)">காலியா விட்டா commission இல்ல (0%). Order value: Rs ${fmt(o.sell)}</div>`:''}
+      <div style="padding:13px 13px;display:flex;gap:10px">
         <button class="btn" id="e_cancel" style="margin-top:0;flex:1;background:#7a8295">Cancel</button>
         <button class="btn gold" id="e_save" style="margin-top:0;flex:2">💾 Save</button>
       </div>
@@ -904,6 +913,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       if(eMode==='items'){box.querySelector('#e_buy').readOnly=true;eRecalc();}
     }
     box.querySelector('#e_cancel').addEventListener('click',()=>{box.innerHTML=detailHtml(o);wireDetail(box,o);});
+    const _apoP=box.querySelector('#e_apoPct'),_clkP=box.querySelector('#e_clarkPct');
+    const commCalc=()=>{const s=Number(o.sell)||0;
+      if(_apoP){const a=Number(_apoP.value)||0;box.querySelector('#e_apoRs').textContent=fmt(s*a/100);}
+      if(_clkP){const c=Number(_clkP.value)||0;box.querySelector('#e_clarkRs').textContent=fmt(s*c/100);}};
+    if(_apoP)_apoP.addEventListener('input',commCalc);
+    if(_clkP)_clkP.addEventListener('input',commCalc);
+    commCalc();
     box.querySelector('#e_save').addEventListener('click',async ()=>{
       if(hasPur){let buy=0;
         if(eMode==='items'){o.items=readItemDetails(box.querySelector('#e_costItems'),o.items);buy=o.items.reduce((a,it)=>a+(Number(it.cost)||0),0);}
@@ -912,6 +928,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const _sup=box.querySelector('#e_supplied');if(_sup){o.supplied=_sup.checked;o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';}
       const _ba=box.querySelector('#e_billAmt');if(_ba)o.bill_amt=Number(_ba.value)||0;
       const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
+      if(_apoP){const a=_apoP.value.trim();o.apo_pct=a===''?null:Number(a)||0;o.apo_comm=(Number(o.sell)||0)*(o.apo_pct||0)/100;}
+      if(_clkP){const c=_clkP.value.trim();o.clark_pct=c===''?null:Number(c)||0;o.clark_comm=(Number(o.sell)||0)*(o.clark_pct||0)/100;}
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail: '+e.message);return;}
       renderList();
     });
@@ -979,11 +997,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('rmDaily').onclick=()=>{setRepMode('daily');renderDaily();};
     $('rmCal').onclick=()=>{setRepMode('cal');renderCal();};
     $('rmOut').onclick=()=>{setRepMode('out');renderOutstanding();};
+    $('rmComm').onclick=()=>{setRepMode('comm');renderCommission();};
     renderReport();
   }
   function setRepMode(m){
-    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');$('rmCal').classList.toggle('on',m==='cal');$('rmOut').classList.toggle('on',m==='out');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');
+    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');$('rmCal').classList.toggle('on',m==='cal');$('rmOut').classList.toggle('on',m==='out');$('rmComm').classList.toggle('on',m==='comm');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');
   }
   let _dailyBasis='bill';
   function renderDaily(){
@@ -1080,6 +1099,24 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${grp('🔴 45+ நாள் (Overdue)',buckets.b3,'')}
       ${grp('🟠 31–45 நாள்',buckets.b2,'')}
       ${grp('🟢 0–30 நாள்',buckets.b1,'')}`;
+  }
+  function renderCommission(){
+    const wrap=$('repCommWrap');
+    const sup=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
+    if(!sup.length){wrap.innerHTML='<div class="empty">Commission இல்ல.<br>Supply ஆன order → Edit → Apo/Clark % போடு</div>';return;}
+    let apoT=0,clkT=0;
+    const rows=sup.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{
+      const s=Number(o.sell)||0;const ac=s*(o.apo_pct||0)/100,cc=s*(o.clark_pct||0)/100;apoT+=ac;clkT+=cc;
+      return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td class="num">${fmt(s)}</td><td class="num">${o.apo_pct||0}% · ${fmt(ac)}</td><td class="num">${o.clark_pct||0}% · ${fmt(cc)}</td></tr>`;
+    }).join('');
+    wrap.innerHTML=`
+      <div class="drow">
+        <div class="dstat gold"><div class="k">🤝 Apo — மொத்தம்</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
+        <div class="dstat gold"><div class="k">🤝 Clark — மொத்தம்</div><div class="v">${fmt(clkT)}</div><div class="s">Rs</div></div>
+      </div>
+      <div class="dstat g" style="margin:8px 0"><div class="k">மொத்த Commission (Apo+Clark)</div><div class="v">${fmt(apoT+clkT)}</div><div class="s">Rs · ${sup.length} orders</div></div>
+      <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>`;
   }
   function renderPending(){
     const supPend=orders.filter(o=>!o.supplied);
