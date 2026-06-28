@@ -2099,6 +2099,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function _setRecalc(){const g=Number($('setGross').value)||0,n=Number($('setNet').value)||0;if(g&&n)$('setDed').value=Math.max(0,g-n);}
   async function saveSettlementFromForm(){
     const acc=($('setAcc').value||'').replace(/\D/g,'');const bi=_bankByAcc(acc);
+    const _net=Number($('setNet').value)||0,_gross=Number($('setGross').value)||0,_date=$('setDate').value||'';
+    const _dup=Object.values(_setCache||{}).find(r=>{
+      const sameAmt=(_net>0&&Math.round(Number(r.net)||0)===Math.round(_net))||(_gross>0&&Math.round(Number(r.gross)||0)===Math.round(_gross));
+      if(!sameAmt)return false;
+      const d1=parseDate(r.date),d2=parseDate(_date);
+      if(d1&&d2)return Math.abs((d1-d2)/86400000)<=5;
+      return r.date===_date;
+    });
+    if(_dup){
+      if(!confirm('⚠️ Duplicate இருக்கலாம்!\n\nஏற்கனவே இந்த settlement இருக்கு:\n'+(_dup.date||'?')+' · Rs '+fmt(_dup.net)+' · '+((_dup.bills||[]).length)+' bills\n\nஇதே மாதிரி இன்னொண்ணு உண்மையிலேயே save பண்ணணுமா?')){
+        $('setSave').disabled=false;$('setSave').textContent='💾 Settlement Save';return;
+      }
+    }
     const rec={
       id:'set:'+Date.now(),
       date:$('setDate').value||'',
