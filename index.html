@@ -205,6 +205,29 @@
   .modal{position:fixed;inset:0;background:rgba(11,26,42,.55);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeup .2s ease}
   .modalbox{background:#fff;border-radius:14px;max-width:340px;width:100%;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
   .modalbox h3{font-size:15px;color:var(--navy);margin-bottom:10px}
+  /* ===== FULL BLUE THEME — navy page + nav bar, white cards float ===== */
+  :root{--bg:#13243f}
+  body{background:linear-gradient(165deg,#11203a 0%,#172a4d 52%,#1f3864 100%);background-color:#162a4d;min-height:100vh}
+  /* nav bar -> navy to match topbar (full blue, no white strip) */
+  .tabs{background:linear-gradient(180deg,#1b3055,#14264a);border-bottom:1px solid rgba(201,162,39,.30);box-shadow:0 3px 12px rgba(8,16,33,.38)}
+  .tab{color:#9fb0cc}
+  .tab .ti svg{stroke:#9fb0cc}
+  .tab:hover,.tab:hover .ti svg{color:#ffffff;stroke:#ffffff}
+  .tab:hover{background:rgba(255,255,255,.06)}
+  .tab.on,.tab.on:hover{color:var(--gold);background:linear-gradient(180deg,rgba(201,162,39,.16),rgba(201,162,39,0));border-bottom-color:var(--gold)}
+  .tab.on .ti svg{stroke:var(--gold)}
+  /* labels that sit directly on the navy page -> light */
+  .dsec{color:#f0e4c0}
+  .step{color:#aeb9cf}
+  .note{color:#aeb9cf}
+  .calhead .mtitle{color:#ffffff}
+  .caldow{color:#aeb9cf}
+  .callegend{color:#c1cbdd}
+  /* default (navy) buttons sat invisibly on navy bg -> brighter blue so they pop */
+  .btn{background:#27508f;box-shadow:0 3px 11px rgba(0,0,0,.32)}
+  .btn:hover{background:#2f5ea6}
+  /* branding band blends into the navy page (no seam) — keep gold hairline + glow */
+  .brandcard{background:transparent;box-shadow:none}
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
