@@ -266,6 +266,7 @@
       <button class="mbtn" id="rmCal" type="button">📆 Calendar</button>
       <button class="mbtn" id="rmOut" type="button">💵 Outstanding</button>
       <button class="mbtn" id="rmComm" type="button">🤝 Commission</button>
+      <button class="mbtn" id="rmSum" type="button">📈 Summary</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -287,6 +288,7 @@
     <div id="repCalWrap" class="hide"></div>
     <div id="repOutWrap" class="hide"></div>
     <div id="repCommWrap" class="hide"></div>
+    <div id="repSumWrap" class="hide"></div>
   </div>
 
   <div class="wrap hide" id="viewUsers">
@@ -1008,11 +1010,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('rmCal').onclick=()=>{setRepMode('cal');renderCal();};
     $('rmOut').onclick=()=>{setRepMode('out');renderOutstanding();};
     $('rmComm').onclick=()=>{setRepMode('comm');renderCommission();};
+    $('rmSum').onclick=()=>{setRepMode('sum');renderSummary();};
     renderReport();
   }
   function setRepMode(m){
-    $('rmReport').classList.toggle('on',m==='report');$('rmPending').classList.toggle('on',m==='pending');$('rmDaily').classList.toggle('on',m==='daily');$('rmCal').classList.toggle('on',m==='cal');$('rmOut').classList.toggle('on',m==='out');$('rmComm').classList.toggle('on',m==='comm');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');
+    ['Report','Pending','Daily','Cal','Out','Comm','Sum'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
+    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum'};
+    const b=$('rm'+(map[m]||'Report'));if(b)b.classList.add('on');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');
   }
   let _dailyBasis='bill';
   function renderDaily(){
@@ -1189,6 +1194,97 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     w.document.write('<html><head><title>Commission '+esc(name)+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
     w.document.close();
   }
+  // ---- Management Summary ----
+  let _sumFrom='',_sumTo='',_sumComp='all',_sumCamp='all';
+  function _monthsList(){const set={};orders.forEach(o=>{const d=parseDate(o.order_date||o.bill_date);if(d)set[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=1;});return Object.keys(set).sort();}
+  function _mLabel(k){const p=k.split('-');return new Date(p[0],p[1]-1,1).toLocaleDateString('en-GB',{month:'short',year:'numeric'});}
+  function _sumFilter(){
+    return orders.filter(o=>{const d=parseDate(o.order_date||o.bill_date);const mk=d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'';
+      if(_sumFrom&&(!mk||mk<_sumFrom))return false;if(_sumTo&&(!mk||mk>_sumTo))return false;
+      if(_sumComp!=='all'&&_companyOf(o)!==_sumComp)return false;
+      if(_sumCamp!=='all'&&(o.buyer||'—')!==_sumCamp)return false;return true;});
+  }
+  function _sumStats(list){let val=0,sup=0,supVal=0,nsup=0,nsupVal=0,prof=0,costed=0,apo=0,clk=0;
+    list.forEach(o=>{const s=Number(o.sell)||0;val+=s;if(o.supplied){sup++;supVal+=s;}else{nsup++;nsupVal+=s;}const pv=profitVal(o);if(pv!=null){prof+=pv;costed+=s;}apo+=s*(o.apo_pct||0)/100;clk+=s*(o.clark_pct||0)/100;});
+    return {n:list.length,val,sup,supVal,nsup,nsupVal,prof,costed,apo,clk};}
+  function renderSummary(){
+    const wrap=$('repSumWrap');const months=_monthsList();
+    if(!months.length){wrap.innerHTML='<div class="empty">Order data இல்ல</div>';return;}
+    if(!_sumFrom||months.indexOf(_sumFrom)<0)_sumFrom=months[0];if(!_sumTo||months.indexOf(_sumTo)<0)_sumTo=months[months.length-1];
+    const comps=['all','NGRD Motors','Puspha Motors'];
+    const camps=['all'].concat(Array.from(new Set(orders.map(o=>o.buyer||'—'))).sort());
+    const list=_sumFilter();const S=_sumStats(list);
+    const ngrd=_sumStats(list.filter(o=>_companyOf(o)==='NGRD Motors'));
+    const pusp=_sumStats(list.filter(o=>_companyOf(o)==='Puspha Motors'));
+    const mset={};list.forEach(o=>{const d=parseDate(o.order_date||o.bill_date);if(!d)return;const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');(mset[k]=mset[k]||[]).push(o);});
+    const mrows=Object.keys(mset).sort().map(k=>{const ms=_sumStats(mset[k]);return `<tr><td>${_mLabel(k)}</td><td class="num">${ms.n}</td><td class="num">${fmt(ms.val)}</td><td class="num">${ms.sup}</td><td class="num">${ms.costed>0?fmt(ms.prof):'—'}</td></tr>`;}).join('');
+    const opt=(arr,cur,lab)=>arr.map(x=>`<option value="${esc(x)}" ${cur===x?'selected':''}>${esc(lab?lab(x):x)}</option>`).join('');
+    wrap.innerHTML=`
+      <div class="dpanel" style="padding:10px 12px;margin-bottom:10px"><div class="grid2">
+        <div class="fld"><label>From (மாசம்)</label><select id="sumFrom">${opt(months,_sumFrom,_mLabel)}</select></div>
+        <div class="fld"><label>To (மாசம்)</label><select id="sumTo">${opt(months,_sumTo,_mLabel)}</select></div>
+        <div class="fld"><label>Company</label><select id="sumComp">${opt(comps,_sumComp,x=>x==='all'?'எல்லாம் (NGRD+Puspha)':x)}</select></div>
+        <div class="fld"><label>Camp / Buyer</label><select id="sumCamp">${opt(camps,_sumCamp,x=>x==='all'?'எல்லா Camp':x)}</select></div>
+      </div></div>
+      <div class="dsec">📊 SUMMARY — ${_mLabel(_sumFrom)} → ${_mLabel(_sumTo)}${_sumComp==='all'?'':' · '+esc(_sumComp)}${_sumCamp==='all'?'':' · '+esc(_sumCamp.slice(0,16))}</div>
+      <div class="drow">
+        <div class="dstat"><div class="k">மொத்த Orders</div><div class="v">${S.n}</div></div>
+        <div class="dstat gold"><div class="k">மொத்த Value</div><div class="v">${fmt(S.val)}</div><div class="s">Rs</div></div>
+      </div>
+      <div class="drow">
+        <div class="dstat g"><div class="k">✅ Supplied</div><div class="v">${S.sup}</div><div class="s">Rs ${fmt(S.supVal)}</div></div>
+        <div class="dstat r"><div class="k">⏳ Not supplied</div><div class="v">${S.nsup}</div><div class="s">Rs ${fmt(S.nsupVal)}</div></div>
+      </div>
+      <div class="drow">
+        <div class="dstat g"><div class="k">💰 Profit ${S.costed>0?'':'(cost போடல)'}</div><div class="v">${S.costed>0?fmt(S.prof):'—'}</div><div class="s">${S.costed>0?'margin '+(S.prof/S.costed*100).toFixed(1)+'%':'Rs'}</div></div>
+        <div class="dstat gold"><div class="k">🤝 Commission</div><div class="v">${fmt(S.apo+S.clk)}</div><div class="s">Apo ${fmt(S.apo)} · Clark ${fmt(S.clk)}</div></div>
+      </div>
+      <div class="dsec">🏢 Company Compare</div>
+      <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Company</th><th class="num">Orders</th><th class="num">Value</th><th class="num">Supplied</th><th class="num">Profit</th></tr></thead><tbody>
+        <tr><td>NGRD Motors</td><td class="num">${ngrd.n}</td><td class="num">${fmt(ngrd.val)}</td><td class="num">${ngrd.sup}</td><td class="num">${ngrd.costed>0?fmt(ngrd.prof):'—'}</td></tr>
+        <tr><td>Puspha Motors</td><td class="num">${pusp.n}</td><td class="num">${fmt(pusp.val)}</td><td class="num">${pusp.sup}</td><td class="num">${pusp.costed>0?fmt(pusp.prof):'—'}</td></tr>
+      </tbody></table></div></div>
+      <div class="dsec">📅 Month-wise</div>
+      <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Value</th><th class="num">Supplied</th><th class="num">Profit</th></tr></thead><tbody>${mrows}</tbody></table></div></div>
+      <div class="drow" style="margin-top:12px">
+        <button class="btn" id="sumPdf" style="margin-top:0;background:#1f6f8b">📄 PDF</button>
+        <button class="btn gold" id="sumExcel" style="margin-top:0">📥 Excel</button>
+      </div>`;
+    $('sumFrom').onchange=e=>{_sumFrom=e.target.value;if(_sumFrom>_sumTo)_sumTo=_sumFrom;renderSummary();};
+    $('sumTo').onchange=e=>{_sumTo=e.target.value;if(_sumTo<_sumFrom)_sumFrom=_sumTo;renderSummary();};
+    $('sumComp').onchange=e=>{_sumComp=e.target.value;renderSummary();};
+    $('sumCamp').onchange=e=>{_sumCamp=e.target.value;renderSummary();};
+    $('sumPdf').onclick=()=>summaryPDF(S,ngrd,pusp,mset);
+    $('sumExcel').onclick=()=>summaryExcel(S,ngrd,pusp,mset);
+  }
+  function summaryPDF(S,ngrd,pusp,mset){
+    const title=_mLabel(_sumFrom)+' → '+_mLabel(_sumTo)+(_sumComp==='all'?'':' · '+_sumComp)+(_sumCamp==='all'?'':' · '+_sumCamp);
+    const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px"><div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div><div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526</div></div>`;
+    const r=(l,v)=>`<tr><td style="border:1px solid #ccc;padding:6px;font-weight:600">${l}</td><td style="border:1px solid #ccc;padding:6px;text-align:right">${v}</td></tr>`;
+    const mrows=Object.keys(mset).sort().map(k=>{const ms=_sumStats(mset[k]);return `<tr><td style="border:1px solid #ccc;padding:5px">${_mLabel(k)}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${ms.n}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${fmt(ms.val)}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${ms.sup}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${ms.costed>0?fmt(ms.prof):'-'}</td></tr>`;}).join('');
+    const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">${head}
+      <div style="font-size:15px;font-weight:800;margin-bottom:4px">MANAGEMENT SUMMARY</div>
+      <div style="font-size:12px;color:#555;margin-bottom:12px">${esc(title)} &nbsp;|&nbsp; Date: ${new Date().toLocaleDateString('en-GB')}</div>
+      <table style="width:62%;border-collapse:collapse;font-size:12px;margin-bottom:16px">${r('Total Orders',S.n)}${r('Total Value (Rs)',fmt(S.val))}${r('Supplied',S.sup+' (Rs '+fmt(S.supVal)+')')}${r('Not Supplied',S.nsup+' (Rs '+fmt(S.nsupVal)+')')}${r('Profit (Rs)',S.costed>0?fmt(S.prof):'-')}${r('Commission Apo (Rs)',fmt(S.apo))}${r('Commission Clark (Rs)',fmt(S.clk))}</table>
+      <div style="font-size:13px;font-weight:800;margin-bottom:6px">Company Compare</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
+        <thead><tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a">Company</th><th style="padding:6px;border:1px solid #0b2a4a">Orders</th><th style="padding:6px;border:1px solid #0b2a4a">Value</th><th style="padding:6px;border:1px solid #0b2a4a">Supplied</th><th style="padding:6px;border:1px solid #0b2a4a">Profit</th></tr></thead>
+        <tbody><tr><td style="border:1px solid #ccc;padding:5px">NGRD Motors</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${ngrd.n}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${fmt(ngrd.val)}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${ngrd.sup}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${ngrd.costed>0?fmt(ngrd.prof):'-'}</td></tr>
+        <tr><td style="border:1px solid #ccc;padding:5px">Puspha Motors</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${pusp.n}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${fmt(pusp.val)}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${pusp.sup}</td><td style="border:1px solid #ccc;padding:5px;text-align:right">${pusp.costed>0?fmt(pusp.prof):'-'}</td></tr></tbody></table>
+      <div style="font-size:13px;font-weight:800;margin-bottom:6px">Month-wise</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a">Month</th><th style="padding:6px;border:1px solid #0b2a4a">Orders</th><th style="padding:6px;border:1px solid #0b2a4a">Value</th><th style="padding:6px;border:1px solid #0b2a4a">Supplied</th><th style="padding:6px;border:1px solid #0b2a4a">Profit</th></tr></thead><tbody>${mrows}</tbody></table>
+      <div style="margin-top:30px;font-size:10px;color:#777;border-top:1px solid #ccc;padding-top:6px">NGRD Order System — Management Summary</div></div>`;
+    const w=window.open('','_blank');if(!w){alert('Popup allow பண்ணு');return;}
+    w.document.write('<html><head><title>Summary</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');w.document.close();
+  }
+  function summaryExcel(S,ngrd,pusp,mset){
+    const title=_mLabel(_sumFrom)+' to '+_mLabel(_sumTo)+(_sumComp==='all'?'':' '+_sumComp)+(_sumCamp==='all'?'':' '+_sumCamp);
+    const L=[['NGRD MANAGEMENT SUMMARY'],[title],[],['Total Orders',S.n],['Total Value',S.val],['Supplied',S.sup,S.supVal],['Not Supplied',S.nsup,S.nsupVal],['Profit',S.costed>0?S.prof:''],['Commission Apo',S.apo],['Commission Clark',S.clk],[],['COMPANY','Orders','Value','Supplied','Profit'],['NGRD Motors',ngrd.n,ngrd.val,ngrd.sup,ngrd.costed>0?ngrd.prof:''],['Puspha Motors',pusp.n,pusp.val,pusp.sup,pusp.costed>0?pusp.prof:''],[],['MONTH','Orders','Value','Supplied','Profit']];
+    Object.keys(mset).sort().forEach(k=>{const ms=_sumStats(mset[k]);L.push([_mLabel(k),ms.n,ms.val,ms.sup,ms.costed>0?ms.prof:'']);});
+    const ce=v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    _dl('NGRD_Summary_'+_stamp()+'.csv','\ufeff'+L.map(r=>r.map(ce).join(',')).join('\n'),'text/csv');
+  }
+  // ---- end summary ----
   function renderPending(){
     const supPend=orders.filter(o=>!o.supplied);
     const payPend=orders.filter(o=>(o.supplied||o.bill_no)&&!o.paid);
@@ -1533,15 +1629,27 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function parseRegister(text){
     let lines=text.split(/\r?\n/).filter(l=>l.trim()!=='');
     if(!lines.length)return {error:'Data இல்ல'};
-    let hi=lines.findIndex(l=>/ORDER\s*NUMBER/i.test(l));if(hi<0)hi=0;
+    let hi=lines.findIndex(l=>/ORDER\s*NUMBER/i.test(l));
+    const hasHeader=hi>=0;if(hi<0)hi=0;
     const delim=lines[hi].indexOf('\t')>=0?'\t':',';
     const split=l=>delim==='\t'?l.split('\t'):(l.match(/(".*?"|[^,]+|(?<=,)(?=,))/g)||l.split(',')).map(x=>x.replace(/^"|"$/g,''));
-    const hdr=split(lines[hi]);
-    const ci={order:_hidx(hdr,['ORDER NUMBER']),file:_hidx(hdr,['FILE NUMBER']),qdate:_hidx(hdr,['QUOTATION DATE']),veh:_hidx(hdr,['VEHICLE NO']),make:_hidx(hdr,['MAKE']),odate:_hidx(hdr,['ORDER R DATE','ORDER DATE']),amt:_hidx(hdr,['AMOUNT']),comp:_hidx(hdr,['COMPANY']),last:_hidx(hdr,['LAST DATE']),rem:_hidx(hdr,['REMARK']),billno:_hidx(hdr,['BILL NUMBER']),billdate:_hidx(hdr,['BILL DATE'])};
-    if(ci.order<0)return {error:'ORDER NUMBER column கண்டுபிடிக்கல. Header சரியா copy பண்ணியா?'};
+    let ci,startLine;
+    if(hasHeader){
+      const hdr=split(lines[hi]);
+      ci={order:_hidx(hdr,['ORDER NUMBER']),file:_hidx(hdr,['FILE NUMBER']),qdate:_hidx(hdr,['QUOTATION DATE']),veh:_hidx(hdr,['VEHICLE NO']),make:_hidx(hdr,['MAKE']),odate:_hidx(hdr,['ORDER R DATE','ORDER DATE']),amt:_hidx(hdr,['AMOUNT']),comp:_hidx(hdr,['COMPANY']),last:_hidx(hdr,['LAST DATE']),rem:_hidx(hdr,['REMARK']),billno:_hidx(hdr,['BILL NUMBER']),billdate:_hidx(hdr,['BILL DATE'])};
+      startLine=hi+1;
+    } else {
+      // No header — assume fixed column order: NOS, ORDER, FILE, QDATE, VEHICLE, MAKE, ODATE, AMOUNT, COMPANY, LASTDATE, REMARK, BILLNO, BILLDATE
+      const first=split(lines[0]);
+      // detect if a leading NOS column exists (first cell is a plain number)
+      const off=(/^\d+$/.test((first[0]||'').trim()))?1:0;
+      ci={order:off+0,file:off+1,qdate:off+2,veh:off+3,make:off+4,odate:off+5,amt:off+6,comp:off+7,last:off+8,rem:off+9,billno:off+10,billdate:off+11};
+      startLine=0;
+    }
+    if(ci.order<0)return {error:'ORDER NUMBER column கண்டுபிடிக்கல'};
     const out=[];
-    for(let i=hi+1;i<lines.length;i++){const c=split(lines[i]);const get=k=>ci[k]>=0&&c[ci[k]]!=null?c[ci[k]].trim():'';
-      const ord=_normOrd(get('order'));if(!ord)continue;
+    for(let i=startLine;i<lines.length;i++){const c=split(lines[i]);const get=k=>ci[k]>=0&&c[ci[k]]!=null?c[ci[k]].trim():'';
+      const ord=_normOrd(get('order'));if(!ord||!/PO\/\d/i.test(ord))continue;
       const supplied=/SUPPLI/i.test(get('rem'));
       out.push({order_no:ord,file_no:get('file'),quotation_date:_impDate(get('qdate')),naha_no:get('veh').replace(/\s+/g,' ').trim(),model:get('make'),order_date:_impDate(get('odate')),sell:_impAmt(get('amt')),supplier:_impSup(get('comp')),delivery_date:_impDate(get('last')),supplied:supplied,bill_no:supplied?get('billno'):'',bill_date:supplied?_impDate(get('billdate')):'',buyer:'Western Naval Command (WNA)',items:[],paid:false});
     }
