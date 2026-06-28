@@ -1161,8 +1161,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function statusKey(o){return o.paid?'paid':(o.supplied||o.bill_no)?'invoiced':'pending';}
   let repFiltered=[];
   function initReport(){
-    const sel=$('repCamp');const buyers=Array.from(new Set(orders.map(o=>o.buyer||'—'))).sort();
-    sel.innerHTML='<option value="all">எல்லா Camp / Buyer</option>'+buyers.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
+    const sel=$('repCamp');const camps=Array.from(new Set(orders.map(o=>_campOf(o)))).sort();
+    sel.innerHTML='<option value="all">எல்லா Camp / Buyer</option>'+camps.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');
     sel.onchange=renderReport;$('repStatus').onchange=renderReport;
     $('rmReport').onclick=()=>{setRepMode('report');renderReport();};
     $('rmPending').onclick=()=>{setRepMode('pending');renderPending();};
@@ -1552,7 +1552,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderReport(){
     const camp=$('repCamp').value,status=$('repStatus').value;
     repFiltered=orders.filter(o=>{
-      if(camp!=='all'&&(o.buyer||'—')!==camp)return false;
+      if(camp!=='all'&&_campOf(o)!==camp)return false;
       if(status==='ld'){const a=deliveryAlert(o);return a&&a.lvl===0;}
       if(status!=='all'&&statusKey(o)!==status)return false;
       return true;
@@ -1574,11 +1574,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function downloadReport(){
     if(!repFiltered.length){alert('Download பண்ண order இல்ல');return;}
-    const head=['Order No','File No','NAHA','Civil No','Model','Buyer','Order Date','Delivery Date','Status','Sell (Rs)','Cost (Rs)','Profit (Rs)','Bill No','Cheque No'];
+    const head=['Order No','File No','NAHA','Civil No','Model','Camp','Order Date','Delivery Date','Status','Sell (Rs)','Cost (Rs)','Profit (Rs)','Bill No','Cheque No'];
     const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
     const lines=[head.map(q).join(',')];
     repFiltered.forEach(o=>{const sk=statusKey(o);
-      lines.push([o.order_no,o.file_no,o.naha_no,o.civil_no,o.model,o.buyer,o.order_date,o.delivery_date,sk,o.sell,o.buy,(profitVal(o)===null?'':profitVal(o)),o.bill_no,o.cheque_no].map(q).join(','));});
+      lines.push([o.order_no,o.file_no,o.naha_no,o.civil_no,o.model,_campOf(o),o.order_date,o.delivery_date,sk,o.sell,o.buy,(profitVal(o)===null?'':profitVal(o)),o.bill_no,o.cheque_no].map(q).join(','));});
     const csv='\ufeff'+lines.join('\r\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
