@@ -271,6 +271,11 @@
   .hbar .hb-sub{font-size:10.5px;color:var(--muted);margin-top:5px;font-weight:600}
   .hbar:hover .hb-name{color:var(--navy2)}
   .hbar:hover .hb-fill{filter:brightness(1.06)}
+  /* backup reminder nudge */
+  .nudge{background:linear-gradient(100deg,#3a2f10,#4a3a14);border:1px solid rgba(201,162,39,.5);color:#f3e7c4;font-size:12.5px;font-weight:700;padding:11px 14px;border-radius:12px;margin-bottom:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(8,16,33,.25)}
+  .nudge b{color:#fff}
+  .nudge button{margin-left:auto;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;font-family:inherit}
+  .nudge button:hover{filter:brightness(.96)}
   /* NGRD emblem watermark is now a body background layer (always behind content, iOS-safe) */
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -305,6 +310,7 @@
   </div>
 
   <div class="wrap" id="viewDash">
+    <div id="backupNudge"></div>
     <div class="dsearch">
       <input id="dashSearch" type="text" autocomplete="off" placeholder="🔍 தேடு — Customer / Camp · File No · Vehicle No · Order No">
       <span class="clr" id="dashSearchClear">✕</span>
@@ -411,6 +417,15 @@
 
   <div class="wrap hide" id="viewUsers">
     <div class="step">👤 Users — Admin மட்டும் manage பண்ணலாம்</div>
+    <div class="card">
+      <div class="sec">💾 Data Backup & Restore</div>
+      <div style="padding:11px 13px">
+        <div id="backupInfo" style="font-size:12px;color:var(--muted);margin-bottom:11px"></div>
+        <button class="btn gold" id="btnBackup" style="margin-top:0">💾 Full Backup Download (JSON)</button>
+        <label class="btn" id="btnRestoreLbl" style="margin-top:10px;text-align:center;cursor:pointer">♻️ Restore from Backup<input type="file" id="restoreFile" accept=".json,application/json" hidden></label>
+        <div class="note" style="text-align:left;margin-top:9px">Backup file-ஐ safe-ஆ வை (Google Drive / email / PC). வாரம் ஒரு தடவையாவது download பண்ணு. Restore = இதே id order update + புதுசு add (எதுவும் delete ஆகாது).</div>
+      </div>
+    </div>
     <div class="card">
       <div class="sec">➕ புது User சேர்</div>
       <div class="grid2">
@@ -1738,9 +1753,52 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const clr=$('dashSearchClear');if(clr)clr.onclick=()=>{sIn.value='';renderDashSearch();sIn.focus();};
     _renderCustChips();
   }
+  function _updateBackupInfo(){
+    const el=$('backupInfo');if(!el)return;
+    let last=0;try{last=Number(localStorage.getItem('__last_backup'))||0;}catch(e){}
+    const d=last?new Date(last):null;
+    el.innerHTML=d?('கடைசி backup: <b style="color:var(--navy)">'+d.toLocaleDateString('en-GB')+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+'</b> · இப்போ '+orders.length+' orders'):('⚠️ இதுவரை backup பண்ணல · இப்போ '+orders.length+' orders');
+  }
+  function _exportBackup(){
+    const data={_ngrd_backup:true,version:1,exported_at:new Date().toISOString(),
+      counts:{orders:orders.length},orders:orders,
+      settlements:(typeof _setCache!=='undefined'&&_setCache)?_setCache:{},
+      parts:(typeof _partsCache!=='undefined'&&_partsCache)?_partsCache:{}};
+    const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='NGRD_backup_'+new Date().toISOString().slice(0,10)+'_'+orders.length+'orders.json';
+    document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},100);
+    try{localStorage.setItem('__last_backup',String(Date.now()));}catch(e){}
+    _updateBackupInfo();
+  }
+  async function _restoreBackup(file){
+    let data;try{data=JSON.parse(await file.text());}catch(e){alert('File படிக்க முடியல / wrong format');return;}
+    if(!data||!data._ngrd_backup||!Array.isArray(data.orders)){alert('இது NGRD backup file இல்ல');return;}
+    if(!confirm(data.orders.length+' orders restore பண்ணவா?\n\n• இதே id order → update\n• புது order → add\n• எதுவும் DELETE ஆகாது\n\n(தற்போதைய orders: '+orders.length+')'))return;
+    let n=0,fail=0;
+    for(const o of data.orders){if(!o||!o.id)continue;try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){fail++;}}
+    try{if(data.parts&&typeof _partsCache!=='undefined'){_partsCache=Object.assign(_partsCache||{},data.parts);localStorage.setItem('__parts_cache',JSON.stringify(_partsCache));}}catch(e){}
+    try{if(data.settlements&&typeof _setCache!=='undefined'){_setCache=Object.assign(_setCache||{},data.settlements);localStorage.setItem('__set_cache',JSON.stringify(_setCache));if(typeof firebase!=='undefined'&&firebase.database)await firebase.database().ref('settlements').update(data.settlements);}}catch(e){}
+    await loadOrders();renderDash();
+    alert('✓ '+n+' orders restore ஆச்சு'+(fail?(' · '+fail+' fail')+'':''));
+  }
+  function _wireBackup(){
+    const b=$('btnBackup');if(b)b.onclick=_exportBackup;
+    const rf=$('restoreFile');if(rf)rf.onchange=e=>{const f=e.target.files[0];if(f)_restoreBackup(f);rf.value='';};
+    _updateBackupInfo();
+  }
+  function _backupNudge(){
+    const el=$('backupNudge');if(!el)return;
+    if(document.body.classList.contains('no-users')){el.innerHTML='';return;}
+    let last=0;try{last=Number(localStorage.getItem('__last_backup'))||0;}catch(e){}
+    const days=last?Math.floor((Date.now()-last)/86400000):999;
+    if(!orders.length||days<7){el.innerHTML='';return;}
+    el.innerHTML=`<div class="nudge">⚠️ ${last?days+' நாள்-ஆ':'இதுவரை'} data backup பண்ணல — safe-ஆ வைக்க <b>download பண்ணு</b><button id="nudgeGo">💾 Backup</button></div>`;
+    const g=$('nudgeGo');if(g)g.onclick=()=>{setTab('users');renderUsers();setTimeout(()=>{const bb=$('btnBackup');if(bb)bb.scrollIntoView({behavior:'smooth',block:'center'});},80);};
+  }
   function renderDash(){
     const dw=$('dashContent');
-    _renderCustChips();
+    _renderCustChips();_backupNudge();
     if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
     let value=0,profit=0,costedVal=0,pend=0,pendAmt=0,ld=0,soon=0,payLate=0;
     const st={p:0,i:0,d:0};const comp={},camp={};
@@ -1818,7 +1876,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         else if(t==='camp')gotoList({t:'camp',v});
         else gotoList({t});});});
   }
-  loadOrders().then(()=>{renderDash();_loadSuppliers();_wireDashSearch();});
+  loadOrders().then(()=>{renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();});
   _loadParts();
   _loadSettlements();
   $('repDownload').addEventListener('click',downloadReport);
