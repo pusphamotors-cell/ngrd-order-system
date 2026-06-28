@@ -1284,9 +1284,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const apo=$('bulkApo').value.trim(),clk=$('bulkClark').value.trim();
       if(apo===''&&clk===''){alert('Apo % illa Clark % போடு');return;}
       const over=$('bulkPctOver').checked;
-      const sup=orders.filter(o=>o.supplied||o.bill_no);
-      if(!sup.length){alert('Supplied order இல்ல');return;}
-      if(!confirm(sup.length+' supplied order-க்கு '+(apo!==''?'Apo '+apo+'% ':'')+(clk!==''?'Clark '+clk+'%':'')+' set பண்ணவா?'+(over?'\n(ஏற்கனவே % இருந்தாலும் overwrite ஆகும்)':'\n(% இல்லாத order-க்கு மட்டும்)')))return;
+      const tgt=($('bulkPctTarget')||{}).value||'all';
+      let sup=orders.filter(o=>o.supplied||o.bill_no);
+      if(tgt==='egp')sup=sup.filter(_isEgp);else if(tgt==='non')sup=sup.filter(o=>!_isEgp(o));
+      if(!sup.length){alert('அந்த வகை order இல்ல');return;}
+      const tlbl=tgt==='egp'?'🏛️ eGP':tgt==='non'?'Non-eGP':'எல்லா';
+      if(!confirm(sup.length+' '+tlbl+' order-க்கு '+(apo!==''?'Apo '+apo+'% ':'')+(clk!==''?'Clark '+clk+'%':'')+' set பண்ணவா?'+(over?'\n(ஏற்கனவே % இருந்தாலும் overwrite ஆகும்)':'\n(% இல்லாத order-க்கு மட்டும்)')))return;
       _bpb.disabled=true;_bpb.textContent='⏳ set பண்றேன்...';
       let n=0;
       for(const o of sup){
@@ -1301,14 +1304,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     };
   }
   function _bulkPctHtml(){
-    return `<details class="egpbulk"><summary>📊 Commission % — supplied orders-க்கு bulk set</summary>
+    return `<details class="egpbulk"><summary>📊 Commission % — bulk set (eGP தனி rate)</summary>
+      <div class="fld" style="margin:4px 13px"><label>எந்த orders-க்கு?</label><select id="bulkPctTarget"><option value="non">Non-eGP மட்டும் (சாதாரண %)</option><option value="egp">🏛️ eGP மட்டும் (தனி %)</option><option value="all">எல்லா supplied orders</option></select></div>
       <div class="grid2" style="padding:0 13px 4px">
-        <div class="fld"><label>Apo %</label><input type="number" inputmode="decimal" id="bulkApo" placeholder="10"></div>
-        <div class="fld"><label>Clark %</label><input type="number" inputmode="decimal" id="bulkClark" placeholder="5"></div>
+        <div class="fld"><label>Apo %</label><input type="number" inputmode="decimal" id="bulkApo" placeholder="non-eGP:10 · eGP:1"></div>
+        <div class="fld"><label>Clark %</label><input type="number" inputmode="decimal" id="bulkClark" placeholder="non-eGP:5 · eGP:0.5"></div>
       </div>
       <label class="toggle" style="margin:4px 13px"><input type="checkbox" id="bulkPctOver"><span>ஏற்கனவே % இருந்தாலும் overwrite</span></label>
       <button class="btn gold" id="bulkPctBtn" style="margin:6px 13px">✓ Commission % set</button>
-      <div id="bulkPctResult" class="note" style="text-align:left;padding:4px 13px 12px"></div>
+      <div id="bulkPctResult" class="note" style="text-align:left;padding:4px 13px 12px">💡 eGP-க்கு 0% வேணும்னா Apo% box-ல <b>0</b> போடு</div>
     </details>`;
   }
   function _matchFilter(o){const f=_listFilter;if(!f)return true;
@@ -1604,12 +1608,21 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function openCommissionPDF(name,pctKey,sup,camp){
     const list=sup.filter(o=>Number(o[pctKey])>0);
     if(!list.length){alert(name+'-க்கு commission இல்ல');return;}
-    const today=new Date().toLocaleDateString('en-GB');let total=0;
+    const today=new Date().toLocaleDateString('en-GB');let total=0;let gn=0;
     const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
-    const rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map((o,n)=>{
-      const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;
-      return `<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n+1}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
-    }).join('');
+    const rowCell=(n,o,s,c)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
+    const buildSec=(title,arr,bg)=>{
+      if(!arr.length)return '';let sub=0;
+      const rws=arr.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;sub+=c;total+=c;return rowCell(gn,o,s,c);}).join('');
+      return `<tr><td colspan="9" style="background:${bg};border:1px solid #ccc;padding:7px;font-weight:800;color:#0b2a4a;font-size:12px">${title} (${arr.length} orders)</td></tr>${rws}<tr><td colspan="8" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${title} — Subtotal (Rs)</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(sub)}</td></tr>`;
+    };
+    const egpList=list.filter(_isEgp),nonList=list.filter(o=>!_isEgp(o));
+    let rows;
+    if(egpList.length&&nonList.length){
+      rows=buildSec('Non-eGP Orders',nonList,'#eef2f8')+buildSec('🏛️ eGP Orders',egpList,'#e7f0ff');
+    }else{
+      rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;return rowCell(gn,o,s,c);}).join('');
+    }
     const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
       <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
       <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &nbsp;&bull;&nbsp; ngrdmotors@gmail.com</div></div>`;
