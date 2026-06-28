@@ -216,6 +216,7 @@
     <div class="tab" id="tabList">📋 Saved</div>
     <div class="tab" id="tabTasks">👷 வேலை</div>
     <div class="tab" id="tabRep">📑 Report</div>
+    <div class="tab" id="tabSettle">🏦 Settle</div>
     <div class="tab" id="tabUsers">👤 Users</div>
   </div>
 
@@ -301,6 +302,11 @@
     <div id="repCommWrap" class="hide"></div>
     <div id="repSumWrap" class="hide"></div>
     <div id="repSalesWrap" class="hide"></div>
+  </div>
+
+  <div class="wrap hide" id="viewSettle">
+    <div class="step">🏦 Settlements — Navy payment slips + Bank check</div>
+    <div id="settleBody"></div>
   </div>
 
   <div class="wrap hide" id="viewUsers">
@@ -425,14 +431,15 @@
   let chosen=null,current=null,orders=[],mode='file',pastedImgs=[];
 
   function setTab(tab){
-    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabTasks').classList.toggle('on',tab==='tasks');$('tabRep').classList.toggle('on',tab==='rep');$('tabUsers').classList.toggle('on',tab==='users');
-    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');$('viewTasks').classList.toggle('hide',tab!=='tasks');$('viewRep').classList.toggle('hide',tab!=='rep');$('viewUsers').classList.toggle('hide',tab!=='users');
+    $('tabDash').classList.toggle('on',tab==='dash');$('tabNew').classList.toggle('on',tab==='new');$('tabList').classList.toggle('on',tab==='list');$('tabTasks').classList.toggle('on',tab==='tasks');$('tabRep').classList.toggle('on',tab==='rep');$('tabSettle').classList.toggle('on',tab==='settle');$('tabUsers').classList.toggle('on',tab==='users');
+    $('viewDash').classList.toggle('hide',tab!=='dash');$('viewNew').classList.toggle('hide',tab!=='new');$('viewList').classList.toggle('hide',tab!=='list');$('viewTasks').classList.toggle('hide',tab!=='tasks');$('viewRep').classList.toggle('hide',tab!=='rep');$('viewSettle').classList.toggle('hide',tab!=='settle');$('viewUsers').classList.toggle('hide',tab!=='users');
   }
   $('tabDash').onclick=()=>{setTab('dash');renderDash();};
   $('tabNew').onclick=()=>setTab('new');
   $('tabList').onclick=()=>{_listFilter=null;setTab('list');renderList();};
   $('tabTasks').onclick=()=>{setTab('tasks');renderTasks();};
   $('tabRep').onclick=()=>{setTab('rep');initReport();};
+  $('tabSettle').onclick=()=>{setTab('settle');renderSettlements();};
   $('tabUsers').onclick=()=>{setTab('users');renderUsers();};
 
   function updateGo(){$('go').disabled=(mode==='file')?!chosen:!(pastedImgs.length||$('pasteBox').value.trim());}
@@ -635,6 +642,36 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     try{if(_fbOk)await firebase.database().ref('suppliers/'+k).set(name);}catch(e){}
   }
   // ---- end Supplier Master ----
+
+  // ---- Settlements (Navy payment slips) ----
+  let _setCache=null;
+  function _bankFor(o){
+    const c=_companyOf(o);
+    if(c==='Puspha Motors')return {bank:'Peoples Bank',acc:'100150021692'};
+    return {bank:'HNB',acc:'6010014099'};
+  }
+  function _bankByAcc(acc){
+    acc=(acc||'').replace(/\D/g,'');
+    if(acc==='100150021692')return {company:'Puspha Motors',bank:'Peoples Bank',acc:'100150021692'};
+    if(acc==='6010014099')return {company:'NGRD Motors',bank:'HNB',acc:'6010014099'};
+    return {company:'',bank:'',acc:acc};
+  }
+  async function _loadSettlements(){
+    try{if(!_fbOk)throw 0;const s=await firebase.database().ref('settlements').once('value');_setCache=s.val()||{};try{localStorage.setItem('__set_cache',JSON.stringify(_setCache));}catch(e){}}
+    catch(e){try{_setCache=JSON.parse(localStorage.getItem('__set_cache')||'{}');}catch(_){_setCache={};}}
+    return _setCache;
+  }
+  async function _saveSettlement(rec){
+    if(!_setCache)_setCache={};_setCache[rec.id]=rec;
+    try{localStorage.setItem('__set_cache',JSON.stringify(_setCache));}catch(e){}
+    try{if(_fbOk)await firebase.database().ref('settlements/'+rec.id).set(rec);}catch(e){}
+  }
+  async function _delSettlement(id){
+    if(_setCache)delete _setCache[id];
+    try{localStorage.setItem('__set_cache',JSON.stringify(_setCache));}catch(e){}
+    try{if(_fbOk)await firebase.database().ref('settlements/'+id).remove();}catch(e){}
+  }
+  // ---- end Settlements ----
 
   function itemRowsHtml(items){
     return (items||[]).map((it,ix)=>{
@@ -1579,6 +1616,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   loadOrders().then(()=>{renderDash();_loadSuppliers();});
   _loadParts();
+  _loadSettlements();
   $('repDownload').addEventListener('click',downloadReport);
   $('searchBox').addEventListener('input',renderList);
   function _fillCampFilter(){
@@ -1951,6 +1989,159 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('dupResult').innerHTML=html;
   });
   // ---- end dup checker ----
+  // ---- Settlements UI ----
+  let _setSlipFile=null,_setStaged=null;
+  function renderSettlements(){
+    const body=$('settleBody');if(!body)return;
+    const recs=Object.values(_setCache||{}).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    let totGross=0,totNet=0,recvd=0,pendingAmt=0;
+    recs.forEach(r=>{totGross+=Number(r.gross)||0;totNet+=Number(r.net)||0;if(r.received)recvd+=Number(r.net)||0;else pendingAmt+=Number(r.net)||0;});
+    const listHtml=recs.length?recs.map(r=>{
+      const bi=_bankByAcc(r.acc);
+      return `<div class="orow"><div class="ohead" data-set="${esc(r.id)}">
+        <div class="left"><div class="ono">${esc(r.date||'—')} · ${esc(r.company||bi.company||'—')} <span class="badge ${r.received?'b-paid':'b-pend'}">${r.received?'🟢 Bank ✓':'🔵 Pending'}</span></div>
+        <div class="meta">${esc(bi.bank||'')} ${esc(r.acc||'')} · ${(r.bills||[]).length} bills · ${esc(r.method||'Slip')}</div></div>
+        <div class="pf"><div class="amt">Rs ${fmt(r.net)}</div></div>
+      </div><div id="setd-${esc(r.id)}" class="hide"></div></div>`;
+    }).join(''):'<div class="empty">Settlement record இல்ல.<br>கீழ Navy slip upload பண்ணு ✨</div>';
+    body.innerHTML=`
+      <div class="card">
+        <div class="grow">
+          <div class="gcard"><div class="k">Settlements</div><div class="v">${recs.length}</div></div>
+          <div class="gcard p money"><div class="k">Bank வந்தது</div><div class="v">${fmt(recvd)}</div></div>
+          <div class="gcard w money"><div class="k">Pending (bank வரல)</div><div class="v">${fmt(pendingAmt)}</div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="sec">➕ புது Settlement — Navy slip</div>
+        <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Navy settlement slip upload பண்ணு (PDF/image) → AI படிக்கும் → confirm → save. Account number பாத்து company auto.</div>
+        <div style="padding:4px 13px">
+          <input type="file" id="setSlipFile" accept="application/pdf,image/*" style="font-size:12px;display:block">
+          <button class="btn" id="setSlipRead" style="margin-top:8px;background:#1f6f8b;width:100%" disabled>🤖 Slip படி (AI)</button>
+          <div id="setSlipMsg" style="font-size:12px;margin-top:6px"></div>
+        </div>
+        <div id="setForm" style="padding:0 13px 13px"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="sec">📋 Settlement Records (${recs.length})</div>
+        <div style="padding:8px 13px 13px">${listHtml}</div>
+      </div>`;
+    // wire slip upload
+    const sf=$('setSlipFile');if(sf)sf.addEventListener('change',e=>{_setSlipFile=e.target.files&&e.target.files[0];$('setSlipRead').disabled=!_setSlipFile;$('setSlipMsg').innerHTML=_setSlipFile?'<span style="color:var(--muted)">'+esc(_setSlipFile.name)+' ready</span>':'';});
+    const sr=$('setSlipRead');if(sr)sr.addEventListener('click',readSettlementSlip);
+    // wire record expand
+    body.querySelectorAll('.ohead[data-set]').forEach(h=>h.addEventListener('click',()=>{
+      const id=h.dataset.set,box=$('setd-'+id);
+      if(box.classList.contains('hide')){box.innerHTML=settlementDetail(_setCache[id]);box.classList.remove('hide');wireSettlementDetail(box,_setCache[id]);}
+      else{box.classList.add('hide');box.innerHTML='';}
+    }));
+  }
+  async function readSettlementSlip(){
+    if(!_setSlipFile)return;
+    $('setSlipRead').disabled=true;$('setSlipRead').innerHTML='<span class="spin"></span>படிக்கிறேன்...';$('setSlipMsg').innerHTML='';
+    try{
+      const f=_setSlipFile;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+      const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
+      const P='This is a Sri Lanka Navy "Settlement of Bills" payment slip. Return ONLY JSON, no markdown: {"date":"yyyy-mm-dd","account":"the account number money paid to","method":"Slip or Cheque","gross":53900,"deduction":2720,"net":51180,"bills":[{"invoice":"RAG/0193","amount":53900}]}. date = the settlement date (on ...). account = the "to your account to" number. gross = sum of bill amounts (the bottom total). net = the "Amount to Rs" figure paid (after deductions). deduction = gross minus net. bills = each invoice line with its amount (numeric, no commas). Invoice cells like "4495,4496,4497" → one bill object with invoice "4495,4496,4497" and its amount.';
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[block,{type:'text',text:P}]})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
+      const rec=JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
+      _setStaged=rec;_setSlipFile=null;$('setSlipFile').value='';
+      $('setSlipMsg').innerHTML='<span style="color:var(--green);font-weight:700">✅ படிச்சேன் — கீழ பாத்து Save பண்ணு</span>';
+      showSettlementForm(rec);
+    }catch(err){$('setSlipMsg').innerHTML='<span style="color:var(--red)">⚠️ '+esc(err.message)+'</span>';}
+    finally{$('setSlipRead').innerHTML='🤖 Slip படி (AI)';$('setSlipRead').disabled=false;}
+  }
+  function showSettlementForm(rec){
+    const bi=_bankByAcc(rec.account||'');
+    const d=parseDate(rec.date);const dval=d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'):'';
+    const bills=Array.isArray(rec.bills)?rec.bills:[];
+    const billRows=bills.map((b,i)=>`<tr><td>${esc(b.invoice)}</td><td class="num">${fmt(b.amount)}</td></tr>`).join('');
+    $('setForm').innerHTML=`
+      <div class="sec" style="background:#f6f9ff">🧾 Slip details (சரி பாத்து Save)</div>
+      <div class="grid2">
+        <div class="fld"><label>Date</label><input type="date" id="setDate" value="${dval}"></div>
+        <div class="fld"><label>Method</label><input id="setMethod" value="${esc(rec.method||'Slip (Bank Transfer)')}"></div>
+        <div class="fld"><label>Account</label><input id="setAcc" value="${esc(rec.account||'')}"></div>
+        <div class="fld"><label>Company / Bank</label><input id="setComp" value="${esc(bi.company?bi.company+' ('+bi.bank+')':'')}" readonly style="background:#f4f4f4"></div>
+        <div class="fld"><label>Gross (bill total)</label><input type="number" id="setGross" value="${rec.gross!=null?rec.gross:''}"></div>
+        <div class="fld"><label>Deduction (stamp+LD)</label><input type="number" id="setDed" value="${rec.deduction!=null?rec.deduction:''}"></div>
+        <div class="fld full"><label>Net (bank வந்தது)</label><input type="number" id="setNet" value="${rec.net!=null?rec.net:''}"></div>
+      </div>
+      <div class="sec">🧾 Bills (${bills.length})</div>
+      <div class="tablewrap"><table><thead><tr><th>Invoice</th><th class="num">Amount</th></tr></thead><tbody>${billRows||'<tr><td colspan=2 class=ctr style="color:#999">bill இல்ல</td></tr>'}</tbody></table></div>
+      <label class="toggle" style="margin-top:10px"><input type="checkbox" id="setPaid" checked><span>இந்த bills-ஐ orders-ல paid mark பண்ணு</span></label>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn" id="setCancel" style="margin-top:0;flex:1;background:#7a8295">Cancel</button>
+        <button class="btn gold" id="setSave" style="margin-top:0;flex:2">💾 Settlement Save</button>
+      </div>`;
+    $('setAcc').addEventListener('input',()=>{const b=_bankByAcc($('setAcc').value);$('setComp').value=b.company?b.company+' ('+b.bank+')':'';});
+    $('setGross').addEventListener('input',_setRecalc);$('setNet').addEventListener('input',_setRecalc);$('setDed').addEventListener('input',()=>{});
+    $('setCancel').addEventListener('click',()=>{$('setForm').innerHTML='';_setStaged=null;});
+    $('setSave').addEventListener('click',saveSettlementFromForm);
+  }
+  function _setRecalc(){const g=Number($('setGross').value)||0,n=Number($('setNet').value)||0;if(g&&n)$('setDed').value=Math.max(0,g-n);}
+  async function saveSettlementFromForm(){
+    const acc=($('setAcc').value||'').replace(/\D/g,'');const bi=_bankByAcc(acc);
+    const rec={
+      id:'set:'+Date.now(),
+      date:$('setDate').value||'',
+      method:$('setMethod').value||'Slip',
+      acc:acc,company:bi.company||'',bank:bi.bank||'',
+      gross:Number($('setGross').value)||0,
+      deduction:Number($('setDed').value)||0,
+      net:Number($('setNet').value)||0,
+      bills:(_setStaged&&_setStaged.bills)||[],
+      received:false,
+      created:new Date().toISOString()
+    };
+    $('setSave').disabled=true;$('setSave').textContent='Save ஆகுது...';
+    await _saveSettlement(rec);
+    // optionally mark orders paid
+    if($('setPaid')&&$('setPaid').checked){
+      const dt=rec.date;let n=0;
+      for(const b of rec.bills){
+        const inv=(String(b.invoice).match(/\d{3,}/g)||[]);
+        for(const num of inv){
+          const r=_findByInvAmt(num,Number(b.amount)||null);
+          if(r.status==='ok'&&!r.o.paid){r.o.paid=true;r.o.pay_date=dt||r.o.pay_date||'';r.o.cheque_no=r.o.cheque_no||rec.method;try{await window.storage.set(r.o.id,JSON.stringify(r.o));n++;}catch(e){}}
+        }
+      }
+      await loadOrders();
+    }
+    _setStaged=null;renderSettlements();
+  }
+  function settlementDetail(r){
+    if(!r)return '';
+    const bi=_bankByAcc(r.acc);
+    const billRows=(r.bills||[]).map(b=>`<tr><td>${esc(b.invoice)}</td><td class="num">${fmt(b.amount)}</td></tr>`).join('');
+    return `<div style="padding:12px 14px;background:#fafbfd;border-top:1px solid var(--line)">
+      <div class="metarow">
+        <div class="mc"><div class="l">Date</div><div class="d">${esc(r.date||'—')}</div></div>
+        <div class="mc"><div class="l">Company / Bank</div><div class="d">${esc((r.company||bi.company||'—')+' '+(bi.bank||''))}</div></div>
+        <div class="mc"><div class="l">Account</div><div class="d">${esc(r.acc||'—')}</div></div>
+        <div class="mc"><div class="l">Method</div><div class="d">${esc(r.method||'Slip')}</div></div>
+        <div class="mc"><div class="l">Gross (bill)</div><div class="d">Rs ${fmt(r.gross)}</div></div>
+        <div class="mc"><div class="l">Deduction</div><div class="d">Rs ${fmt(r.deduction)}</div></div>
+        <div class="mc"><div class="l">Net (வந்தது)</div><div class="d" style="font-weight:800">Rs ${fmt(r.net)}</div></div>
+      </div>
+      <div class="sec" style="margin-top:8px">🧾 Bills (${(r.bills||[]).length})</div>
+      <div class="tablewrap"><table><thead><tr><th>Invoice</th><th class="num">Amount</th></tr></thead><tbody>${billRows}</tbody></table></div>
+      <label class="toggle" style="margin-top:10px"><input type="checkbox" class="setRecv" ${r.received?'checked':''}><span>✅ Bank-ல வந்துச்சு (${esc(bi.bank||'bank')} statement check)</span></label>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <button class="btn" style="margin-top:0;flex:1;background:#b23b3b" data-setdel="${esc(r.id)}">🗑 Delete</button>
+      </div>
+    </div>`;
+  }
+  function wireSettlementDetail(box,r){
+    const cb=box.querySelector('.setRecv');
+    if(cb)cb.addEventListener('change',async()=>{r.received=cb.checked;await _saveSettlement(r);renderSettlements();});
+    const del=box.querySelector('[data-setdel]');
+    if(del)del.addEventListener('click',async()=>{if(confirm('இந்த settlement record delete பண்ணவா? (orders payment மாறாது)')){await _delSettlement(r.id);renderSettlements();}});
+  }
+  // ---- end settlements UI ----
   // ---- end user system ----</script>
 </body>
 </html>
