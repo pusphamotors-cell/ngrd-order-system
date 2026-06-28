@@ -1115,8 +1115,54 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="dstat gold"><div class="k">🤝 Clark — மொத்தம்</div><div class="v">${fmt(clkT)}</div><div class="s">Rs</div></div>
       </div>
       <div class="dstat g" style="margin:8px 0"><div class="k">மொத்த Commission (Apo+Clark)</div><div class="v">${fmt(apoT+clkT)}</div><div class="s">Rs · ${sup.length} orders</div></div>
+      <div class="drow" style="margin-bottom:8px">
+        <button class="btn" id="commApoPdf" style="margin-top:0;background:#0b2a4a">📄 Apo PDF</button>
+        <button class="btn" id="commClarkPdf" style="margin-top:0;background:#0b2a4a">📄 Clark PDF</button>
+      </div>
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>`;
+    $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup);
+    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup);
+  }
+  function openCommissionPDF(name,pctKey,sup){
+    const list=sup.filter(o=>Number(o[pctKey])>0);
+    if(!list.length){alert(name+'-க்கு commission இல்ல');return;}
+    const today=new Date().toLocaleDateString('en-GB');let total=0;
+    const rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map((o,n)=>{
+      const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;
+      return `<tr><td style="text-align:center;border:1px solid #ccc;padding:6px">${n+1}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.buyer||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:6px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:6px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:6px;font-weight:600">${fmt(c)}</td></tr>`;
+    }).join('');
+    const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
+      <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
+      <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &nbsp;&bull;&nbsp; ngrdmotors@gmail.com</div></div>`;
+    const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
+      ${head}
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
+        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b></div>
+        <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#0b2a4a;color:#fff">
+          <th style="padding:7px;border:1px solid #0b2a4a;width:30px">#</th>
+          <th style="padding:7px;border:1px solid #0b2a4a">Order No</th>
+          <th style="padding:7px;border:1px solid #0b2a4a">Buyer</th>
+          <th style="padding:7px;border:1px solid #0b2a4a;width:74px">Bill Date</th>
+          <th style="padding:7px;border:1px solid #0b2a4a;width:80px">Value</th>
+          <th style="padding:7px;border:1px solid #0b2a4a;width:44px">%</th>
+          <th style="padding:7px;border:1px solid #0b2a4a;width:84px">Commission</th>
+        </tr></thead><tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
+      </table>
+      <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
+        <div>__________________________<br>Received by (${esc(name)})</div>
+        <div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div>
+      </div>
+      <div style="margin-top:16px;font-size:10px;color:#777;border-top:1px solid #ccc;padding-top:6px">NGRD Order System — Commission statement</div>
+    </div>`;
+    const w=window.open('','_blank');
+    if(!w){alert('Popup block ஆச்சு — popup allow பண்ணு');return;}
+    w.document.write('<html><head><title>Commission '+esc(name)+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.close();
   }
   function renderPending(){
     const supPend=orders.filter(o=>!o.supplied);
