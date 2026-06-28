@@ -660,8 +660,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function _bankByAcc(acc){
     acc=(acc||'').replace(/\D/g,'');
-    if(acc==='100150021692')return {company:'Puspha Motors',bank:'Peoples Bank',acc:'100150021692'};
-    if(acc==='6010014099')return {company:'NGRD Motors',bank:'HNB',acc:'6010014099'};
+    const a=acc.replace(/^0+/,'');
+    if(acc==='100150021692'||a==='100150021692'||acc.indexOf('100150021692')>=0)return {company:'Puspha Motors',bank:'Peoples Bank',acc:'100150021692'};
+    if(acc==='6010014099'||a==='6010014099'||acc.indexOf('6010014099')>=0)return {company:'NGRD Motors',bank:'HNB',acc:'6010014099'};
     return {company:'',bank:'',acc:acc};
   }
   async function _loadSettlements(){
@@ -2155,7 +2156,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(del)del.addEventListener('click',async()=>{if(confirm('இந்த settlement record delete பண்ணவா? (orders payment மாறாது)')){await _delSettlement(r.id);renderSettlements();}});
   }
   // ---- Bank Statement Reconcile (HNB) ----
-  let _recExtracted=null,_recFile=null;
+  let _recExtracted=null,_recFiles=[];
+  function _recShrinkImage(file,maxW){
+    return new Promise((res,rej)=>{
+      const img=new Image(),url=URL.createObjectURL(file);
+      img.onload=()=>{let w=img.width,h=img.height;if(w>maxW){h=Math.round(h*maxW/w);w=maxW;}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);res(c.toDataURL('image/jpeg',0.82).split(',')[1]);};
+      img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('image படிக்க முடியல'));};
+      img.src=url;
+    });
+  }
   const REC_PROMPT='You are a JSON extractor. Output ONLY a single JSON object, no markdown, no prose. This is a Hatton National Bank (HNB) Sri Lanka account statement. Extract EVERY row that has a CREDIT amount (money received). Ignore debit/withdrawal rows and balance-only rows. JSON shape: {"account":"account number if shown","lines":[{"date":"yyyy-mm-dd","credit":256910.00,"ref":"SD12345","desc":"IW SLIPS"}]}. date = the transaction/value date; if only day.month is shown (e.g. 27.05) infer the year from the statement period and output full yyyy-mm-dd. credit = the amount in the CREDITS column, number only, no commas, no currency symbol. ref = the reference number (often starts with SD). desc = the narration text (e.g. IW SLIPS). Only include rows that actually have a credit value. Respond with the JSON object only.';
 
   function _recYear(){
@@ -2196,42 +2205,53 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderReconcile(){
     const body=$('recBody');if(!body)return;
     body.innerHTML=`
-      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">HNB statement upload பண்ணு (PDF/image) → AI credit lines படிக்கும் → pending settlement-ஓட net amount + date auto-match → ✅ Apply பண்ணா "🟢 Bank ✓" auto. (IW SLIPS = Navy inward credit)</div>
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">HNB statement upload பண்ணு (PDF illa image). <b>பல page = எல்லா image-ஐயும் ஒரே நேரத்துல select பண்ணு (4-8 OK)</b> → ஒவ்வொன்னா AI படிக்கும் → credit lines merge → pending settlement net+date auto-match → ✅ Apply பண்ணா "🟢 Bank ✓" auto. (IW SLIPS = Navy inward credit)</div>
       <div style="padding:4px 13px">
-        <input type="file" id="recFile" accept="application/pdf,image/*" style="font-size:12px;display:block">
+        <input type="file" id="recFile" accept="application/pdf,image/*" multiple style="font-size:12px;display:block">
         <button class="btn" id="recRead" style="margin-top:8px;background:#1f6f8b;width:100%" disabled>🤖 Statement படி (AI)</button>
         <textarea id="recPaste" placeholder="illa statement text-ஐ இங்க paste பண்ணு..." style="width:100%;min-height:56px;font-size:12px;margin-top:8px"></textarea>
         <button class="btn" id="recReadTxt" style="margin-top:6px;background:#1f6f8b;width:100%">📋 Paste படி (AI)</button>
         <div id="recMsg" style="font-size:12px;margin-top:6px"></div>
       </div>
       <div id="recResult" style="padding:0 13px 8px"></div>`;
-    const f=$('recFile');if(f)f.addEventListener('change',e=>{_recFile=e.target.files&&e.target.files[0];$('recRead').disabled=!_recFile;});
+    const f=$('recFile');if(f)f.addEventListener('change',e=>{_recFiles=e.target.files?Array.from(e.target.files):[];$('recRead').disabled=!_recFiles.length;const m=$('recMsg');if(m)m.innerHTML=_recFiles.length?'<span style="color:var(--muted)">'+_recFiles.length+' file ready</span>':'';});
     const rd=$('recRead');if(rd)rd.addEventListener('click',()=>readBankStatement('file'));
     const rt=$('recReadTxt');if(rt)rt.addEventListener('click',()=>readBankStatement('text'));
     if(_recExtracted)renderRecResult();
   }
   async function readBankStatement(src){
-    const msg=$('recMsg');let block;
+    const msg=$('recMsg');let blocks=[];
     if(src==='file'){
-      if(!_recFile)return;
-      const f=_recFile;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
-      block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
-      $('recRead').disabled=true;$('recRead').innerHTML='<span class="spin"></span>படிக்கிறேன்...';
+      if(!_recFiles||!_recFiles.length)return;
+      $('recRead').disabled=true;$('recRead').innerHTML='<span class="spin"></span>தயார் ஆகுது...';
+      for(const f of _recFiles){
+        const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+        if(isPdf){const b64=await toB64(f);blocks.push({type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}});}
+        else{let b64;try{b64=await _recShrinkImage(f,1600);}catch(e){b64=await toB64(f);}blocks.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}});}
+      }
     }else{
       const txt=($('recPaste').value||'').trim();if(!txt){msg.innerHTML='<span style="color:var(--red)">text paste பண்ணு</span>';return;}
-      block={type:'text',text:'STATEMENT TEXT:\n'+txt};
+      blocks.push({type:'text',text:'STATEMENT TEXT:\n'+txt});
       $('recReadTxt').disabled=true;$('recReadTxt').innerHTML='<span class="spin"></span>படிக்கிறேன்...';
     }
-    msg.innerHTML='';
+    let all=[],errs=0;
     try{
-      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[block,{type:'text',text:REC_PROMPT}]})});
-      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
-      const data=await resp.json();
-      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
-      const rec=_parseAIjson(text);
-      const lines=Array.isArray(rec.lines)?rec.lines.filter(l=>Number(l.credit)>0):[];
-      _recExtracted=lines;_recFile=null;
-      msg.innerHTML='<span style="color:var(--green);font-weight:700">✅ '+lines.length+' credit line படிச்சேன்</span>';
+      for(let i=0;i<blocks.length;i++){
+        msg.innerHTML='<span style="color:var(--muted)"><span class="spin"></span> படிக்கிறேன் '+(i+1)+'/'+blocks.length+'...</span>';
+        try{
+          const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[blocks[i],{type:'text',text:REC_PROMPT}]})});
+          if(!resp.ok)throw new Error('AI '+resp.status);
+          const data=await resp.json();
+          const text=(data.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+          const rec=_parseAIjson(text);
+          const lines=Array.isArray(rec.lines)?rec.lines.filter(l=>Number(l.credit)>0):[];
+          all=all.concat(lines);
+        }catch(e){errs++;}
+      }
+      const seen={},merged=[];
+      all.forEach(l=>{const k=(l.date||'')+'|'+Math.round(Number(l.credit)||0)+'|'+(l.ref||'');if(!seen[k]){seen[k]=1;merged.push(l);}});
+      _recExtracted=merged;_recFiles=[];if($('recFile'))$('recFile').value='';
+      msg.innerHTML='<span style="color:var(--green);font-weight:700">✅ '+merged.length+' credit line ('+blocks.length+' page)</span>'+(errs?' <span style="color:var(--red)">('+errs+' page fail — மறுபடி try)</span>':'');
       renderRecResult();
     }catch(err){msg.innerHTML='<span style="color:var(--red)">⚠️ '+esc(err.message)+'</span>';}
     finally{const a=$('recRead');if(a){a.disabled=false;a.innerHTML='🤖 Statement படி (AI)';}const b=$('recReadTxt');if(b){b.disabled=false;b.innerHTML='📋 Paste படி (AI)';}}
