@@ -302,6 +302,19 @@
       <button class="btn gold" id="nuAdd" style="margin:13px">➕ User சேர்</button>
     </div>
     <div id="userList"></div>
+    <div class="card" style="margin-top:14px">
+      <div class="sec">💾 Backup — Data safety</div>
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Data already cloud-ல safe. இது extra copy — உன் PC-ல save பண்ணி வச்சுக்க. ஏதாவது நடந்தா restore பண்ணலாம்.</div>
+      <div style="padding:4px 13px 13px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn gold" id="bkExcel" style="margin-top:0;flex:1;min-width:140px">📥 Excel download</button>
+        <button class="btn" id="bkJson" style="margin-top:0;flex:1;min-width:140px;background:#0b2a4a">💾 Full Backup (.json)</button>
+      </div>
+      <div style="padding:0 13px 13px">
+        <div class="sec" style="background:#fafbfd;border-radius:9px">↩️ Restore (backup file-ல இருந்து)</div>
+        <div style="padding:6px 0;font-size:11.5px;color:var(--muted)">முன்னாடி download பண்ண .json file-ஐ தேர்வு பண்ணு → orders திரும்ப ஏறும் (இப்போ இருக்கறதோட சேரும்).</div>
+        <input type="file" id="bkRestore" accept=".json" style="font-size:12px">
+      </div>
+    </div>
   </div>
 
 <script>
@@ -1372,6 +1385,37 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('nuUser').value='';$('nuName').value='';$('nuPass').value='';$('nuRole').value='staff';$('nuPerms').innerHTML=permChecks('nuPerm',{purchase:true,supply:true});
     renderUsers();
   });
+
+  // ---- Backup / Restore ----
+  function _dl(filename,text,mime){const b=new Blob([text],{type:mime||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500);}
+  function _stamp(){const n=new Date();return n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');}
+  const _bkE=$('bkExcel');if(_bkE)_bkE.addEventListener('click',()=>{
+    const cols=['Order No','NAHA','Civil No','Chassis','Engine','Model','Buyer','Order Date','Delivery','Items','Sell','Buy','Profit','Supplied','Bill No','Bill Date','Paid','Cheque No','Pay Date','Assignee'];
+    const rows=orders.map(o=>[o.order_no,o.naha_no,o.civil_no,o.chassis_no,o.engine_no,o.model,o.buyer,o.order_date,o.delivery_date,(o.items||[]).length,o.sell,(hasCost(o)?o.buy:''),(profitVal(o)==null?'':profitVal(o)),o.supplied?'Yes':'No',o.bill_no,o.bill_date,o.paid?'Yes':'No',o.cheque_no,o.pay_date,o.assignee_name||o.assignee||'']);
+    const esc=v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+    const csv='\ufeff'+[cols.join(',')].concat(rows.map(r=>r.map(esc).join(','))).join('\n');
+    _dl('NGRD_orders_'+_stamp()+'.csv',csv,'text/csv');
+  });
+  const _bkJ=$('bkJson');if(_bkJ)_bkJ.addEventListener('click',()=>{
+    const data={app:'NGRD Order System',backup_date:new Date().toISOString(),count:orders.length,orders:orders,parts:_partsCache||{},suppliers:_supCache||{}};
+    _dl('NGRD_backup_'+_stamp()+'.json',JSON.stringify(data,null,2),'application/json');
+  });
+  const _bkR=$('bkRestore');if(_bkR)_bkR.addEventListener('change',e=>{
+    const f=e.target.files&&e.target.files[0];if(!f)return;
+    const rd=new FileReader();rd.onload=async()=>{
+      let data;try{data=JSON.parse(rd.result);}catch(err){alert('File சரியில்ல (.json வேணும்)');return;}
+      const arr=Array.isArray(data)?data:(data.orders||[]);
+      if(!arr.length){alert('Backup-ல orders இல்ல');return;}
+      if(!confirm(arr.length+' orders restore பண்ணவா? (இப்போ இருக்கறதோட சேரும்)')){_bkR.value='';return;}
+      let added=0;
+      for(const o of arr){if(!o||!o.id){o.id='order:'+Date.now()+Math.floor(Math.random()*1000);}
+        try{await window.storage.set(o.id,JSON.stringify(o));added++;}catch(e){}}
+      if(data.parts){try{if(_fbOk)await firebase.database().ref('parts').update(data.parts);}catch(e){}Object.assign(_partsCache=_partsCache||{},data.parts);}
+      if(data.suppliers){try{if(_fbOk)await firebase.database().ref('suppliers').update(data.suppliers);}catch(e){}Object.assign(_supCache=_supCache||{},data.suppliers);}
+      await loadOrders();_bkR.value='';alert(added+' orders restore ஆச்சு ✓');renderUsers();
+    };rd.readAsText(f);
+  });
+  // ---- end backup ----
   // ---- end user system ----</script>
 </body>
 </html>
