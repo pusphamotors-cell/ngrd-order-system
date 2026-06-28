@@ -228,6 +228,27 @@
   .btn:hover{background:#2f5ea6}
   /* branding band blends into the navy page (no seam) — keep gold hairline + glow */
   .brandcard{background:transparent;box-shadow:none}
+  /* dashboard quick-search (customer lookup) */
+  .dsearch{position:relative;margin-bottom:14px}
+  .dsearch input{width:100%;border:2px solid var(--gold);border-radius:13px;padding:13px 42px 13px 16px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink);box-shadow:0 5px 16px rgba(8,16,33,.28)}
+  .dsearch input::placeholder{color:#9aa3b4}
+  .dsearch input:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 3px rgba(201,162,39,.28)}
+  .dsearch .clr{position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;color:#8a93a6;font-size:18px;font-weight:700;display:none;line-height:1;padding:4px}
+  .dsearch .clr.show{display:block}
+  #dashSearchResults{margin-bottom:6px}
+  #dashSearchResults .cnt{font-size:12px;color:#cbd5ea;font-weight:700;margin:0 2px 10px}
+  .ocard{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:11px;overflow:hidden;box-shadow:0 4px 14px rgba(8,16,33,.18)}
+  .ocard .ohd{background:linear-gradient(100deg,var(--navy),var(--navy2));color:#fff;padding:11px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ocard .ohd .on{font-weight:800;font-size:14.5px;letter-spacing:.3px}
+  .ocard .ohd .sb{margin-left:auto;font-size:11px;font-weight:800;padding:3px 11px;border-radius:11px;white-space:nowrap}
+  .ocard .supL{padding:9px 14px;font-size:12.5px;font-weight:800;border-bottom:1px solid var(--line)}
+  .ocard .supL.ok{background:var(--green-bg);color:var(--green)}
+  .ocard .supL.no{background:var(--amber-bg);color:var(--amber)}
+  .ocard .meta{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;padding:12px 14px}
+  .ocard .meta .k{color:var(--muted);font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:.3px}
+  .ocard .meta .v{color:var(--navy);font-weight:700;font-size:12.5px;word-break:break-word;margin-top:1px}
+  .ocard .itbl{border-top:1px solid var(--line)}
+  .ocard .itbl table{min-width:540px}
   /* NGRD emblem watermark is now a body background layer (always behind content, iOS-safe) */
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -262,6 +283,11 @@
   </div>
 
   <div class="wrap" id="viewDash">
+    <div class="dsearch">
+      <input id="dashSearch" type="text" autocomplete="off" placeholder="🔍 Order தேடு — File No / Vehicle No / Order No / Model / Brand">
+      <span class="clr" id="dashSearchClear">✕</span>
+    </div>
+    <div id="dashSearchResults"></div>
     <div id="dashContent"></div>
   </div>
 
@@ -1605,6 +1631,43 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     }).join('');
     return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto">${rows}</svg>`;
   }
+  function _orderSearchText(o){
+    const items=(o.items||[]).map(it=>[it.description,it.brand,it.partno,it.supplier,it.country].filter(Boolean).join(' ')).join(' ');
+    return [o.order_no,o.file_no,o.naha_no,o.civil_no,o.chassis_no,o.engine_no,o.model,o.buyer,o.supplier,o.bill_no,o.cheque_no,items].filter(Boolean).join(' ').toLowerCase();
+  }
+  function _searchCard(o){
+    const sk=statusKey(o);const supplied=!!(o.supplied||o.bill_no);
+    const badge=sk==='paid'?'<span class="sb" style="background:var(--green-bg);color:var(--green)">🟢 Paid</span>'
+      :sk==='invoiced'?'<span class="sb" style="background:var(--amber-bg);color:var(--amber)">🟠 Invoiced</span>'
+      :'<span class="sb" style="background:#e8f0fb;color:#2563b5">🔵 Pending</span>';
+    const supLine=supplied
+      ? `<div class="supL ok">✅ Supply ஆச்சு${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''}</div>`
+      : `<div class="supL no">⏳ இன்னும் supply ஆகல</div>`;
+    const meta=[['File No',o.file_no],['Vehicle / NAHA',o.naha_no],['Civil No',o.civil_no],['Model',o.model],['Camp',_campOf(o)],['Company',_companyOf(o)],['Order Date',o.order_date],['Delivery',o.delivery_date],['Value','Rs '+fmt(o.sell)],['Paid',o.paid?('✅ '+(o.pay_date||'ஆச்சு')):'—']]
+      .filter(m=>m[1]!=null&&m[1]!=='').map(m=>`<div><div class="k">${m[0]}</div><div class="v">${esc(m[1])}</div></div>`).join('');
+    const items=(o.items||[]);
+    const rows=items.length?items.map((it,n)=>`<tr><td class="ctr">${n+1}</td><td>${esc(it.description||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td class="num">${esc(it.qty||'')}</td><td class="num">${it.unit_price?fmt(it.unit_price):'—'}</td><td class="num">${it.total?fmt(it.total):'—'}</td></tr>`).join('')
+      :'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:12px">Item details இல்ல</td></tr>';
+    return `<div class="ocard"><div class="ohd"><span class="on">${esc(o.order_no||'—')}</span>${badge}</div>${supLine}<div class="meta">${meta}</div><div class="itbl"><div class="tablewrap"><table><thead><tr><th class="ctr">#</th><th>Item</th><th>Brand</th><th>Part No</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+  }
+  function renderDashSearch(){
+    const sIn=$('dashSearch');if(!sIn)return;
+    const q=(sIn.value||'').trim().toLowerCase();
+    const res=$('dashSearchResults'),dc=$('dashContent'),clr=$('dashSearchClear');
+    if(clr)clr.classList.toggle('show',!!q);
+    if(!q){res.innerHTML='';if(dc)dc.style.display='';return;}
+    if(dc)dc.style.display='none';
+    const matches=orders.filter(o=>_orderSearchText(o).indexOf(q)>=0);
+    if(!matches.length){res.innerHTML='<div class="empty">"'+esc(q)+'" — match ஆன order இல்ல</div>';return;}
+    matches.sort((a,b)=>String(b.order_date||'').localeCompare(String(a.order_date||'')));
+    const LIM=25,show=matches.slice(0,LIM);
+    res.innerHTML=`<div class="cnt">🔍 ${matches.length} order match${matches.length>LIM?' · top '+LIM+' காட்டுது':''}</div>`+show.map(_searchCard).join('');
+  }
+  function _wireDashSearch(){
+    const sIn=$('dashSearch');if(!sIn||sIn._wired)return;sIn._wired=1;
+    sIn.oninput=renderDashSearch;
+    const clr=$('dashSearchClear');if(clr)clr.onclick=()=>{sIn.value='';renderDashSearch();sIn.focus();};
+  }
   function renderDash(){
     const dw=$('dashContent');
     if(!orders.length){dw.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணா dashboard நிரம்பும் 📊</div>';return;}
@@ -1684,7 +1747,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         else if(t==='camp')gotoList({t:'camp',v});
         else gotoList({t});});});
   }
-  loadOrders().then(()=>{renderDash();_loadSuppliers();});
+  loadOrders().then(()=>{renderDash();_loadSuppliers();_wireDashSearch();});
   _loadParts();
   _loadSettlements();
   $('repDownload').addEventListener('click',downloadReport);
