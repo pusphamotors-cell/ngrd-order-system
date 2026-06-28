@@ -256,6 +256,9 @@
   .ocard .meta .v{color:var(--navy);font-weight:700;font-size:12.5px;word-break:break-word;margin-top:1px}
   .ocard .itbl{border-top:1px solid var(--line)}
   .ocard .itbl table{min-width:540px}
+  .ocard .oact{padding:10px 14px;border-top:1px solid var(--line)}
+  .ocard .oedit{width:100%;border:none;border-radius:9px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;background:var(--navy2);color:#fff;transition:background .15s}
+  .ocard .oedit:hover{background:var(--navy)}
   /* NGRD emblem watermark is now a body background layer (always behind content, iOS-safe) */
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -924,6 +927,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const anyCost=(o.items||[]).some(it=>Number(it.cost)>0);
     return `<div class="odetail">
       <div class="sec">✏️ Edit</div>
+      <div class="sec">📝 Order Info — typo / date திருத்த</div>
+      <div class="grid2" style="padding:0 13px 4px">
+        <div class="fld full"><label>Order No</label><input id="e_orderNo" value="${v(o.order_no)}"></div>
+        <div class="fld"><label>Vehicle / NAHA No</label><input id="e_naha" value="${v(o.naha_no)}"></div>
+        <div class="fld"><label>Civil No</label><input id="e_civil" value="${v(o.civil_no)}"></div>
+        <div class="fld full"><label>Model / Vehicle</label><input id="e_model" value="${v(o.model)}"></div>
+        <div class="fld"><label>Order Date</label><input type="date" id="e_orderDate" value="${v(o.order_date)}"></div>
+        <div class="fld"><label>Delivery Date</label><input type="date" id="e_deliveryDate" value="${v(o.delivery_date)}"></div>
+        <div class="fld"><label>Quotation Date</label><input type="date" id="e_qdate" value="${v(o.quotation_date)}"></div>
+      </div>
       ${showPur?`<div class="modetoggle" style="margin:0 13px 8px">
         <button class="mbtn ${anyCost?'':'on'}" id="e_cmTotal" type="button">மொத்த cost</button>
         <button class="mbtn ${anyCost?'on':''}" id="e_cmItems" type="button">Item-by-item</button>
@@ -1112,6 +1125,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
       if(_apoP){const a=_apoP.value.trim();o.apo_pct=a===''?null:Number(a)||0;o.apo_comm=(Number(o.sell)||0)*(o.apo_pct||0)/100;}
       if(_clkP){const c=_clkP.value.trim();o.clark_pct=c===''?null:Number(c)||0;o.clark_comm=(Number(o.sell)||0)*(o.clark_pct||0)/100;}
+      const _on=box.querySelector('#e_orderNo');if(_on)o.order_no=_on.value.trim();
+      const _nh=box.querySelector('#e_naha');if(_nh)o.naha_no=_nh.value.trim();
+      const _cv=box.querySelector('#e_civil');if(_cv)o.civil_no=_cv.value.trim();
+      const _md=box.querySelector('#e_model');if(_md)o.model=_md.value.trim();
+      const _od=box.querySelector('#e_orderDate');if(_od)o.order_date=_od.value||'';
+      const _dd=box.querySelector('#e_deliveryDate');if(_dd)o.delivery_date=_dd.value||'';
+      const _qd=box.querySelector('#e_qdate');if(_qd)o.quotation_date=_qd.value||'';
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail: '+e.message);return;}
       renderList();
     });
@@ -1641,7 +1661,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function _orderSearchText(o){
     const items=(o.items||[]).map(it=>[it.description,it.brand,it.partno,it.supplier,it.country].filter(Boolean).join(' ')).join(' ');
-    return [o.order_no,o.file_no,o.naha_no,o.civil_no,o.chassis_no,o.engine_no,o.model,o.buyer,_campOf(o),o.supplier,o.bill_no,o.cheque_no,items].filter(Boolean).join(' ').toLowerCase();
+    return [o.order_no,o.file_no,o.naha_no,o.civil_no,o.chassis_no,o.engine_no,o.model,o.buyer,_campOf(o),o.supplier,o.bill_no,o.cheque_no,o.order_date,o.delivery_date,o.bill_date,o.quotation_date,o.pay_date,items].filter(Boolean).join(' ').toLowerCase();
   }
   function _searchCard(o){
     const sk=statusKey(o);const supplied=!!(o.supplied||o.bill_no);
@@ -1656,7 +1676,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const items=(o.items||[]);
     const rows=items.length?items.map((it,n)=>`<tr><td class="ctr">${n+1}</td><td>${esc(it.description||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td class="num">${esc(it.qty||'')}</td><td class="num">${it.unit_price?fmt(it.unit_price):'—'}</td><td class="num">${it.total?fmt(it.total):'—'}</td></tr>`).join('')
       :'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:12px">Item details இல்ல</td></tr>';
-    return `<div class="ocard"><div class="ohd"><span class="on">${esc(o.order_no||'—')}</span>${badge}</div>${supLine}<div class="meta">${meta}</div><div class="itbl"><div class="tablewrap"><table><thead><tr><th class="ctr">#</th><th>Item</th><th>Brand</th><th>Part No</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+    return `<div class="ocard"><div class="ohd"><span class="on">${esc(o.order_no||'—')}</span>${badge}</div>${supLine}<div class="meta">${meta}</div><div class="itbl"><div class="tablewrap"><table><thead><tr><th class="ctr">#</th><th>Item</th><th>Brand</th><th>Part No</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="oact"><button class="oedit" data-eo="${esc(o.id||o.order_no)}">✏️ இந்த order திருத்து / Edit</button></div></div>`;
   }
   function _chipState(q){const box=$('dashCustChips');if(box)box.querySelectorAll('.cchip').forEach(el=>el.classList.toggle('on',(el.dataset.c||'').toLowerCase()===q));}
   function _renderCustChips(){
@@ -1682,6 +1702,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const tot=matches.reduce((s,o)=>s+(Number(o.sell)||0),0);
     const LIM=25,show=matches.slice(0,LIM);
     res.innerHTML=`<div class="cnt">🔍 ${matches.length} order · Rs ${fmt(tot)}${matches.length>LIM?' · top '+LIM+' காட்டுது':''}</div>`+show.map(_searchCard).join('');
+    res.querySelectorAll('[data-eo]').forEach(b=>b.onclick=()=>_openOrderEdit(b.dataset.eo));
+  }
+  function _openOrderEdit(key){
+    _listFilter=null;
+    const sb=$('searchBox');if(sb)sb.value='';
+    const cf=$('campFilter');if(cf)cf.value='all';
+    const cmf=$('compFilter');if(cmf)cmf.value='all';
+    setTab('list');renderList();
+    const idx=orders.findIndex(o=>(o.id&&o.id===key)||o.order_no===key);
+    if(idx<0)return;
+    const box=$('det-'+idx),head=document.querySelector('.ohead[data-i="'+idx+'"]');
+    if(box){box.classList.remove('hide');box.innerHTML=editForm(orders[idx]);wireEdit(box,orders[idx]);}
+    if(head)head.scrollIntoView({behavior:'smooth',block:'center'});
   }
   function _wireDashSearch(){
     const sIn=$('dashSearch');if(!sIn||sIn._wired)return;sIn._wired=1;
