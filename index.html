@@ -1100,34 +1100,47 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${grp('🟠 31–45 நாள்',buckets.b2,'')}
       ${grp('🟢 0–30 நாள்',buckets.b1,'')}`;
   }
+  let _commCamp='all';
   function renderCommission(){
     const wrap=$('repCommWrap');
-    const sup=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
-    if(!sup.length){wrap.innerHTML='<div class="empty">Commission இல்ல.<br>Supply ஆன order → Edit → Apo/Clark % போடு</div>';return;}
+    const all=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
+    if(!all.length){wrap.innerHTML='<div class="empty">Commission இல்ல.<br>Supply ஆன order → Edit → Apo/Clark % போடு</div>';return;}
+    const camps=Array.from(new Set(all.map(o=>o.buyer||'—'))).sort();
+    const sup=_commCamp==='all'?all:all.filter(o=>(o.buyer||'—')===_commCamp);
     let apoT=0,clkT=0;
     const rows=sup.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{
       const s=Number(o.sell)||0;const ac=s*(o.apo_pct||0)/100,cc=s*(o.clark_pct||0)/100;apoT+=ac;clkT+=cc;
       return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td class="num">${fmt(s)}</td><td class="num">${o.apo_pct||0}% · ${fmt(ac)}</td><td class="num">${o.clark_pct||0}% · ${fmt(cc)}</td></tr>`;
     }).join('');
+    // camp-wise summary (all)
+    const byCamp={};all.forEach(o=>{const k=o.buyer||'—';const s=Number(o.sell)||0;const m=byCamp[k]||(byCamp[k]={a:0,c:0});m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
+    const campSummary=Object.keys(byCamp).sort((a,b)=>(byCamp[b].a+byCamp[b].c)-(byCamp[a].a+byCamp[a].c)).map(k=>`<div class="brow" data-ccamp="${esc(k)}" style="cursor:pointer"><span class="nm">${esc(k)}</span><span class="ct">Apo ${fmt(byCamp[k].a)}</span><span class="vl">Clark ${fmt(byCamp[k].c)}</span></div>`).join('');
     wrap.innerHTML=`
+      <div class="fld" style="margin-bottom:10px"><label>Camp / Buyer</label><select id="commCampSel"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
       <div class="drow">
-        <div class="dstat gold"><div class="k">🤝 Apo — மொத்தம்</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
-        <div class="dstat gold"><div class="k">🤝 Clark — மொத்தம்</div><div class="v">${fmt(clkT)}</div><div class="s">Rs</div></div>
+        <div class="dstat gold"><div class="k">🤝 Apo${_commCamp==='all'?'':' ('+esc(_commCamp.slice(0,14))+')'}</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
+        <div class="dstat gold"><div class="k">🤝 Clark</div><div class="v">${fmt(clkT)}</div><div class="s">Rs</div></div>
       </div>
-      <div class="dstat g" style="margin:8px 0"><div class="k">மொத்த Commission (Apo+Clark)</div><div class="v">${fmt(apoT+clkT)}</div><div class="s">Rs · ${sup.length} orders</div></div>
+      <div class="dstat g" style="margin:8px 0"><div class="k">மொத்த Commission</div><div class="v">${fmt(apoT+clkT)}</div><div class="s">Rs · ${sup.length} orders</div></div>
       <div class="drow" style="margin-bottom:8px">
         <button class="btn" id="commApoPdf" style="margin-top:0;background:#0b2a4a">📄 Apo PDF</button>
         <button class="btn" id="commClarkPdf" style="margin-top:0;background:#0b2a4a">📄 Clark PDF</button>
       </div>
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${rows}</tbody>
-      <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>`;
-    $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup);
-    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup);
+      <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>
+      <div class="dsec">🏕️ Camp-wise Commission (எல்லாம்)</div>
+      <div style="font-size:11px;color:var(--muted);margin:0 2px 6px">Camp click பண்ணா அந்த camp மட்டும் filter ஆகும்</div>
+      <div class="dpanel">${campSummary}</div>`;
+    $('commCampSel').onchange=e=>{_commCamp=e.target.value;renderCommission();};
+    wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
+    $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup,_commCamp);
+    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup,_commCamp);
   }
-  function openCommissionPDF(name,pctKey,sup){
+  function openCommissionPDF(name,pctKey,sup,camp){
     const list=sup.filter(o=>Number(o[pctKey])>0);
     if(!list.length){alert(name+'-க்கு commission இல்ல');return;}
     const today=new Date().toLocaleDateString('en-GB');let total=0;
+    const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
     const rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map((o,n)=>{
       const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;
       return `<tr><td style="text-align:center;border:1px solid #ccc;padding:6px">${n+1}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.buyer||'-')}</td><td style="border:1px solid #ccc;padding:6px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:6px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:6px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:6px;font-weight:600">${fmt(c)}</td></tr>`;
@@ -1138,7 +1151,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
       ${head}
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
-        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b></div>
+        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)}</div>
         <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px">
