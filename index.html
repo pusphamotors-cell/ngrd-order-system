@@ -285,6 +285,14 @@
   .tcard.win .tn{color:var(--green)}
   .tcard.loss .tn{color:var(--amber)}
   .tcard .tl{font-size:10.5px;color:var(--muted);font-weight:700;margin-top:5px}
+  .egpbulk{margin-bottom:12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .egpbulk summary{cursor:pointer;padding:11px 13px;font-weight:700;font-size:12.5px;color:var(--navy);user-select:none}
+  .egpbulk summary::-webkit-details-marker{display:none}
+  .egpbulk summary::before{content:'▸';color:var(--gold);margin-right:6px}
+  .egpbulk[open] summary::before{content:'▾'}
+  .egpbulk textarea{display:block;width:auto;margin:0 13px 8px;border:1px solid var(--line);border-radius:8px;padding:9px;font-size:12px;font-family:monospace;resize:vertical;box-sizing:border-box}
+  .egpbulk .btn{margin:0 13px}
+  .egpbulk #egpBulkResult{padding:4px 13px 12px}
   /* NGRD emblem watermark is now a body background layer (always behind content, iOS-safe) */
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -1204,6 +1212,24 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return 'மற்றவை';
   }
   function _isEgp(o){return !!(o.egp||(o.egp_ref&&String(o.egp_ref).trim())||/E-?GP/i.test((o.remark||'')));}
+  async function _bulkEgpMark(text){
+    const lines=String(text||'').split(/\r?\n/);
+    const targets=[];
+    lines.forEach(line=>{
+      const om=line.match(/[A-Z]{2,4}\/[A-Z0-9]+\/PO\/\d{4}\/\s*\d+/i);
+      const rm=line.match(/\b20\d{11}\b/);
+      if(om&&rm)targets.push({ordNo:om[0].replace(/\s+/g,''),ref:rm[0]});
+    });
+    let marked=0,nomatch=0;const miss=[];
+    for(const t of targets){
+      const tn=_nk(t.ordNo);const tk=_tenderKey({order_no:t.ordNo,file_no:t.ordNo},t.ordNo);
+      const o=orders.find(x=>_nk(x.order_no)===tn)||orders.find(x=>{const k=_tenderKey(x,x.order_no);return k&&tk&&k===tk;});
+      if(!o){nomatch++;if(miss.length<6)miss.push(t.ordNo);continue;}
+      o.egp=true;o.egp_ref=t.ref;
+      try{await window.storage.set(o.id,JSON.stringify(o));marked++;}catch(e){}
+    }
+    return {total:targets.length,marked,nomatch,miss};
+  }
   function _matchFilter(o){const f=_listFilter;if(!f)return true;
     if(f.t==='company')return _companyOf(o)===f.v;
     if(f.t==='buyer')return (o.buyer||'—')===f.v;
@@ -1469,6 +1495,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.innerHTML=`
       <div class="fld" style="margin-bottom:10px"><label>Camp / Buyer</label><select id="commCampSel"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
       ${egpBtns}
+      <details class="egpbulk"><summary>🏛️ பழைய eGP orders — list paste பண்ணி bulk mark</summary>
+        <textarea id="egpBulkText" rows="5" placeholder="eGP list-ஐ இங்க paste பண்ணு (Order No + eGP Ref No உள்ள வரிகள்). உதா:&#10;Egp SNA/APO/PO/2026/0579  SNA/APO/FO/MT/2026/0924  2026041581946  52,950  NGRD"></textarea>
+        <button class="btn gold" id="egpBulkBtn" style="margin-top:8px">✓ Match பண்ணி eGP mark</button>
+        <div id="egpBulkResult" class="note" style="text-align:left;margin-top:8px"></div>
+      </details>
       <div class="drow">
         <div class="dstat gold"><div class="k">🤝 Apo${_commCamp==='all'?'':' ('+esc(_commCamp.slice(0,14))+')'}</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
         <div class="dstat gold"><div class="k">🤝 Clark</div><div class="v">${fmt(clkT)}</div><div class="s">Rs</div></div>
@@ -1487,6 +1518,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dpanel">${campSummary}</div>`;
     $('commCampSel').onchange=e=>{_commCamp=e.target.value;renderCommission();};
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
+    const _ebb=$('egpBulkBtn');if(_ebb)_ebb.onclick=async()=>{
+      const txt=($('egpBulkText')||{}).value||'';const res=$('egpBulkResult');
+      _ebb.disabled=true;_ebb.textContent='⏳ mark பண்றேன்...';
+      const r=await _bulkEgpMark(txt);
+      if(res)res.innerHTML=`✅ <b>${r.marked}</b> order eGP-ஆ mark ஆச்சு${r.nomatch?(' · ⚠️ '+r.nomatch+' match ஆகல'+(r.miss.length?'<br><small style="color:var(--muted)">match ஆகாதது: '+r.miss.map(esc).join(', ')+'</small>':'')):''}${r.total===0?'<br><span style="color:var(--red)">Order No + 13-digit eGP Ref உள்ள வரி கிடைக்கல</span>':''}`;
+      _ebb.disabled=false;_ebb.textContent='✓ Match பண்ணி eGP mark';
+      if(r.marked)setTimeout(renderCommission,1200);
+    };
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
     $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup,_commCamp);
     $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup,_commCamp);
