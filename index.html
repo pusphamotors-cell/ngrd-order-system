@@ -228,11 +228,15 @@
   .btn:hover{background:#2f5ea6}
   /* branding band blends into the navy page (no seam) — keep gold hairline + glow */
   .brandcard{background:transparent;box-shadow:none}
+  /* faint NGRD emblem watermark behind everything (shows in navy areas, hidden by white cards) */
+  .bgwm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:-1;pointer-events:none;opacity:.07;color:var(--gold)}
+  .bgwm svg{width:min(580px,82vw);height:auto;display:block;filter:drop-shadow(0 0 1px rgba(201,162,39,.2))}
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
+  <div class="bgwm" aria-hidden="true"><svg viewBox="0 0 440 440" fill="none"><circle cx="220" cy="220" r="202" stroke="currentColor" stroke-width="5"/><circle cx="220" cy="220" r="180" stroke="currentColor" stroke-width="1.5"/><text x="220" y="238" text-anchor="middle" font-family="'Segoe UI',Arial,sans-serif" font-weight="800" font-size="118" letter-spacing="3" fill="currentColor">NGRD</text><text x="220" y="298" text-anchor="middle" font-family="'Segoe UI',Arial,sans-serif" font-weight="700" font-size="33" letter-spacing="11" fill="currentColor">MOTORS</text></svg></div>
   <div class="gate" id="loginGate">
     <div class="gatebox">
       <div class="gc">NGRD</div>
