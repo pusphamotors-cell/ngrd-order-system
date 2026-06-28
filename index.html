@@ -949,7 +949,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${o.assignee?`<div style="padding:8px 13px;background:#eef4ff;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy)">👷 ${esc(o.assignee_name||o.assignee)}${o.task_date?' · 📅 '+_fmtDk(o.task_date):''} · ${o.task_done?'<span style="color:var(--green)">✓ Ready ஆச்சு</span>':'<span style="color:var(--amber)">⏳ pending</span>'}</div>`:''}
       <div class="sec">📋 PO Details</div><div class="metarow">
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Chassis No',o.chassis_no)}${row('Engine No',o.engine_no)}${row('Model',o.model)}
-        ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}</div>
+        ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}${_isEgp(o)?row('🏛️ eGP Ref',o.egp_ref||o.proc_ref)+row('🏛️ eGP Date',o.egp_date):''}</div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
       <div class="tablewrap"><table><thead><tr>${itemHead}</tr></thead><tbody>${itemRows}</tbody></table></div>
       ${st?'':`<div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>`}
@@ -1273,7 +1273,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(!list.length){lc.innerHTML=chip+'<div class="empty">'+(q?'🔍 "'+esc(q)+'" — match ஆகல':'இந்த filter-க்கு order இல்ல')+'</div>';const fc=$('fltClear');if(fc)fc.onclick=()=>{_listFilter=null;renderList();};return;}
     lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
       return `<div class="orow"><div class="ohead" data-i="${idx}">
-        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}</div>
+        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}</div>
           <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
