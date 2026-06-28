@@ -599,12 +599,13 @@
   $('pasteBox').addEventListener('input',updateGo);
 
   const PROMPT=`Extract details from this Sri Lanka Navy purchase order (PO). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
-{"order_no":"","file_no":"","naha_no":"","civil_no":"","chassis_no":"","engine_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
+{"order_no":"","file_no":"","proc_ref":"","naha_no":"","civil_no":"","chassis_no":"","engine_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
 
 Dates (read from the PO, do not invent):
 - po_date = the "DATE" shown at the top of the PO (e.g. 24/06/2026). This is the order date.
 - delivery_date = the date after "arrange supply of above mentioned items on or before" (e.g. 22/07/2026).
 - quotation_date = the date after "Procurement Reference Number ... Dated" (e.g. 05 June 2026).
+- proc_ref = the "Procurement Reference Number" itself — the long number (e.g. 2026041782273), NOT the date. Read the number only.
 
 IMPORTANT - read ALL pages. The vehicle block (often on the LAST page, written in one line) contains: "Vehical No: NAHA#### Civil No <value> Vehical Type <value> Model & Type: <value> Make: <value>...". Extract from there:
 - naha_no = the "Vehical No" value (e.g. NAHA2175)
@@ -876,7 +877,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(dup){alert('⚠️ இந்த Order No ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\nஒரே order-க்கு ஒன்னு தான். Duplicate ஆகாது.');return;}
     const sell=Number($('sellIn').value)||0,buy=currentBuy();
     const items=(window._costMode&&window._costMode()==='items')?readItemDetails($('costItems'),current.items):(current.items||[]);
-    const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
+    const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',proc_ref:current.proc_ref||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
       chassis_no:current.chassis_no||'',engine_no:current.engine_no||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
       items,sell,buy,profit:(buy>0?sell-buy:null),
@@ -1280,14 +1281,25 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     _v3Cache=arr;return arr;
   }
   function _nk(s){return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'');}
+  function _tenderKey(o,fileStr){
+    const nums=(String(fileStr||'').match(/\d+/g)||[]);
+    if(!nums.length)return '';
+    let year='';for(const n of nums){if(/^20\d\d$/.test(n)){year=n;break;}}
+    const last=nums[nums.length-1];
+    if(!year||!last)return '';
+    return _campOf(o)+'|'+year+'|'+parseInt(last,10);
+  }
   function _matchQuoteOrder(q){
-    const qv=_nk(q.vNo),qc=_nk(q.chassisNo),qe=_nk(q.engineNo),qr=_nk(q.refNo||q.eqNo);
+    const qProc=_nk(q.refNo);
+    const qkey=_tenderKey({file_no:q.eqNo,order_no:q.eqNo},q.eqNo);
+    const qv=_nk(q.vNo),qc=_nk(q.chassisNo),qe=_nk(q.engineNo);
     return orders.find(o=>{
-      const ov=_nk(o.naha_no),oc=_nk(o.chassis_no),oe=_nk(o.engine_no),of=_nk(o.file_no);
+      if(qProc&&o.proc_ref&&_nk(o.proc_ref)===qProc)return true;          // exact procurement ref (future orders)
+      if(qkey){const ok=_tenderKey(o,o.file_no);if(ok&&ok===qkey)return true;} // camp + year + file running no
+      const ov=_nk(o.naha_no),oc=_nk(o.chassis_no),oe=_nk(o.engine_no),ocv=_nk(o.civil_no);
       if(qc&&oc&&qc===oc)return true;
       if(qe&&oe&&qe===oe)return true;
-      if(qv&&ov&&qv===ov)return true;
-      if(qr&&of&&qr===of)return true;
+      if(qv&&((ov&&qv===ov)||(ocv&&qv===ocv)))return true;
       return false;
     })||null;
   }
