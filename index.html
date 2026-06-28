@@ -185,6 +185,9 @@
   .calcell .cnt{position:absolute;top:4px;right:5px;font-size:9px;font-weight:800;color:var(--muted)}
   .callegend{display:flex;flex-wrap:wrap;gap:10px;margin:10px 2px;font-size:10.5px;color:var(--muted);font-weight:600}
   .callegend span{display:inline-flex;align-items:center;gap:4px}
+  .modal{position:fixed;inset:0;background:rgba(11,26,42,.55);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeup .2s ease}
+  .modalbox{background:#fff;border-radius:14px;max-width:340px;width:100%;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .modalbox h3{font-size:15px;color:var(--navy);margin-bottom:10px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -519,10 +522,26 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function lookupPart(model,desc){if(!_partsCache)return null;return _partsCache[partKey(model,desc)]||null;}
   async function savePart(model,desc,partno,brand){
     partno=(partno||'').trim();if(!partno||!_norm(desc))return;
-    const k=partKey(model,desc);const rec={partno,brand:(brand||'').trim()};
+    const k=partKey(model,desc);const rec={partno,brand:(brand||'').trim(),model:model||'',desc:desc||''};
     if(!_partsCache)_partsCache={};_partsCache[k]=rec;
     try{localStorage.setItem('__parts_cache',JSON.stringify(_partsCache));}catch(e){}
     try{if(_fbOk)await firebase.database().ref('parts/'+k).set(rec);}catch(e){}
+  }
+  function crossVehicleParts(partno,curModel){
+    if(!_partsCache)return [];const pn=_norm(partno);if(!pn)return [];const cm=_norm(curModel);
+    const out=[],seen={};
+    Object.keys(_partsCache).forEach(k=>{const r=_partsCache[k];if(!r||_norm(r.partno)!==pn)return;
+      const m=r.model||'';if(!m)return;if(_norm(m)===cm)return;
+      const key=_norm(m)+'|'+_norm(r.desc||'');if(seen[key])return;seen[key]=1;
+      out.push({model:m,desc:r.desc||''});});
+    return out;
+  }
+  function showInfoModal(title,bodyHtml){
+    const ov=document.createElement('div');ov.className='modal';
+    ov.innerHTML='<div class="modalbox"><h3>'+title+'</h3><div style="font-size:13px;color:#333;line-height:1.7">'+bodyHtml+'</div><button class="btn gold mclose" style="margin-top:14px">சரி</button></div>';
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    ov.querySelector('.mclose').addEventListener('click',()=>ov.remove());
+    document.body.appendChild(ov);
   }
   // ---- end Parts Master ----
 
@@ -594,7 +613,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     }));
     container.querySelectorAll('.itempart').forEach(el=>el.addEventListener('change',()=>{
       const ix=el.dataset.ix,desc=el.dataset.desc||'';const br=container.querySelector('.itembrand[data-ix="'+ix+'"]');
-      savePart(window._partModel,desc,el.value,br?br.value:'');
+      const val=el.value;
+      savePart(window._partModel,desc,val,br?br.value:'');
+      if(val&&val.trim()){const cross=crossVehicleParts(val,window._partModel);
+        if(cross.length)showInfoModal('ℹ️ இதே Part No வேற vehicle-லயும்','<b>'+esc(val.trim())+'</b> — இங்கயும் இருக்கு:<br><br>'+cross.map(c=>'• <b>'+esc(c.model)+'</b>'+(c.desc?' — '+esc(c.desc):'')).join('<br>')+'<br><br><span style="color:#999;font-size:11px">(info மட்டும் — எதுவும் மாறல)</span>');}
     }));
     container.querySelectorAll('.itembrand').forEach(el=>el.addEventListener('change',()=>{
       const ix=el.dataset.ix;const pt=container.querySelector('.itempart[data-ix="'+ix+'"]');
