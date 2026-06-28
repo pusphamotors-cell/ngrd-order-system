@@ -2031,6 +2031,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div id="setForm" style="padding:0 13px 13px"></div>
       </div>
       <div class="card" style="margin-top:14px">
+        <div class="sec">🏦 Bank Statement Reconcile — HNB</div>
+        <div id="recBody"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
         <div class="sec">📋 Settlement Records (${recs.length})</div>
         <div style="padding:8px 13px 13px">${listHtml}</div>
       </div>`;
@@ -2043,6 +2047,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       if(box.classList.contains('hide')){box.innerHTML=settlementDetail(_setCache[id]);box.classList.remove('hide');wireSettlementDetail(box,_setCache[id]);}
       else{box.classList.add('hide');box.innerHTML='';}
     }));
+    renderReconcile();
   }
   async function readSettlementSlip(){
     if(!_setSlipFile)return;
@@ -2149,6 +2154,138 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const del=box.querySelector('[data-setdel]');
     if(del)del.addEventListener('click',async()=>{if(confirm('இந்த settlement record delete பண்ணவா? (orders payment மாறாது)')){await _delSettlement(r.id);renderSettlements();}});
   }
+  // ---- Bank Statement Reconcile (HNB) ----
+  let _recExtracted=null,_recFile=null;
+  const REC_PROMPT='You are a JSON extractor. Output ONLY a single JSON object, no markdown, no prose. This is a Hatton National Bank (HNB) Sri Lanka account statement. Extract EVERY row that has a CREDIT amount (money received). Ignore debit/withdrawal rows and balance-only rows. JSON shape: {"account":"account number if shown","lines":[{"date":"yyyy-mm-dd","credit":256910.00,"ref":"SD12345","desc":"IW SLIPS"}]}. date = the transaction/value date; if only day.month is shown (e.g. 27.05) infer the year from the statement period and output full yyyy-mm-dd. credit = the amount in the CREDITS column, number only, no commas, no currency symbol. ref = the reference number (often starts with SD). desc = the narration text (e.g. IW SLIPS). Only include rows that actually have a credit value. Respond with the JSON object only.';
+
+  function _recYear(){
+    const ys={};
+    Object.values(_setCache||{}).forEach(r=>{const d=parseDate(r.date);if(d)ys[d.getFullYear()]=(ys[d.getFullYear()]||0)+1;});
+    let best=null,bc=-1;for(const y in ys){if(ys[y]>bc){bc=ys[y];best=+y;}}
+    return best||new Date().getFullYear();
+  }
+  function _recParseDate(s){
+    if(s==null)return null;s=String(s).trim();
+    let d=parseDate(s);if(d)return d;
+    let m=s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})$/);
+    if(m)return new Date(2000+(+m[3]),+m[2]-1,+m[1]);
+    m=s.match(/^(\d{1,2})[.\/-](\d{1,2})$/);
+    if(m)return new Date(_recYear(),+m[2]-1,+m[1]);
+    return null;
+  }
+  function _recBuildMatches(lines){
+    const pend=Object.values(_setCache||{}).filter(r=>!r.received);
+    const used={};
+    return (lines||[]).map(L=>{
+      const cd=_recParseDate(L.date);const amt=Math.round(Number(L.credit)||0);
+      let best=null,bestScore=1e9;
+      pend.forEach(r=>{
+        if(used[r.id])return;
+        const net=Math.round(Number(r.net)||0),gross=Math.round(Number(r.gross)||0);
+        let kind=null;
+        if(amt&&Math.abs(net-amt)<=1)kind='net';else if(amt&&Math.abs(gross-amt)<=1)kind='gross';
+        if(!kind)return;
+        const sd=parseDate(r.date);let dd=999;if(cd&&sd)dd=Math.abs((cd-sd)/86400000);
+        const score=dd+(kind==='gross'?0.4:0)+(r.bank==='HNB'?0:6);
+        if(score<bestScore){bestScore=score;best={r,kind,dd};}
+      });
+      if(best)used[best.r.id]=true;
+      return {line:L,cd,amt,match:best};
+    });
+  }
+  function renderReconcile(){
+    const body=$('recBody');if(!body)return;
+    body.innerHTML=`
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">HNB statement upload பண்ணு (PDF/image) → AI credit lines படிக்கும் → pending settlement-ஓட net amount + date auto-match → ✅ Apply பண்ணா "🟢 Bank ✓" auto. (IW SLIPS = Navy inward credit)</div>
+      <div style="padding:4px 13px">
+        <input type="file" id="recFile" accept="application/pdf,image/*" style="font-size:12px;display:block">
+        <button class="btn" id="recRead" style="margin-top:8px;background:#1f6f8b;width:100%" disabled>🤖 Statement படி (AI)</button>
+        <textarea id="recPaste" placeholder="illa statement text-ஐ இங்க paste பண்ணு..." style="width:100%;min-height:56px;font-size:12px;margin-top:8px"></textarea>
+        <button class="btn" id="recReadTxt" style="margin-top:6px;background:#1f6f8b;width:100%">📋 Paste படி (AI)</button>
+        <div id="recMsg" style="font-size:12px;margin-top:6px"></div>
+      </div>
+      <div id="recResult" style="padding:0 13px 8px"></div>`;
+    const f=$('recFile');if(f)f.addEventListener('change',e=>{_recFile=e.target.files&&e.target.files[0];$('recRead').disabled=!_recFile;});
+    const rd=$('recRead');if(rd)rd.addEventListener('click',()=>readBankStatement('file'));
+    const rt=$('recReadTxt');if(rt)rt.addEventListener('click',()=>readBankStatement('text'));
+    if(_recExtracted)renderRecResult();
+  }
+  async function readBankStatement(src){
+    const msg=$('recMsg');let block;
+    if(src==='file'){
+      if(!_recFile)return;
+      const f=_recFile;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+      block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
+      $('recRead').disabled=true;$('recRead').innerHTML='<span class="spin"></span>படிக்கிறேன்...';
+    }else{
+      const txt=($('recPaste').value||'').trim();if(!txt){msg.innerHTML='<span style="color:var(--red)">text paste பண்ணு</span>';return;}
+      block={type:'text',text:'STATEMENT TEXT:\n'+txt};
+      $('recReadTxt').disabled=true;$('recReadTxt').innerHTML='<span class="spin"></span>படிக்கிறேன்...';
+    }
+    msg.innerHTML='';
+    try{
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[block,{type:'text',text:REC_PROMPT}]})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
+      const rec=_parseAIjson(text);
+      const lines=Array.isArray(rec.lines)?rec.lines.filter(l=>Number(l.credit)>0):[];
+      _recExtracted=lines;_recFile=null;
+      msg.innerHTML='<span style="color:var(--green);font-weight:700">✅ '+lines.length+' credit line படிச்சேன்</span>';
+      renderRecResult();
+    }catch(err){msg.innerHTML='<span style="color:var(--red)">⚠️ '+esc(err.message)+'</span>';}
+    finally{const a=$('recRead');if(a){a.disabled=false;a.innerHTML='🤖 Statement படி (AI)';}const b=$('recReadTxt');if(b){b.disabled=false;b.innerHTML='📋 Paste படி (AI)';}}
+  }
+  function renderRecResult(){
+    const box=$('recResult');if(!box)return;
+    if(!_recExtracted||!_recExtracted.length){box.innerHTML='';return;}
+    const rows=_recBuildMatches(_recExtracted);
+    const matched=rows.filter(x=>x.match);
+    const _setArr=Object.values(_setCache||{});
+    const noMatch=rows.filter(x=>!x.match).filter(x=>!_setArr.some(r=>r.received&&x.amt&&(Math.abs(Math.round(Number(r.net)||0)-x.amt)<=1||Math.abs(Math.round(Number(r.gross)||0)-x.amt)<=1)));
+    const matchedIds={};matched.forEach(x=>matchedIds[x.match.r.id]=1);
+    const pendNoStmt=Object.values(_setCache||{}).filter(r=>!r.received&&!matchedIds[r.id]);
+    let html=`<div class="sec" style="background:#f6f9ff;margin-top:6px">🔗 Match ஆனது (${matched.length})</div>`;
+    if(matched.length){
+      html+='<div class="tablewrap"><table><thead><tr><th>Statement</th><th>↔ Settlement</th><th class="num">Amount</th><th>✓</th></tr></thead><tbody>';
+      matched.forEach(x=>{
+        const r=x.match.r,dd=Math.round(x.match.dd),far=dd>10;
+        html+=`<tr>
+          <td style="font-size:11px">${esc(x.line.date||'—')}<br><span style="color:var(--muted)">${esc(x.line.desc||'')} ${esc(x.line.ref||'')}</span></td>
+          <td style="font-size:11px">${esc(r.date||'—')} · ${esc(r.company||'')}<br><span style="color:var(--muted)">${x.match.kind==='gross'?'gross match':'net'}${far?' · ⚠️ '+dd+'d தூரம்':''}</span></td>
+          <td class="num">${fmt(x.amt)}</td>
+          <td><input type="checkbox" class="recpick" data-sid="${esc(r.id)}" data-sdate="${esc(x.line.date||'')}" data-sref="${esc(x.line.ref||'')}" ${far?'':'checked'}></td>
+        </tr>`;
+      });
+      html+='</tbody></table></div><button class="btn gold" id="recApply" style="margin-top:10px;width:100%">✅ Tick ஆனதை "🟢 Bank ✓" பண்ணு</button>';
+    }else{html+='<div class="empty" style="padding:8px">Match இல்ல</div>';}
+    if(noMatch.length){
+      html+=`<div class="sec" style="margin-top:10px">⚠️ Bank-ல வந்துச்சு — settlement record இல்ல (${noMatch.length})</div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Desc / Ref</th><th class="num">Credit</th></tr></thead><tbody>`;
+      noMatch.forEach(x=>{html+=`<tr><td>${esc(x.line.date||'—')}</td><td style="font-size:11px">${esc(x.line.desc||'')} ${esc(x.line.ref||'')}</td><td class="num">${fmt(x.amt)}</td></tr>`;});
+      html+='</tbody></table></div>';
+    }
+    if(pendNoStmt.length){
+      html+=`<div class="sec" style="margin-top:10px">🔵 Settlement இருக்கு — statement-ல வரல (${pendNoStmt.length})</div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Company</th><th class="num">Net</th></tr></thead><tbody>`;
+      pendNoStmt.forEach(r=>{html+=`<tr><td>${esc(r.date||'—')}</td><td style="font-size:11px">${esc(r.company||'')}</td><td class="num">${fmt(r.net)}</td></tr>`;});
+      html+='</tbody></table></div>';
+    }
+    box.innerHTML=html;
+    const ap=$('recApply');if(ap)ap.addEventListener('click',applyReconcile);
+  }
+  async function applyReconcile(){
+    const boxes=document.querySelectorAll('#recResult input.recpick:checked');
+    if(!boxes.length)return;
+    const ap=$('recApply');if(ap){ap.disabled=true;ap.textContent='Apply ஆகுது...';}
+    let n=0;
+    for(const cb of boxes){
+      const r=_setCache[cb.dataset.sid];if(!r||r.received)continue;
+      r.received=true;r.recv_date=cb.dataset.sdate||'';r.recv_ref=cb.dataset.sref||'';
+      await _saveSettlement(r);n++;
+    }
+    renderSettlements();
+    const msg=$('recMsg');if(msg)msg.innerHTML='<span style="color:var(--green);font-weight:700">✅ '+n+' settlement Bank ✓ ஆச்சு</span>';
+  }
+  // ---- end Bank Reconcile ----
   // ---- end settlements UI ----
   // ---- end user system ----</script>
 </body>
