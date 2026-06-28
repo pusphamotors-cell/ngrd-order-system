@@ -330,12 +330,19 @@
     </div>
     <div class="card" style="margin-top:14px">
       <div class="sec">💵 Bulk Payment — Navy slip-ல இருந்து</div>
-      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Navy settlement slip-ல invoice no போட்டு paste பண்ணு (ஒரு வரிக்கு ஒரு invoice, illa comma). Match ஆகி payment ✓ ஆகும். Default: Slip (bank transfer).</div>
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Navy settlement slip-ஐ <b>upload</b> பண்ணு (PDF/image) → AI invoice+amount படிக்கும். illa கீழ invoice no paste பண்ணு. Amount-உம் match (duplicate safe). Default: Slip (bank transfer).</div>
       <div style="padding:4px 13px"><div class="grid2">
         <div class="fld"><label>Payment Date</label><input type="date" id="payBulkDate"></div>
         <div class="fld"><label>Method / Ref</label><input id="payBulkRef" value="Slip (Bank Transfer)"></div>
       </div></div>
-      <div style="padding:4px 13px"><textarea id="payText" placeholder="Invoice no paste:&#10;2889&#10;2890&#10;4498, 4494, 4493" style="width:100%;min-height:80px;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-size:13px;font-family:monospace"></textarea></div>
+      <div style="padding:4px 13px">
+        <label style="font-size:12px;color:var(--muted);font-weight:700">📎 Navy Slip Upload (PDF/Image)</label>
+        <input type="file" id="paySlipFile" accept="application/pdf,image/*" style="font-size:12px;display:block;margin-top:5px">
+        <button class="btn" id="paySlipRead" style="margin-top:8px;background:#1f6f8b;width:100%" disabled>🤖 Slip படி (AI)</button>
+        <div id="paySlipMsg" style="font-size:12px;margin-top:6px"></div>
+      </div>
+      <div style="padding:8px 13px 4px;font-size:11px;color:var(--muted);text-align:center">— illa கீழ paste —</div>
+      <div style="padding:4px 13px"><textarea id="payText" placeholder="Invoice no + amount paste:&#10;4498  10200&#10;4494  14550&#10;(illa invoice மட்டும்: 4498, 4494)" style="width:100%;min-height:80px;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-size:13px;font-family:monospace"></textarea></div>
       <div style="padding:4px 13px 13px;display:flex;gap:10px">
         <button class="btn" id="payPreview" style="margin-top:0;flex:1;background:#1f8a4c">🔍 Preview</button>
         <button class="btn gold" id="payDo" style="margin-top:0;flex:1" disabled>✅ Paid mark பண்ணு</button>
@@ -1830,37 +1837,61 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   // ---- end import ----
   // ---- Bulk Payment (Navy slip) ----
   function _billNums(o){
-    // extract numeric invoice tokens from bill_no, ignoring [WNA/...] refs
     const raw=(o.bill_no||'');
-    const cleaned=raw.replace(/\[[^\]]*\]/g,' '); // drop [WNA/0158]
+    const cleaned=raw.replace(/\[[^\]]*\]/g,' ');
     const nums=cleaned.match(/\d{3,}/g)||[];
     return nums;
   }
-  function _parsePayTokens(text){
-    // split by newline/comma/space, keep 3+ digit numbers
-    return Array.from(new Set((text.match(/\d{3,}/g)||[])));
+  // parse paste: lines may be "invoice amount" or just invoice; returns [{inv, amt|null}]
+  function _parsePayLines(text){
+    const out=[];const seen={};
+    text.split(/[\n,]+/).forEach(line=>{
+      const nums=(line.match(/[\d,]+(?:\.\d+)?/g)||[]).map(x=>x.replace(/,/g,''));
+      if(!nums.length)return;
+      const inv=nums[0];if(!inv||inv.length<3)return;
+      let amt=null;
+      // if a second bigger-looking number present, treat as amount
+      for(let i=1;i<nums.length;i++){const n=Number(nums[i]);if(!isNaN(n)&&n>0){amt=n;break;}}
+      const key=inv+'|'+(amt||'');if(seen[key])return;seen[key]=1;
+      out.push({inv,amt});
+    });
+    return out;
+  }
+  function _findByInvAmt(inv,amt){
+    const cands=orders.filter(o=>_billNums(o).indexOf(inv)>=0);
+    if(!cands.length)return {status:'notfound'};
+    if(cands.length===1)return {status:'ok',o:cands[0]};
+    // multiple candidates (duplicate bill no) — use amount to disambiguate
+    if(amt!=null){
+      const exact=cands.filter(o=>Math.abs((Number(o.sell)||0)-amt)<1);
+      if(exact.length===1)return {status:'ok',o:exact[0]};
+      if(exact.length>1)return {status:'multi',cands:exact};
+    }
+    return {status:'multi',cands};
   }
   let _payStaged=null;
   const _pP=$('payPreview');if(_pP)_pP.addEventListener('click',()=>{
-    const toks=_parsePayTokens($('payText').value||'');
-    if(!toks.length){$('payResult').innerHTML='<div class="err">⚠️ Invoice no போடு</div>';$('payDo').disabled=true;return;}
-    // build map: invoice number -> order
-    const matched=[],notFound=[],already=[];
-    toks.forEach(t=>{
-      const o=orders.find(o=>_billNums(o).indexOf(t)>=0);
-      if(!o){notFound.push(t);return;}
-      if(o.paid){already.push({t,o});return;}
-      if(matched.find(m=>m.o.id===o.id)){return;}
-      matched.push({t,o});
+    const lines=_parsePayLines($('payText').value||'');
+    if(!lines.length){$('payResult').innerHTML='<div class="err">⚠️ Invoice no போடு</div>';$('payDo').disabled=true;return;}
+    const matched=[],multi=[],notFound=[],already=[];
+    lines.forEach(({inv,amt})=>{
+      const r=_findByInvAmt(inv,amt);
+      if(r.status==='notfound'){notFound.push(inv);return;}
+      if(r.status==='multi'){multi.push({inv,amt,cands:r.cands});return;}
+      const o=r.o;
+      if(o.paid){already.push(inv);return;}
+      if(matched.find(m=>m.o.id===o.id))return;
+      matched.push({inv,amt,o});
     });
     _payStaged=matched;
-    let html='<div class="dpanel" style="padding:10px 13px;font-size:13px">';
-    html+='✅ Match ஆச்சு: <b>'+matched.length+'</b>';
+    let html='<div class="dpanel" style="padding:10px 13px;font-size:13px">✅ Match: <b>'+matched.length+'</b>';
+    if(multi.length)html+=' · ⚠️ பல order (amount வேணும்): '+multi.length;
     if(already.length)html+=' · 🟢 already paid: '+already.length;
-    if(notFound.length)html+=' · ❌ கண்டுபிடிக்கல: '+notFound.length;
+    if(notFound.length)html+=' · ❌ இல்ல: '+notFound.length;
     html+='</div>';
-    if(matched.length)html+='<div class="dpanel" style="margin-top:6px"><div class="tablewrap"><table><thead><tr><th>Invoice</th><th>Order No</th><th class="num">Amount</th></tr></thead><tbody>'+matched.map(m=>`<tr><td>${esc(m.t)}</td><td>${esc(m.o.order_no)}</td><td class="num">${fmt(m.o.sell)}</td></tr>`).join('')+'</tbody></table></div></div>';
-    if(notFound.length)html+='<div style="font-size:12px;color:var(--red);margin-top:6px">❌ Match ஆகல: '+notFound.map(esc).join(', ')+'<br><span style="color:var(--muted)">(supply/bill போடலையோ, illa invoice no தப்போ பாரு)</span></div>';
+    if(matched.length)html+='<div class="dpanel" style="margin-top:6px"><div class="tablewrap"><table><thead><tr><th>Invoice</th><th>Order No</th><th class="num">Amount</th></tr></thead><tbody>'+matched.map(m=>`<tr><td>${esc(m.inv)}</td><td>${esc(m.o.order_no)}</td><td class="num">${fmt(m.o.sell)}</td></tr>`).join('')+'</tbody></table></div></div>';
+    if(multi.length)html+='<div style="font-size:12px;color:#9a6b00;margin-top:6px">⚠️ இந்த invoice பல order-ல இருக்கு — amount-உம் போட்டா சரியா match ஆகும்:<br>'+multi.map(m=>'<b>'+esc(m.inv)+'</b> ('+m.cands.length+' orders: '+m.cands.map(o=>fmt(o.sell)).join(', ')+')').join('<br>')+'</div>';
+    if(notFound.length)html+='<div style="font-size:12px;color:var(--red);margin-top:6px">❌ Match ஆகல: '+notFound.map(esc).join(', ')+'<br><span style="color:var(--muted)">(supply/bill போடலையோ, invoice தப்போ பாரு)</span></div>';
     $('payResult').innerHTML=html;
     $('payDo').disabled=matched.length===0;
   });
@@ -1875,6 +1906,30 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     await loadOrders();
     $('payResult').innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ '+n+' orders payment ✓ ஆச்சு!</div>';
     $('payText').value='';_payStaged=null;$('payDo').textContent='✅ Paid mark பண்ணு';
+  });
+  // slip AI reader
+  let _paySlipFileObj=null;
+  const _psf=$('paySlipFile');if(_psf)_psf.addEventListener('change',e=>{_paySlipFileObj=e.target.files&&e.target.files[0];$('paySlipRead').disabled=!_paySlipFileObj;$('paySlipMsg').innerHTML=_paySlipFileObj?'<span style="color:var(--muted)">'+esc(_paySlipFileObj.name)+' ready</span>':'';});
+  const _psr=$('paySlipRead');if(_psr)_psr.addEventListener('click',async()=>{
+    if(!_paySlipFileObj)return;
+    $('paySlipRead').disabled=true;$('paySlipRead').innerHTML='<span class="spin"></span>படிக்கிறேன்...';$('paySlipMsg').innerHTML='';
+    try{
+      const f=_paySlipFileObj;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+      const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
+      const SLIP_PROMPT='This is a Sri Lanka Navy "Settlement of Bills" payment slip. Extract every bill/invoice line. Return ONLY JSON, no markdown: {"date":"yyyy-mm-dd or as shown","lines":[{"invoice":"4498","amount":10200}]}. For invoice cells with multiple numbers like "4495,4496,4497" output each as a separate line object with the SAME amount only if amount is per-group; if a single amount covers the group, output one line per invoice number sharing that amount. Amount = numeric only, no commas. Ignore stamp/total/account rows.';
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[block,{type:'text',text:SLIP_PROMPT}]})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
+      const rec=JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
+      const lines=Array.isArray(rec.lines)?rec.lines:[];
+      if(!lines.length)throw new Error('Slip-ல bill கண்டுபிடிக்கல');
+      $('payText').value=lines.map(l=>l.invoice+(l.amount!=null?'  '+l.amount:'')).join('\n');
+      if(rec.date){const d=parseDate(rec.date);if(d)$('payBulkDate').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+      $('paySlipMsg').innerHTML='<span style="color:var(--green);font-weight:700">✅ '+lines.length+' bills படிச்சேன் — கீழ Preview பண்ணு</span>';
+      _paySlipFileObj=null;$('paySlipFile').value='';
+    }catch(err){$('paySlipMsg').innerHTML='<span style="color:var(--red)">⚠️ '+esc(err.message)+'</span>';}
+    finally{$('paySlipRead').innerHTML='🤖 Slip படி (AI)';$('paySlipRead').disabled=false;}
   });
   // ---- end bulk payment ----
   // ---- Duplicate Bill No checker ----
