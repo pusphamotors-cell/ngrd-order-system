@@ -2108,9 +2108,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       return r.date===_date;
     });
     if(_dup){
-      if(!confirm('⚠️ Duplicate இருக்கலாம்!\n\nஏற்கனவே இந்த settlement இருக்கு:\n'+(_dup.date||'?')+' · Rs '+fmt(_dup.net)+' · '+((_dup.bills||[]).length)+' bills\n\nஇதே மாதிரி இன்னொண்ணு உண்மையிலேயே save பண்ணணுமா?')){
-        $('setSave').disabled=false;$('setSave').textContent='💾 Settlement Save';return;
-      }
+      alert('🚫 இந்த settlement ஏற்கனவே save ஆயிருக்கு!\n\n'+(_dup.date||'?')+' · Rs '+fmt(_dup.net)+' · '+((_dup.bills||[]).length)+' bills\n\nDuplicate save பண்ண முடியாது. Cancel அழுத்தி form-ஐ மூடு.');
+      $('setSave').disabled=false;$('setSave').textContent='💾 Settlement Save';
+      return;
     }
     const rec={
       id:'set:'+Date.now(),
