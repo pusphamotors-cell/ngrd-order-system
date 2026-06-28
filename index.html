@@ -305,6 +305,16 @@
     </div>
     <div id="userList"></div>
     <div class="card" style="margin-top:14px">
+      <div class="sec">📤 Import — பழைய orders (Excel-ல இருந்து)</div>
+      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Excel-ல எல்லா rows-ஐயும் (header உட்பட) copy பண்ணி இங்க paste பண்ணு → Preview → Import. Order + supply + bill ஏறும் (items/cost அப்புறம் போடலாம்).</div>
+      <div style="padding:4px 13px"><textarea id="impText" placeholder="Excel-ல இருந்து copy பண்ணி இங்க paste..." style="width:100%;min-height:90px;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-size:12px;font-family:monospace"></textarea></div>
+      <div style="padding:4px 13px 13px;display:flex;gap:10px">
+        <button class="btn" id="impPreview" style="margin-top:0;flex:1;background:#5a3fb0">🔍 Preview</button>
+        <button class="btn gold" id="impDo" style="margin-top:0;flex:1" disabled>✅ Import பண்ணு</button>
+      </div>
+      <div id="impResult" style="padding:0 13px 13px"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
       <div class="sec">💾 Backup — Data safety</div>
       <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Data already cloud-ல safe. இது extra copy — உன் PC-ல save பண்ணி வச்சுக்க. ஏதாவது நடந்தா restore பண்ணலாம்.</div>
       <div style="padding:4px 13px 13px;display:flex;gap:10px;flex-wrap:wrap">
@@ -1514,6 +1524,53 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     };rd.readAsText(f);
   });
   // ---- end backup ----
+  // ---- Import (Excel register) ----
+  function _impDate(s){s=(s||'').trim();if(!s)return '';const m=s.match(/(\d{1,2})[.\/\-\s]+(\d{1,2})[.\/\-\s]+(\d{2,4})/);if(!m)return s;let d=m[1],mo=m[2],y=m[3];if(y.length>4)y=y.slice(0,4);if(y.length===2)y='20'+y;const yr=+y;if(yr<2000||yr>2100)return s;return y+'-'+mo.padStart(2,'0')+'-'+d.padStart(2,'0');}
+  function _impAmt(s){s=(s||'').replace(/[^0-9.]/g,'');return s?(Number(s)||0):0;}
+  function _impSup(s){const u=(s||'').toUpperCase();if(u.indexOf('PUSP')>=0||u.indexOf('PUSH')>=0)return 'Puspha Motors';if(u.indexOf('NGRD')>=0)return 'NGRD Motors';return (s||'').trim();}
+  function _normOrd(s){return (s||'').replace(/\s+/g,'').toUpperCase();}
+  function _hidx(hdr,names){for(const n of names){const i=hdr.findIndex(h=>h.trim().toUpperCase()===n);if(i>=0)return i;}return -1;}
+  function parseRegister(text){
+    let lines=text.split(/\r?\n/).filter(l=>l.trim()!=='');
+    if(!lines.length)return {error:'Data இல்ல'};
+    let hi=lines.findIndex(l=>/ORDER\s*NUMBER/i.test(l));if(hi<0)hi=0;
+    const delim=lines[hi].indexOf('\t')>=0?'\t':',';
+    const split=l=>delim==='\t'?l.split('\t'):(l.match(/(".*?"|[^,]+|(?<=,)(?=,))/g)||l.split(',')).map(x=>x.replace(/^"|"$/g,''));
+    const hdr=split(lines[hi]);
+    const ci={order:_hidx(hdr,['ORDER NUMBER']),file:_hidx(hdr,['FILE NUMBER']),qdate:_hidx(hdr,['QUOTATION DATE']),veh:_hidx(hdr,['VEHICLE NO']),make:_hidx(hdr,['MAKE']),odate:_hidx(hdr,['ORDER R DATE','ORDER DATE']),amt:_hidx(hdr,['AMOUNT']),comp:_hidx(hdr,['COMPANY']),last:_hidx(hdr,['LAST DATE']),rem:_hidx(hdr,['REMARK']),billno:_hidx(hdr,['BILL NUMBER']),billdate:_hidx(hdr,['BILL DATE'])};
+    if(ci.order<0)return {error:'ORDER NUMBER column கண்டுபிடிக்கல. Header சரியா copy பண்ணியா?'};
+    const out=[];
+    for(let i=hi+1;i<lines.length;i++){const c=split(lines[i]);const get=k=>ci[k]>=0&&c[ci[k]]!=null?c[ci[k]].trim():'';
+      const ord=_normOrd(get('order'));if(!ord)continue;
+      const supplied=/SUPPLI/i.test(get('rem'));
+      out.push({order_no:ord,file_no:get('file'),quotation_date:_impDate(get('qdate')),naha_no:get('veh').replace(/\s+/g,' ').trim(),model:get('make'),order_date:_impDate(get('odate')),sell:_impAmt(get('amt')),supplier:_impSup(get('comp')),delivery_date:_impDate(get('last')),supplied:supplied,bill_no:supplied?get('billno'):'',bill_date:supplied?_impDate(get('billdate')):'',buyer:'Western Naval Command (WNA)',items:[],paid:false});
+    }
+    return {rows:out};
+  }
+  let _impStaged=null;
+  const _impP=$('impPreview');if(_impP)_impP.addEventListener('click',()=>{
+    const res=parseRegister($('impText').value||'');
+    if(res.error){$('impResult').innerHTML='<div class="err">⚠️ '+esc(res.error)+'</div>';$('impDo').disabled=true;return;}
+    const existing=new Set(orders.map(o=>_normOrd(o.order_no)));
+    const fresh=res.rows.filter(r=>!existing.has(r.order_no));
+    const dup=res.rows.length-fresh.length;
+    _impStaged=fresh;
+    const sup=fresh.filter(r=>r.supplied).length;
+    $('impResult').innerHTML='<div class="dpanel" style="padding:10px 13px;font-size:13px"><b>'+res.rows.length+'</b> orders கண்டுபிடிச்சேன்.<br>✅ புதுசு: <b>'+fresh.length+'</b> · ⏭ already இருக்கு: '+dup+'<br>🚚 Supplied: '+sup+' · Not supplied: '+(fresh.length-sup)+'</div>';
+    $('impDo').disabled=fresh.length===0;
+  });
+  const _impD=$('impDo');if(_impD)_impD.addEventListener('click',async()=>{
+    if(!_impStaged||!_impStaged.length){alert('முதல்ல Preview பண்ணு');return;}
+    if(!confirm(_impStaged.length+' orders import பண்ணவா?'))return;
+    $('impDo').disabled=true;$('impDo').textContent='Import ஆகுது...';
+    let n=0;const base=Date.now();
+    for(const r of _impStaged){r.id='order:'+(base+n);r.savedAt=new Date(base+n).toISOString();
+      try{await window.storage.set(r.id,JSON.stringify(r));n++;}catch(e){}}
+    await loadOrders();
+    $('impResult').innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ '+n+' orders import ஆச்சு! Saved tab-ல பாரு.</div>';
+    $('impText').value='';_impStaged=null;$('impDo').textContent='✅ Import பண்ணு';
+  });
+  // ---- end import ----
   // ---- end user system ----</script>
 </body>
 </html>
