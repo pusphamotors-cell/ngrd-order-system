@@ -259,7 +259,7 @@
         <option value="Puspha Motors">Puspha Motors</option>
       </select>
     </div>
-    <input id="searchBox" placeholder="🔍 Order No / NAHA / Buyer தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
+    <input id="searchBox" placeholder="🔍 Order No / Bill No / NAHA / Vehicle தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
     <div id="orderList"></div>
   </div>
 
@@ -1031,7 +1031,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const campSel=(($('campFilter')||{}).value)||'all';
     const compSel=(($('compFilter')||{}).value)||'all';
     let list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
-    if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')).toLowerCase().indexOf(q)>=0));
+    if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')+' '+(o.bill_no||'')+' '+(o.model||'')+' '+(o.file_no||'')).toLowerCase().indexOf(q)>=0));
     if(campSel!=='all')list=list.filter(({o})=>_campOf(o)===campSel);
     if(compSel!=='all')list=list.filter(({o})=>_companyOf(o)===compSel);
     if(_listFilter)list=list.filter(({o})=>_matchFilter(o));
