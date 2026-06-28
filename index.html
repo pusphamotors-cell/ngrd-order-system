@@ -1146,7 +1146,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
       return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}</div>
-          <div class="meta">${esc(o.buyer||'—')} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
+          <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
@@ -1243,7 +1243,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const box=$('calDay');if(!box)return;
     const dl=maps.del[k]||[],or=maps.ord[k]||[],bl=maps.bill[k]||[],py=maps.pay[k]||[];
     const dt=new Date(k);const nice=isNaN(dt)?k:dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    const sec=(t,arr,extra)=>arr.length?`<div class="sec" style="margin-top:6px">${t} (${arr.length})</div>`+arr.map(o=>`<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(o.buyer||'—')}</span></div><div class="vl">${extra(o)}</div></div>`).join(''):'';
+    const sec=(t,arr,extra)=>arr.length?`<div class="sec" style="margin-top:6px">${t} (${arr.length})</div>`+arr.map(o=>`<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(_campOf(o))}</span></div><div class="vl">${extra(o)}</div></div>`).join(''):'';
     let html=`<div class="dpanel" style="margin-top:12px;padding-bottom:6px"><div style="padding:10px 13px;font-weight:800;color:var(--navy);font-size:13px;border-bottom:1px solid var(--line)">📆 ${nice}</div>`;
     if(!(dl.length||or.length||bl.length||py.length))html+='<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">இந்த நாள் activity இல்ல</div>';
     html+=sec('🚚 Deliver பண்ணணும்',dl,o=>o.supplied?'<span style="color:var(--green)">✓ ஆச்சு</span>':'<span style="color:var(--red)">⏳ வரல</span>');
@@ -1264,7 +1264,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const v1=sum(buckets.b1),v2=sum(buckets.b2),v3=sum(buckets.b3);
     const grp=(title,arr,cls)=>{if(!arr.length)return '';
       arr.sort((a,b)=>b.days-a.days);
-      return `<div class="sec ${cls}" style="margin-top:8px">${title} — ${arr.length} order · Rs ${fmt(sum(arr))}</div><div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th>Bill/Del Date</th><th class="num">நாள்</th><th class="num">Rs வரல</th></tr></thead><tbody>${arr.map(({o,days})=>`<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td>${esc(o.bill_date||o.delivery_date||'—')}</td><td class="num">${days}</td><td class="num">${fmt(o.sell)}</td></tr>`).join('')}</tbody></table></div></div>`;};
+      return `<div class="sec ${cls}" style="margin-top:8px">${title} — ${arr.length} order · Rs ${fmt(sum(arr))}</div><div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th>Bill/Del Date</th><th class="num">நாள்</th><th class="num">Rs வரல</th></tr></thead><tbody>${arr.map(({o,days})=>`<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td>${esc(o.bill_date||o.delivery_date||'—')}</td><td class="num">${days}</td><td class="num">${fmt(o.sell)}</td></tr>`).join('')}</tbody></table></div></div>`;};
     wrap.innerHTML=`
       <div class="dstat gold" style="margin-bottom:10px"><div class="k">💵 மொத்த வராத பணம் (Outstanding)</div><div class="v">${fmt(total)}</div><div class="s">Rs · ${due.length} orders</div></div>
       <div class="drow">
@@ -1281,15 +1281,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const wrap=$('repCommWrap');
     const all=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
     if(!all.length){wrap.innerHTML='<div class="empty">Commission இல்ல.<br>Supply ஆன order → Edit → Apo/Clark % போடு</div>';return;}
-    const camps=Array.from(new Set(all.map(o=>o.buyer||'—'))).sort();
-    const sup=_commCamp==='all'?all:all.filter(o=>(o.buyer||'—')===_commCamp);
+    const camps=Array.from(new Set(all.map(o=>_campOf(o)))).sort();
+    const sup=_commCamp==='all'?all:all.filter(o=>_campOf(o)===_commCamp);
     let apoT=0,clkT=0;
     const rows=sup.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{
       const s=Number(o.sell)||0;const ac=s*(o.apo_pct||0)/100,cc=s*(o.clark_pct||0)/100;apoT+=ac;clkT+=cc;
-      return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td class="num">${fmt(s)}</td><td class="num">${o.apo_pct||0}% · ${fmt(ac)}</td><td class="num">${o.clark_pct||0}% · ${fmt(cc)}</td></tr>`;
+      return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td class="num">${fmt(s)}</td><td class="num">${o.apo_pct||0}% · ${fmt(ac)}</td><td class="num">${o.clark_pct||0}% · ${fmt(cc)}</td></tr>`;
     }).join('');
     // camp-wise summary (all)
-    const byCamp={};all.forEach(o=>{const k=o.buyer||'—';const s=Number(o.sell)||0;const m=byCamp[k]||(byCamp[k]={a:0,c:0});m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
+    const byCamp={};all.forEach(o=>{const k=_campOf(o);const s=Number(o.sell)||0;const m=byCamp[k]||(byCamp[k]={a:0,c:0});m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
     const campSummary=Object.keys(byCamp).sort((a,b)=>(byCamp[b].a+byCamp[b].c)-(byCamp[a].a+byCamp[a].c)).map(k=>`<div class="brow" data-ccamp="${esc(k)}" style="cursor:pointer"><span class="nm">${esc(k)}</span><span class="ct">Apo ${fmt(byCamp[k].a)}</span><span class="vl">Clark ${fmt(byCamp[k].c)}</span></div>`).join('');
     wrap.innerHTML=`
       <div class="fld" style="margin-bottom:10px"><label>Camp / Buyer</label><select id="commCampSel"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
@@ -1363,7 +1363,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return orders.filter(o=>{const d=parseDate(o.order_date||o.bill_date);const mk=d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'';
       if(_sumFrom&&(!mk||mk<_sumFrom))return false;if(_sumTo&&(!mk||mk>_sumTo))return false;
       if(_sumComp!=='all'&&_companyOf(o)!==_sumComp)return false;
-      if(_sumCamp!=='all'&&(o.buyer||'—')!==_sumCamp)return false;return true;});
+      if(_sumCamp!=='all'&&_campOf(o)!==_sumCamp)return false;return true;});
   }
   function _sumStats(list){let val=0,sup=0,supVal=0,nsup=0,nsupVal=0,prof=0,costed=0,apo=0,clk=0;
     list.forEach(o=>{const s=Number(o.sell)||0;val+=s;if(o.supplied){sup++;supVal+=s;}else{nsup++;nsupVal+=s;}const pv=profitVal(o);if(pv!=null){prof+=pv;costed+=s;}apo+=s*(o.apo_pct||0)/100;clk+=s*(o.clark_pct||0)/100;});
@@ -1373,7 +1373,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(!months.length){wrap.innerHTML='<div class="empty">Order data இல்ல</div>';return;}
     if(!_sumFrom||months.indexOf(_sumFrom)<0)_sumFrom=months[0];if(!_sumTo||months.indexOf(_sumTo)<0)_sumTo=months[months.length-1];
     const comps=['all','NGRD Motors','Puspha Motors'];
-    const camps=['all'].concat(Array.from(new Set(orders.map(o=>o.buyer||'—'))).sort());
+    const camps=['all'].concat(Array.from(new Set(orders.map(o=>_campOf(o)))).sort());
     const list=_sumFilter();const S=_sumStats(list);
     const ngrd=_sumStats(list.filter(o=>_companyOf(o)==='NGRD Motors'));
     const pusp=_sumStats(list.filter(o=>_companyOf(o)==='Puspha Motors'));
@@ -1536,8 +1536,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const payVal=payPend.reduce((a,o)=>a+(Number(o.sell)||0),0);
     const card=(t,n,sub,cls)=>`<div class="dstat ${cls||''}"><div class="k">${t}</div><div class="v">${n}</div><div class="s">${sub}</div></div>`;
     const sortByDl=arr=>arr.slice().sort((a,b)=>{const x=daysLeft(a),y=daysLeft(b);return (x==null?9999:x)-(y==null?9999:y);});
-    const supRows=sortByDl(supPend).map(o=>{const a=deliveryAlert(o);return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td>${esc(o.delivery_date||'—')}</td><td>${a?a.t.replace(/<[^>]*>/g,''):'—'}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
-    const payRows=payPend.map(o=>{const a=paymentAlert(o);return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.buyer||'—')}</td><td>${esc(o.bill_date||o.delivery_date||'—')}</td><td>${a?a.t.replace(/<[^>]*>/g,''):'—'}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
+    const supRows=sortByDl(supPend).map(o=>{const a=deliveryAlert(o);return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td>${esc(o.delivery_date||'—')}</td><td>${a?a.t.replace(/<[^>]*>/g,''):'—'}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
+    const payRows=payPend.map(o=>{const a=paymentAlert(o);return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td>${esc(o.bill_date||o.delivery_date||'—')}</td><td>${a?a.t.replace(/<[^>]*>/g,''):'—'}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
     $('repPendingWrap').innerHTML=`
       <div class="drow">
         ${card('🚚 Supply வரல',supPend.length,'Rs '+fmt(supVal),'')}
@@ -1737,7 +1737,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const right=o.task_done
       ? '<span class="badge b-paid">✓ Done</span>'+(isAdmin?' <span data-undone="'+esc(o.id)+'" style="cursor:pointer;color:var(--muted);font-size:11px;margin-left:5px">undo</span>':'')
       : '<button class="btn gold" data-done="'+esc(o.id)+'" style="margin:0;padding:7px 12px;width:auto;font-size:12px">✓ Ready ஆச்சு</button>'+(isAdmin?' <span data-unassign="'+esc(o.id)+'" style="cursor:pointer;color:var(--red);font-size:15px;margin-left:6px">✗</span>':'');
-    return `<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(o.buyer||'—')} · ${(o.items||[]).length} items</span>${o.task_date?'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">📅 '+_fmtDk(o.task_date)+(o.delivery_date?' · Delivery '+esc(o.delivery_date):'')+'</div>':''}</div><div style="display:flex;align-items:center;gap:3px;white-space:nowrap">${right}</div></div>`;
+    return `<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(_campOf(o))} · ${(o.items||[]).length} items</span>${o.task_date?'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">📅 '+_fmtDk(o.task_date)+(o.delivery_date?' · Delivery '+esc(o.delivery_date):'')+'</div>':''}</div><div style="display:flex;align-items:center;gap:3px;white-space:nowrap">${right}</div></div>`;
   }
   function renderTasks(){
     const box=$('taskList');const isAdmin=CURRENT&&CURRENT.role==='admin';
@@ -1859,7 +1859,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function _stamp(){const n=new Date();return n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');}
   const _bkE=$('bkExcel');if(_bkE)_bkE.addEventListener('click',()=>{
     const cols=['Order No','NAHA','Civil No','Chassis','Engine','Model','Buyer','Order Date','Delivery','Items','Sell','Buy','Profit','Supplied','Bill No','Bill Date','Paid','Cheque No','Pay Date','Assignee'];
-    const rows=orders.map(o=>[o.order_no,o.naha_no,o.civil_no,o.chassis_no,o.engine_no,o.model,o.buyer,o.order_date,o.delivery_date,(o.items||[]).length,o.sell,(hasCost(o)?o.buy:''),(profitVal(o)==null?'':profitVal(o)),o.supplied?'Yes':'No',o.bill_no,o.bill_date,o.paid?'Yes':'No',o.cheque_no,o.pay_date,o.assignee_name||o.assignee||'']);
+    const rows=orders.map(o=>[o.order_no,o.naha_no,o.civil_no,o.chassis_no,o.engine_no,o.model,_campOf(o),o.order_date,o.delivery_date,(o.items||[]).length,o.sell,(hasCost(o)?o.buy:''),(profitVal(o)==null?'':profitVal(o)),o.supplied?'Yes':'No',o.bill_no,o.bill_date,o.paid?'Yes':'No',o.cheque_no,o.pay_date,o.assignee_name||o.assignee||'']);
     const esc=v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
     const csv='\ufeff'+[cols.join(',')].concat(rows.map(r=>r.map(esc).join(','))).join('\n');
     _dl('NGRD_orders_'+_stamp()+'.csv',csv,'text/csv');
@@ -1915,7 +1915,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     for(let i=startLine;i<lines.length;i++){const c=split(lines[i]);const get=k=>ci[k]>=0&&c[ci[k]]!=null?c[ci[k]].trim():'';
       const ord=_normOrd(get('order'));if(!ord||!/PO\/\d/i.test(ord))continue;
       const supplied=/SUPPLI/i.test(get('rem'));
-      out.push({order_no:ord,file_no:get('file'),quotation_date:_impDate(get('qdate')),naha_no:get('veh').replace(/\s+/g,' ').trim(),model:get('make'),order_date:_impDate(get('odate')),sell:_impAmt(get('amt')),supplier:_impSup(get('comp')),delivery_date:_impDate(get('last')),supplied:supplied,bill_no:supplied?get('billno'):'',bill_date:supplied?_impDate(get('billdate')):'',buyer:'Western Naval Command (WNA)',items:[],paid:false});
+      out.push({order_no:ord,file_no:get('file'),quotation_date:_impDate(get('qdate')),naha_no:get('veh').replace(/\s+/g,' ').trim(),model:get('make'),order_date:_impDate(get('odate')),sell:_impAmt(get('amt')),supplier:_impSup(get('comp')),delivery_date:_impDate(get('last')),supplied:supplied,bill_no:supplied?get('billno'):'',bill_date:supplied?_impDate(get('billdate')):'',buyer:_campOf({order_no:ord,file_no:get('file')}),items:[],paid:false});
     }
     return {rows:out};
   }
