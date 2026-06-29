@@ -205,10 +205,13 @@
   .modal{position:fixed;inset:0;background:rgba(11,26,42,.55);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeup .2s ease}
   .modalbox{background:#fff;border-radius:14px;max-width:340px;width:100%;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
   .modalbox h3{font-size:15px;color:var(--navy);margin-bottom:10px}
-  .sckeys{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:linear-gradient(180deg,#fbfcfe,#f4f7fb)}
-  .sckhead{font-size:12.5px;font-weight:800;color:var(--navy);margin-bottom:8px}
-  .sckgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px 14px;font-size:11.5px;color:#333}
-  .sckgrid kbd{display:inline-block;min-width:16px;text-align:center;padding:1px 6px;border:1px solid #c3ccd8;border-bottom-width:2px;border-radius:5px;background:#fff;font-family:inherit;font-size:10.5px;font-weight:700;color:var(--navy)}
+  .sckbar{display:flex;align-items:center;gap:14px;overflow-x:auto;white-space:nowrap;padding:6px 16px;background:linear-gradient(90deg,var(--navy),var(--navy2));border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#cfe0f3;-webkit-overflow-scrolling:touch}
+  .sckbar::-webkit-scrollbar{height:0}
+  .sckbar .lbl{font-weight:800;color:#ffd97a;flex:none}
+  .sckbar span{flex:none}
+  .sckbar kbd{display:inline-block;min-width:14px;text-align:center;padding:0 5px;border:1px solid #5b7a9e;border-bottom-width:2px;border-radius:4px;background:rgba(255,255,255,.12);font-family:inherit;font-size:10px;font-weight:700;color:#fff}
+  .sckbar .sckx{margin-left:auto;cursor:pointer;color:#ffffff99;font-weight:700;flex:none;padding:0 4px}
+  .sckbar .sckx:hover{color:#fff}
   /* ===== FULL BLUE THEME — navy page + nav bar, white cards float ===== */
   :root{--bg:#13243f}
   body{background:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NDAgNDQwIj48ZyBvcGFjaXR5PSIwLjA1IiBzdHJva2U9IiNjOWEyMjciIGZpbGw9IiNjOWEyMjciPjxjaXJjbGUgY3g9IjIyMCIgY3k9IjIyMCIgcj0iMjAyIiBzdHJva2Utd2lkdGg9IjUiIGZpbGw9Im5vbmUiLz48Y2lyY2xlIGN4PSIyMjAiIGN5PSIyMjAiIHI9IjE4MCIgc3Ryb2tlLXdpZHRoPSIxLjUiIGZpbGw9Im5vbmUiLz48dGV4dCB4PSIyMjAiIHk9IjIzOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iODAwIiBmb250LXNpemU9IjExOCIgbGV0dGVyLXNwYWNpbmc9IjMiIHN0cm9rZT0ibm9uZSI+TkdSRDwvdGV4dD48dGV4dCB4PSIyMjAiIHk9IjI5OCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLEhlbHZldGljYSxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iNzAwIiBmb250LXNpemU9IjMzIiBsZXR0ZXItc3BhY2luZz0iMTEiIHN0cm9rZT0ibm9uZSI+TU9UT1JTPC90ZXh0PjwvZz48L3N2Zz4=") center 45%/min(560px,82vw) no-repeat, linear-gradient(165deg,#11203a 0%,#172a4d 52%,#1f3864 100%);background-color:#162a4d;min-height:100vh}
@@ -332,6 +335,21 @@
     <div class="tab" id="tabSettle"><span class="ti"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15v-5"/><path d="M19 11a2 2 0 0 0 0 5h3v-5z"/></svg></span><span class="tl">Settle</span></div>
     <div class="tab" id="tabUsers"><span class="ti"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="tl">Users</span></div>
   </div>
+  <div class="sckbar" id="sckbar">
+    <span class="lbl">⌨️ Shortcut</span>
+    <span><kbd>Alt</kbd>+<kbd>D</kbd> Dash</span>
+    <span><kbd>Alt</kbd>+<kbd>N</kbd> புது Order</span>
+    <span><kbd>Alt</kbd>+<kbd>S</kbd> Saved</span>
+    <span><kbd>Alt</kbd>+<kbd>W</kbd> வேலை</span>
+    <span><kbd>Alt</kbd>+<kbd>R</kbd> Report</span>
+    <span><kbd>Alt</kbd>+<kbd>C</kbd> Commission</span>
+    <span><kbd>Alt</kbd>+<kbd>B</kbd> Settle</span>
+    <span><kbd>Alt</kbd>+<kbd>U</kbd> Users</span>
+    <span><kbd>/</kbd> தேடு</span>
+    <span><kbd>Esc</kbd> மூடு</span>
+    <span><kbd>?</kbd> Hide/Show</span>
+    <span class="sckx" id="sckbarHide" title="மறை (? அழுத்தி திரும்ப காட்டு)">✕</span>
+  </div>
 
   <div class="wrap" id="viewDash">
     <div id="backupNudge"></div>
@@ -344,22 +362,6 @@
     <div class="custchips" id="dashCustChips"></div>
     <div id="dashSearchResults"></div>
     <div id="dashContent"></div>
-    <div class="sckeys" id="sckeys">
-      <div class="sckhead">⌨️ Shortcut Keys <span style="font-weight:400;color:var(--muted);font-size:10.5px">— எங்க இருந்தாலும் வேலை செய்யும்</span></div>
-      <div class="sckgrid">
-        <div><kbd>Alt</kbd>+<kbd>D</kbd> Dashboard</div>
-        <div><kbd>Alt</kbd>+<kbd>N</kbd> புது Order</div>
-        <div><kbd>Alt</kbd>+<kbd>S</kbd> Saved</div>
-        <div><kbd>Alt</kbd>+<kbd>W</kbd> வேலை</div>
-        <div><kbd>Alt</kbd>+<kbd>R</kbd> Report</div>
-        <div><kbd>Alt</kbd>+<kbd>C</kbd> Commission</div>
-        <div><kbd>Alt</kbd>+<kbd>B</kbd> Settle (Bank)</div>
-        <div><kbd>Alt</kbd>+<kbd>U</kbd> Users</div>
-        <div><kbd>/</kbd> தேடு (Search)</div>
-        <div><kbd>Esc</kbd> Popup மூடு</div>
-        <div><kbd>?</kbd> இந்த list காட்டு/மறை</div>
-      </div>
-    </div>
   </div>
 
   <div class="wrap hide" id="viewNew">
@@ -608,6 +610,7 @@
   $('tabRep').onclick=()=>{setTab('rep');initReport();};
   $('tabSettle').onclick=()=>{setTab('settle');renderSettlements();};
   $('tabUsers').onclick=()=>{setTab('users');renderUsers();};
+  {const _skx=$('sckbarHide');if(_skx)_skx.onclick=()=>{const sk=$('sckbar');if(sk)sk.style.display='none';};}
   // ===== Keyboard shortcuts (Busy-style) =====
   document.addEventListener('keydown',e=>{
     const t=e.target,tag=(t&&t.tagName)||'';const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(tag)||(t&&t.isContentEditable);
@@ -615,8 +618,8 @@
     if(e.key==='Escape'){const ov=[...document.querySelectorAll('.modal')].pop();if(ov){ov.remove();e.preventDefault();}return;}
     // "/" — focus dashboard search (only when not typing)
     if(e.key==='/'&&!typing){const ds=$('dashSearch');if(ds){if($('viewDash').classList.contains('hide')){setTab('dash');renderDash();}setTimeout(()=>{const d=$('dashSearch');if(d)d.focus();},60);e.preventDefault();}return;}
-    // "?" — toggle shortcut legend (not while typing)
-    if(e.key==='?'&&!typing){const sk=$('sckeys');if(sk){if($('viewDash').classList.contains('hide')){setTab('dash');renderDash();}sk.style.display=(sk.style.display==='none')?'':'none';e.preventDefault();}return;}
+    // "?" — toggle shortcut bar (not while typing)
+    if(e.key==='?'&&!typing){const sk=$('sckbar');if(sk){sk.style.display=(sk.style.display==='none')?'':'none';e.preventDefault();}return;}
     // Alt + letter — navigate (works even while typing, Alt is a safe modifier)
     if(e.altKey&&!e.ctrlKey&&!e.metaKey){
       const k=(e.key||'').toLowerCase();const map={d:'tabDash',n:'tabNew',s:'tabList',w:'tabTasks',r:'tabRep',b:'tabSettle',u:'tabUsers'};
