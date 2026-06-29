@@ -1871,6 +1871,37 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   let _cpayDraft=null;
   let _egpFileObj=null;
+  // inline paid-status editor (from commission report row)
+  function _openPaidEdit(orderId){
+    const o=orders.find(x=>x.id===orderId);if(!o)return;
+    const agBlock=(ag,L)=>{
+      if(_agPct(o,ag)<=0)return `<div style="font-size:11.5px;color:var(--muted);margin:4px 0">${L}: commission % இல்ல</div>`;
+      const paid=_agPaid(o,ag),d=_agPaidDate(o,ag),mode=(ag==='apo'?o.apo_paid_mode:o.clark_paid_mode)||'cash',to=esc((ag==='apo'?o.apo_paid_to:o.clark_paid_to)||''),ref=esc((ag==='apo'?o.apo_paid_ref:o.clark_paid_ref)||'');
+      return `<div style="border:1px solid var(--line);border-radius:9px;padding:8px;margin:6px 0">
+        <label style="display:flex;gap:7px;align-items:center;font-size:13px;font-weight:700"><input type="checkbox" id="pe_${ag}_paid" ${paid?'checked':''}> ${L} paid · ${_agPct(o,ag)}% = Rs ${fmt(_agComm(o,ag))}</label>
+        <div class="grid2" style="margin-top:5px"><div class="fld"><label>Date</label><input type="date" id="pe_${ag}_date" value="${esc(d||'')}"></div><div class="fld"><label>Via</label><select id="pe_${ag}_mode"><option value="cash" ${mode!=='bank'?'selected':''}>💵 Cash</option><option value="bank" ${mode==='bank'?'selected':''}>🏦 Bank</option></select></div></div>
+        <div class="grid2"><div class="fld"><label>Paid to / கொண்டு போனவர்</label><input id="pe_${ag}_to" value="${to}" placeholder="name"></div><div class="fld"><label>Ref</label><input id="pe_${ag}_ref" value="${ref}" placeholder="slip/ac"></div></div>
+      </div>`;
+    };
+    const ov=document.createElement('div');ov.className='modal';
+    ov.innerHTML=`<div class="modalbox" style="max-width:420px"><h3>✏️ Commission Paid — ${esc(o.order_no)}</h3>
+      ${agBlock('apo','Apo')}${agBlock('clark','Clark')}
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="peCancel" style="margin:0;background:#777">Cancel</button><button class="btn gold" id="peSave" style="margin:0">✓ Save</button></div></div>`;
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    document.body.appendChild(ov);
+    ov.querySelector('#peCancel').onclick=()=>ov.remove();
+    ov.querySelector('#peSave').onclick=async()=>{
+      ['apo','clark'].forEach(ag=>{
+        const cb=ov.querySelector('#pe_'+ag+'_paid');if(!cb)return;
+        const paid=cb.checked;const dt=ov.querySelector('#pe_'+ag+'_date').value||new Date().toISOString().slice(0,10);
+        const mode=ov.querySelector('#pe_'+ag+'_mode').value||'cash';const to=(ov.querySelector('#pe_'+ag+'_to').value||'').trim()||_agLabel(ag);const ref=(ov.querySelector('#pe_'+ag+'_ref').value||'').trim();
+        if(ag==='apo'){o.apo_paid=paid;if(paid){o.apo_paid_date=dt;o.apo_paid_mode=mode;o.apo_paid_to=to;o.apo_paid_ref=ref;o.apo_paid_amt=_agComm(o,'apo');}else{o.apo_paid_date='';o.apo_paid_mode='';o.apo_paid_to='';o.apo_paid_ref='';o.apo_paid_amt=0;}}
+        else{o.clark_paid=paid;if(paid){o.clark_paid_date=dt;o.clark_paid_mode=mode;o.clark_paid_to=to;o.clark_paid_ref=ref;o.clark_paid_amt=_agComm(o,'clark');}else{o.clark_paid_date='';o.clark_paid_mode='';o.clark_paid_to='';o.clark_paid_ref='';o.clark_paid_amt=0;}}
+      });
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail: '+e.message);return;}
+      ov.remove();renderCommission();
+    };
+  }
   function renderCommission(){
     const wrap=$('repCommWrap');
     const all=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
@@ -1891,7 +1922,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const s=Number(o.sell)||0;const ac=s*(o.apo_pct||0)/100,cc=s*(o.clark_pct||0)/100;apoT+=ac;clkT+=cc;
       const apoCell=(o.apo_pct||0)>0?`${o.apo_pct||0}% · ${fmt(ac)}${tick(_agPaid(o,'apo'))}`:'—';
       const clkCell=(o.clark_pct||0)>0?`${o.clark_pct||0}% · ${fmt(cc)}${tick(_agPaid(o,'clark'))}`:'—';
-      return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td class="num">${fmt(s)}</td><td class="num">${apoCell}</td><td class="num">${clkCell}</td></tr>`;
+      return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td class="num">${fmt(s)}</td><td class="num">${apoCell}</td><td class="num">${clkCell}</td><td><button class="copyprev" data-cpedit="${esc(o.id)}" style="margin:0;padding:5px 9px;width:auto">✏️</button></td></tr>`;
     }).join('');
     // camp-wise summary (all)
     const byCamp={};all.forEach(o=>{const k=_campOf(o);const s=Number(o.sell)||0;const m=byCamp[k]||(byCamp[k]={a:0,c:0});m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
@@ -1932,8 +1963,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="grid2" style="padding:0 13px 10px"><div class="fld"><label>Clark · Non-eGP %</label><input type="number" inputmode="decimal" id="clkNon" value="5"></div><div class="fld"><label>Clark · eGP %</label><input type="number" inputmode="decimal" id="clkEgp" value="0.5"></div></div>
       </details>
       <div class="modetoggle" style="margin:6px 0 8px"><button class="mbtn ${_commPaid==='all'?'on':''}" data-cpaid="all" type="button">எல்லாம் (${sup.length})</button><button class="mbtn ${_commPaid==='pending'?'on':''}" data-cpaid="pending" type="button">⏳ Pending</button><button class="mbtn ${_commPaid==='paid'?'on':''}" data-cpaid="paid" type="button">✓ Paid</button></div>
-      <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${rows}</tbody>
-      <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>
+      <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th><th></th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td><td></td></tr></tfoot></table></div></div>
       <div class="dsec">${monthTitle}</div>
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${monthRows||'<tr><td colspan=5 style="text-align:center;color:var(--muted);padding:10px">இல்ல</td></tr>'}</tbody></table></div></div>
       <div class="dsec">🏕️ Camp-wise Commission (எல்லாம்)</div>
@@ -1942,6 +1973,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('commCampSel').onchange=e=>{_commCamp=e.target.value;renderCommission();};
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
     wrap.querySelectorAll('[data-cpaid]').forEach(el=>el.addEventListener('click',()=>{_commPaid=el.dataset.cpaid;renderCommission();}));
+    wrap.querySelectorAll('[data-cpedit]').forEach(el=>el.addEventListener('click',()=>_openPaidEdit(el.dataset.cpedit)));
     _wireEgpBulk();
     _wireCommPaid();
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
