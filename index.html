@@ -1622,11 +1622,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const today=new Date().toLocaleDateString('en-GB');let total=0;let gn=0;let gvalue=0;
     const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
     const monTxt=month!=='all'?month:'எல்லா Month';
-    const rowCell=(n,o,s,c)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${pctOf(o)}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
+    const rowCell=(n,o,s,c)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px;font-size:10px">${esc(_companyOf(o).replace(' Motors',''))}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.file_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${_isEgp(o)?esc(o.egp_ref||o.proc_ref||'-'):'-'}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${pctOf(o)}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
     const buildSec=(title,arr,bg)=>{
       if(!arr.length)return '';let sub=0,vsub=0;
       const rws=arr.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*pctOf(o)/100;sub+=c;vsub+=s;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
-      return `<tr><td colspan="9" style="background:${bg};border:1px solid #ccc;padding:7px;font-weight:800;color:#0b2a4a;font-size:12px">${title} (${arr.length} orders)</td></tr>${rws}<tr><td colspan="6" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${title} — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(vsub)}</td><td style="border:1px solid #ccc;background:#fafafa"></td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(sub)}</td></tr>`;
+      return `<tr><td colspan="10" style="background:${bg};border:1px solid #ccc;padding:7px;font-weight:800;color:#0b2a4a;font-size:12px">${title} (${arr.length} orders)</td></tr>${rws}<tr><td colspan="7" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${title} — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(vsub)}</td><td style="border:1px solid #ccc;background:#fafafa"></td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(sub)}</td></tr>`;
     };
     const egpList=list.filter(_isEgp),nonList=list.filter(o=>!_isEgp(o));
     let rows;
@@ -1648,15 +1648,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <thead><tr style="background:#0b2a4a;color:#fff">
           <th style="padding:6px;border:1px solid #0b2a4a;width:26px">#</th>
           <th style="padding:6px;border:1px solid #0b2a4a">Order No</th>
-          <th style="padding:6px;border:1px solid #0b2a4a;width:72px">Vehicle No</th>
-          <th style="padding:6px;border:1px solid #0b2a4a">Vehicle</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:54px">Company</th>
+          <th style="padding:6px;border:1px solid #0b2a4a">File No</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:96px">eGP Ref No</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:64px">Bill No</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:70px">Bill Date</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:72px">Value</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:38px">%</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:76px">Commission</th>
         </tr></thead><tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Value / Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gvalue)}</td><td style="border:1px solid #ccc"></td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
+        <tfoot><tr><td colspan="7" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Value / Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gvalue)}</td><td style="border:1px solid #ccc"></td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
       </table>
       <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
         <div>__________________________<br>Received by (${esc(name)})</div>
