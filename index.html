@@ -1919,12 +1919,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function _openAdjEdit(ag,camp,month){
     const list=_adjFor(ag,camp,month);
-    const rowHtml=a=>`<tr><td style="font-size:10.5px">${a.kind==='paid'?'Paid':'Total'}</td><td class="num" style="color:${(Number(a.amt)||0)<0?'#c0392b':'#1b6b2e'}">${(Number(a.amt)||0)>0?'+':''}${fmt(a.amt)}</td><td style="font-size:10px">${esc(a.person||'—')}</td><td style="font-size:10px">${esc(a.note||'')}</td><td><button class="copyprev" data-adjdel="${esc(a.id)}" style="margin:0;padding:3px 7px;width:auto">🗑️</button></td></tr>`;
+    const rowHtml=a=>`<tr><td style="font-size:10.5px">${a.kind==='paid'?'Paid':'Total'}</td><td class="num" style="color:${(Number(a.amt)||0)<0?'#c0392b':((Number(a.amt)||0)>0?'#1b6b2e':'#999')}">${(Number(a.amt)||0)===0?'— (name only)':((Number(a.amt)||0)>0?'+':'')+fmt(a.amt)}</td><td style="font-size:10px">${esc(a.person||'—')}</td><td style="font-size:10px">${esc(a.note||'')}</td><td><button class="copyprev" data-adjdel="${esc(a.id)}" style="margin:0;padding:3px 7px;width:auto">🗑️</button></td></tr>`;
     const ov=document.createElement('div');ov.className='modal';
     ov.innerHTML=`<div class="modalbox" style="max-width:440px"><h3>➕ Adjustment — ${esc(_agLabel(ag))} · ${esc(camp)} · ${esc(_mLab(month))}</h3>
       ${list.length?`<div class="dpanel" style="margin-bottom:8px"><div class="tablewrap"><table><thead><tr><th>Type</th><th class="num">Amt</th><th>Person</th><th>Note</th><th></th></tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table></div></div>`:'<div style="font-size:12px;color:var(--muted);margin-bottom:8px">இன்னும் adjustment இல்ல</div>'}
       <div style="border:1px solid var(--line);border-radius:9px;padding:9px">
-        <div class="grid2"><div class="fld"><label>Type</label><select id="adjKind"><option value="paid">Paid adjust (advance/bonus/round)</option><option value="total">Total/earned adjust</option></select></div><div class="fld"><label>Amount (+/−)</label><input type="number" inputmode="decimal" id="adjAmt" placeholder="உதा: -5000 / 2000"></div></div>
+        <div class="grid2"><div class="fld"><label>Type</label><select id="adjKind"><option value="paid">Paid adjust (advance/bonus/round)</option><option value="total">Total/earned adjust</option></select></div><div class="fld"><label>Amount (+/−) — optional</label><input type="number" inputmode="decimal" id="adjAmt" placeholder="காலியா விட்டா name மட்டும்"></div></div>
         <div class="grid2"><div class="fld"><label>Handover person (யாரு கொடுத்த/வாங்கின)</label><input id="adjPerson" placeholder="name"></div><div class="fld"><label>Date</label><input type="date" id="adjDate" value="${new Date().toISOString().slice(0,10)}"></div></div>
         <div class="fld"><label>Note / காரணம்</label><input id="adjNote" placeholder="advance / bonus / round / ..."></div>
         <button class="btn gold" id="adjAdd" style="margin-top:6px">➕ Add adjustment</button>
@@ -1938,9 +1938,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       _commAdj=_commAdj.filter(x=>x.id!==b.dataset.adjdel);await _saveCommAdj();ov.remove();_openAdjEdit(ag,camp,month);
     }));
     ov.querySelector('#adjAdd').onclick=async()=>{
-      const amt=Number(ov.querySelector('#adjAmt').value);
-      if(!amt){alert('Amount போடு (+/−)');return;}
-      const e={id:'adj:'+Date.now(),ag,camp,month,kind:ov.querySelector('#adjKind').value||'paid',amt,person:(ov.querySelector('#adjPerson').value||'').trim(),note:(ov.querySelector('#adjNote').value||'').trim(),date:ov.querySelector('#adjDate').value||''};
+      const amt=Number(ov.querySelector('#adjAmt').value)||0;
+      const person=(ov.querySelector('#adjPerson').value||'').trim();
+      if(!amt&&!person){alert('Amount illa Person — ஏதாவது ஒண்ணு போடு');return;}
+      const e={id:'adj:'+Date.now(),ag,camp,month,kind:ov.querySelector('#adjKind').value||'paid',amt,person,note:(ov.querySelector('#adjNote').value||'').trim(),date:ov.querySelector('#adjDate').value||''};
       _commAdj.push(e);await _saveCommAdj();ov.remove();_openAdjEdit(ag,camp,month);
     };
   }
