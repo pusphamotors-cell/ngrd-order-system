@@ -1581,6 +1581,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return s;
   }
   // ---- Commission Paid: bulk mark via paste / photo (paper list) ----
+  // robust paste splitter: handles \n, \r\n, \r-only, and one-line pastes (regroups by order-no tokens)
+  function _cpaySplit(raw){
+    let t=String(raw||'').replace(/\r/g,'\n');
+    let lines=t.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+    if(lines.length>1)return lines;
+    const toks=(lines[0]||'').split(/\s+/).filter(Boolean);
+    const isOrd=x=>/\/20\d\d\//.test(x)||(x.match(/\//g)||[]).length>=3;
+    if(toks.filter(isOrd).length<=1)return lines;
+    const groups=[];let cur=null;
+    toks.forEach(x=>{if(isOrd(x)){if(cur)groups.push(cur.join(' '));cur=[x];}else if(cur)cur.push(x);else cur=[x];});
+    if(cur)groups.push(cur.join(' '));
+    return groups.length?groups:lines;
+  }
   function _normON(s){return String(s||'').toUpperCase().replace(/\s+/g,'').replace(/[^\w\/\-]/g,'');}
   function _bnorm(s){return String(s).replace(/\D/g,'').replace(/^0+/,'')||'0';} // bill compare: ignore leading zeros ("0193"==="193")
   const _uniqO=a=>Array.from(new Map(a.map(o=>[o.id,o])).values());
@@ -1663,7 +1676,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     });
     // preview / match
     const pv=$('cpayPreview');if(pv)pv.addEventListener('click',()=>{
-      const lines=($('cpayText').value||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
+      const lines=_cpaySplit($('cpayText').value);
       if(!lines.length){$('cpayResult').innerHTML='<span style="color:var(--red)">List காலியா இருக்கு</span>';return;}
       const agL=_agLabel(ag);const matched=[],already=[],noComm=[],amb=[],none=[];const seen={};
       lines.forEach(ln=>{
@@ -1753,8 +1766,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="dstat" style="border-top-color:#c0392b"><div class="k">⏳ Pending</div><div class="v" style="color:#c0392b">${fmt(apoPendT+clkPendT)}</div><div class="s">Apo ${fmt(apoPendT)} · Clark ${fmt(clkPendT)}</div></div>
       </div>
       <div class="drow" style="margin-bottom:8px">
-        <button class="btn" id="commApoPdf" style="margin-top:0;background:#0b2a4a">📄 Apo PDF</button>
-        <button class="btn" id="commClarkPdf" style="margin-top:0;background:#0b2a4a">📄 Clark PDF</button>
+        <button class="btn" id="commApoPdf" style="margin-top:0;background:#0b2a4a">📄 Apo PDF (due)</button>
+        <button class="btn" id="commClarkPdf" style="margin-top:0;background:#0b2a4a">📄 Clark PDF (due)</button>
+      </div>
+      <div class="drow" style="margin-bottom:8px">
+        <button class="btn" id="paidApoPdf" style="margin-top:0;background:#1b6b2e">✓ Apo Paid PDF</button>
+        <button class="btn" id="paidClarkPdf" style="margin-top:0;background:#1b6b2e">✓ Clark Paid PDF</button>
       </div>
       <details class="egpbulk" open><summary>📄 PDF settings — Month & % (நீ select பண்ணு)</summary>
         <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Month — From</label><select id="commMonthFrom"><option value="all">ஆரம்பம் (எல்லா)</option>${_commMonths.map(mk=>`<option value="${esc(mk)}">${esc(mk)}</option>`).join('')}</select></div><div class="fld"><label>Month — To</label><select id="commMonthTo"><option value="all">இறுதி (எல்லா)</option>${_commMonths.map(mk=>`<option value="${esc(mk)}">${esc(mk)}</option>`).join('')}</select></div></div>
@@ -1778,6 +1795,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
     $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
     $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
+    $('paidApoPdf').onclick=()=>openPaidPDF('apo',_commCamp);
+    $('paidClarkPdf').onclick=()=>openPaidPDF('clark',_commCamp);
   }
   function openCommissionPDF(name,sup,camp,opts){
     opts=opts||{};
@@ -1839,7 +1858,60 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     w.document.write('<html><head><title>Commission '+esc(name)+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
     w.document.close();
   }
-  // ---- Management Summary ----
+  // ---- Commission PAID statement (proof/receipt) — month-wise by paid date ----
+  function openPaidPDF(ag,camp){
+    const agL=_agLabel(ag);
+    let list=orders.filter(o=>o.supplied&&_agPct(o,ag)>0&&_agPaid(o,ag));
+    if(camp&&camp!=='all')list=list.filter(o=>_campOf(o)===camp);
+    if(!list.length){alert(agL+'-க்கு paid commission record இல்ல');return;}
+    const pMonth=o=>{const d=_agPaidDate(o,ag);return (String(d).match(/\d{4}-\d{2}/)||['—'])[0];};
+    const modeOf=o=>{const m=ag==='apo'?o.apo_paid_mode:o.clark_paid_mode;return m==='bank'?'Bank':'Cash';};
+    const toOf=o=>(ag==='apo'?o.apo_paid_to:o.clark_paid_to)||agL;
+    const refOf=o=>(ag==='apo'?o.apo_paid_ref:o.clark_paid_ref)||'';
+    const byMonth={};list.forEach(o=>{const k=pMonth(o);(byMonth[k]=byMonth[k]||[]).push(o);});
+    const today=new Date().toLocaleDateString('en-GB');const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
+    let gTot=0,gN=0;
+    const cell=(v,al,b)=>`<td style="border:1px solid #ccc;padding:5px;${al?'text-align:'+al+';':''}${b?'font-weight:700;':''}">${v}</td>`;
+    const sections=Object.keys(byMonth).sort().reverse().map(mk=>{
+      let sub=0;const rws=byMonth[mk].slice().sort((a,b)=>(_agPaidDate(a,ag)||'').localeCompare(_agPaidDate(b,ag)||'')).map(o=>{
+        const c=_agComm(o,ag);sub+=c;gTot+=c;gN++;
+        return `<tr>${cell(esc(o.order_no))}${cell(esc(o.bill_no||'-'))}${cell(fmt(o.sell),'right')}${cell(_agPct(o,ag)+'%','center')}${cell(fmt(c),'right',1)}${cell(esc(_agPaidDate(o,ag)||'-'),'center')}${cell(esc(modeOf(o)),'center')}${cell(esc(toOf(o))+(refOf(o)?'<br><span style=\"font-size:9px;color:#666\">'+esc(refOf(o))+'</span>':''))}</tr>`;
+      }).join('');
+      return `<tr><td colspan="8" style="background:#e9f7ec;border:1px solid #ccc;padding:6px;font-weight:800;color:#1b6b2e">📅 ${esc(mk)} (${byMonth[mk].length})</td></tr>${rws}<tr><td colspan="4" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${esc(mk)} — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:800;background:#fafafa">${fmt(sub)}</td><td colspan="3" style="border:1px solid #ccc;background:#fafafa"></td></tr>`;
+    }).join('');
+    const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
+      <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
+      <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &bull; ngrdmotors@gmail.com</div></div>`;
+    const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
+      ${head}
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
+        <div><span style="font-size:15px;font-weight:800">COMMISSION PAID STATEMENT</span><br>Agent: <b>${esc(agL)}</b><br>Camp: ${esc(campTxt)}<br><span style="font-size:10px;color:#666">Month-wise by paid date</span></div>
+        <div style="text-align:right">Date: ${today}<br>Paid orders: ${gN}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#0b2a4a;color:#fff">
+          <th style="padding:6px;border:1px solid #0b2a4a">Order No</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:64px">Bill No</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:74px">Value</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:34px">%</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:78px">Commission</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:74px">Paid Date</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:44px">Via</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:96px">Paid to / Ref</th>
+        </tr></thead><tbody>${sections}</tbody>
+        <tfoot><tr><td colspan="4" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Paid Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gTot)}</td><td colspan="3" style="border:1px solid #ccc"></td></tr></tfoot>
+      </table>
+      <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
+        <div>__________________________<br>Received by (${esc(agL)})</div>
+        <div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div>
+      </div>
+      <div style="margin-top:16px;font-size:10px;color:#777;border-top:1px solid #ccc;padding-top:6px">NGRD Order System — Commission paid statement · proof of payment</div>
+    </div>`;
+    const w=window.open('','_blank');
+    if(!w){alert('Popup block ஆச்சு — popup allow பண்ணு');return;}
+    w.document.write('<html><head><title>Paid '+esc(agL)+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.close();
+  }
   let _sumFrom='',_sumTo='',_sumComp='all',_sumCamp='all';
   function _monthsList(){const set={};orders.forEach(o=>{const d=parseDate(o.order_date||o.bill_date);if(d)set[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=1;});return Object.keys(set).sort();}
   function _mLabel(k){const p=k.split('-');return new Date(p[0],p[1]-1,1).toLocaleDateString('en-GB',{month:'short',year:'numeric'});}
