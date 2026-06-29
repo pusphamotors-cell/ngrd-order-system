@@ -1869,6 +1869,60 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       setTimeout(()=>{const rb=$('cpayResult');if(rb)rb.innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ '+n+' order — '+esc(agL)+' commission paid ✓ ('+esc(dt)+')<br><span style="font-weight:500;color:var(--muted)">'+(mode==='bank'?'🏦 Bank deposit':'💵 Cash')+' → '+esc(to)+(ref?' · ref '+esc(ref):'')+'</span></div>';},60);
     });
   }
+  let _ledgerAgent='apo';
+  function _ledgerData(ag){
+    const uni=orders.filter(o=>(o.supplied||o.bill_no)&&_agPct(o,ag)>0);
+    const byCamp={};
+    uni.forEach(o=>{
+      const camp=_campOf(o);const d=o.bill_date||o.order_date||o.egp_date||'';const mk=(String(d).match(/\d{4}-\d{2}/)||['—'])[0];
+      const c=byCamp[camp]||(byCamp[camp]={months:{},total:0,paid:0});
+      const m=c.months[mk]||(c.months[mk]={total:0,paid:0,dates:new Set(),persons:new Set(),n:0});
+      const comm=_agComm(o,ag);m.total+=comm;c.total+=comm;m.n++;
+      if(_agPaid(o,ag)){m.paid+=comm;c.paid+=comm;const pd=_agPaidDate(o,ag);if(pd)m.dates.add(pd);const pt=(ag==='apo'?o.apo_paid_to:o.clark_paid_to);if(pt)m.persons.add(pt);}
+    });
+    return byCamp;
+  }
+  function _mLab(mk){return (mk&&mk!=='—'&&/^\d{4}-\d{2}$/.test(mk))?_mLabel(mk):mk;}
+  function _ledgerHtml(){
+    const ag=_ledgerAgent,agL=_agLabel(ag);const byCamp=_ledgerData(ag);
+    const camps=Object.keys(byCamp).sort((a,b)=>byCamp[b].total-byCamp[a].total);
+    let gT=0,gP=0;camps.forEach(c=>{gT+=byCamp[c].total;gP+=byCamp[c].paid;});
+    const sections=camps.map(camp=>{
+      const c=byCamp[camp];const pend=c.total-c.paid;
+      const mrows=Object.keys(c.months).sort().reverse().map(mk=>{const m=c.months[mk];const mp=m.total-m.paid;
+        return `<tr><td>${esc(_mLab(mk))}</td><td class="num">${fmt(m.total)}</td><td class="num" style="color:#1b6b2e">${fmt(m.paid)}</td><td class="num" style="color:${mp>0.5?'#c0392b':'#999'}">${fmt(mp)}</td><td style="font-size:10px">${[...m.dates].join(', ')||'—'}</td><td style="font-size:10px">${[...m.persons].map(esc).join(', ')||'—'}</td></tr>`;}).join('');
+      return `<div class="dsec">🏕️ ${esc(camp)} — Total ${fmt(c.total)} · ✓ ${fmt(c.paid)} · ⏳ ${fmt(pend)}</div>
+        <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Pending</th><th>Paid date</th><th>Received</th></tr></thead><tbody>${mrows}</tbody></table></div></div>`;
+    }).join('');
+    return `<details class="egpbulk"><summary>📋 Paid Ledger — Camp · Month (${agL})</summary>
+      <div class="modetoggle" style="margin:8px 13px 4px"><button class="mbtn ${ag==='apo'?'on':''}" data-ledag="apo" type="button">🤝 Apo</button><button class="mbtn ${ag==='clark'?'on':''}" data-ledag="clark" type="button">🤝 Clark</button></div>
+      <div class="dstat g" style="margin:6px 13px"><div class="k">${esc(agL)} — மொத்த Commission</div><div class="v">${fmt(gT)}</div><div class="s">✓ Paid ${fmt(gP)} · ⏳ Pending ${fmt(gT-gP)}</div></div>
+      <div style="padding:0 13px">${sections||'<div class="empty">இல்ல</div>'}</div>
+      <button class="btn" id="ledPdf" style="margin:8px 13px;background:#0b2a4a">📄 ${esc(agL)} Ledger PDF</button>
+    </details>`;
+  }
+  function openLedgerPDF(ag){
+    const agL=_agLabel(ag);const byCamp=_ledgerData(ag);
+    const camps=Object.keys(byCamp).sort((a,b)=>byCamp[b].total-byCamp[a].total);
+    if(!camps.length){alert(agL+'-க்கு commission இல்ல');return;}
+    const today=new Date().toLocaleDateString('en-GB');let gT=0,gP=0;
+    const cell=(v,al,b,c)=>`<td style="border:1px solid #ccc;padding:5px;${al?'text-align:'+al+';':''}${b?'font-weight:700;':''}${c?'color:'+c+';':''}">${v}</td>`;
+    const sections=camps.map(camp=>{
+      const c=byCamp[camp];gT+=c.total;gP+=c.paid;const pend=c.total-c.paid;
+      const mrows=Object.keys(c.months).sort().reverse().map(mk=>{const m=c.months[mk];const mp=m.total-m.paid;
+        return `<tr>${cell(esc(_mLab(mk)))}${cell(fmt(m.total),'right')}${cell(fmt(m.paid),'right',0,'#1b6b2e')}${cell(fmt(mp),'right',0,mp>0.5?'#c0392b':'#999')}${cell([...m.dates].join(', ')||'-')}${cell([...m.persons].map(esc).join(', ')||'-')}</tr>`;}).join('');
+      return `<tr><td colspan="6" style="background:#eef2f8;border:1px solid #ccc;padding:6px;font-weight:800;color:#0b2a4a">🏕️ ${esc(camp)} — Total ${fmt(c.total)} · Paid ${fmt(c.paid)} · Pending ${fmt(pend)}</td></tr>${mrows}`;
+    }).join('');
+    const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
+      <div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px"><div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div><div style="font-size:11px;color:#333">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10 &bull; Tel: 011 244 9385</div></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px"><div><span style="font-size:15px;font-weight:800">COMMISSION LEDGER</span><br>Agent: <b>${esc(agL)}</b><br><span style="font-size:10px;color:#666">Camp · Month · Total / Paid / Pending</span></div><div style="text-align:right">Date: ${today}</div></div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a">Month</th><th style="padding:6px;border:1px solid #0b2a4a">Total</th><th style="padding:6px;border:1px solid #0b2a4a">Paid</th><th style="padding:6px;border:1px solid #0b2a4a">Pending</th><th style="padding:6px;border:1px solid #0b2a4a">Paid Date</th><th style="padding:6px;border:1px solid #0b2a4a">Received</th></tr></thead><tbody>${sections}</tbody>
+      <tfoot><tr><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்தம்</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gT)}</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800;color:#1b6b2e">${fmt(gP)}</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800;color:#c0392b">${fmt(gT-gP)}</td><td colspan="2" style="border:1px solid #ccc"></td></tr></tfoot></table>
+      <div style="margin-top:40px;display:flex;justify-content:space-between;font-size:12px"><div>__________________________<br>Received by (${esc(agL)})</div><div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div></div></div>`;
+    const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு');return;}
+    w.document.write('<html><head><title>Ledger '+esc(agL)+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.close();
+  }
   let _cpayDraft=null;
   let _egpFileObj=null;
   // inline paid-status editor (from commission report row)
@@ -1969,11 +2023,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Orders</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${monthRows||'<tr><td colspan=5 style="text-align:center;color:var(--muted);padding:10px">இல்ல</td></tr>'}</tbody></table></div></div>
       <div class="dsec">🏕️ Camp-wise Commission (எல்லாம்)</div>
       <div style="font-size:11px;color:var(--muted);margin:0 2px 6px">Camp click பண்ணா அந்த camp மட்டும் filter ஆகும்</div>
-      <div class="dpanel">${campSummary}</div>`;
+      <div class="dpanel">${campSummary}</div>
+      ${_ledgerHtml()}`;
     $('commCampSel').onchange=e=>{_commCamp=e.target.value;renderCommission();};
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
     wrap.querySelectorAll('[data-cpaid]').forEach(el=>el.addEventListener('click',()=>{_commPaid=el.dataset.cpaid;renderCommission();}));
     wrap.querySelectorAll('[data-cpedit]').forEach(el=>el.addEventListener('click',()=>_openPaidEdit(el.dataset.cpedit)));
+    wrap.querySelectorAll('[data-ledag]').forEach(el=>el.addEventListener('click',()=>{_ledgerAgent=el.dataset.ledag;renderCommission();}));
+    const _lpdf=$('ledPdf');if(_lpdf)_lpdf.onclick=()=>openLedgerPDF(_ledgerAgent);
     _wireEgpBulk();
     _wireCommPaid();
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
