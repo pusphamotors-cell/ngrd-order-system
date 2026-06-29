@@ -959,7 +959,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row('Bill Amount',fmt(o.bill_amt))}</div>
       ${showPay?`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
-      ${(!st&&(o.apo_pct!=null||o.clark_pct!=null))?`<div class="sec">🤝 Commission</div><div class="metarow">${row('Apo',(o.apo_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.apo_pct||0)/100))}${row('Clark',(o.clark_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.clark_pct||0)/100))}</div>`:''}
+      ${(!st&&(o.apo_pct!=null||o.clark_pct!=null))?`<div class="sec">🤝 Commission</div><div class="metarow">${row('Apo',(o.apo_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.apo_pct||0)/100)+(o.apo_pct>0?(o.apo_paid?' ✓ Paid'+(o.apo_paid_date?' ('+esc(o.apo_paid_date)+')':''):' ⏳ Pending'):''))}${row('Clark',(o.clark_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.clark_pct||0)/100)+(o.clark_pct>0?(o.clark_paid?' ✓ Paid'+(o.clark_paid_date?' ('+esc(o.clark_paid_date)+')':''):' ⏳ Pending'):''))}</div>`:''}
       <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
         ${CURRENT&&CURRENT.role==='admin'?`<button class="btn" data-assign="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#5a3fb0">👷 Assign</button>`:''}
@@ -1556,7 +1556,130 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${grp('🟠 31–45 நாள்',buckets.b2,'')}
       ${grp('🟢 0–30 நாள்',buckets.b1,'')}`;
   }
-  let _commCamp='all';let _commEgp='all';
+  let _commCamp='all';let _commEgp='all';let _commPaid='all';let _commPayAgent='apo';let _commPayStaged=null;let _commPayFileObj=null;
+  // ---- per-agent commission helpers ----
+  function _agPct(o,ag){return ag==='apo'?(o.apo_pct||0):(o.clark_pct||0);}
+  function _agComm(o,ag){return (Number(o.sell)||0)*_agPct(o,ag)/100;}
+  function _agPaid(o,ag){return ag==='apo'?!!o.apo_paid:!!o.clark_paid;}
+  function _agPaidDate(o,ag){return ag==='apo'?(o.apo_paid_date||''):(o.clark_paid_date||'');}
+  function _agLabel(ag){return ag==='apo'?'Apo':'Clark';}
+  // order "fully paid" = every agent with pct>0 is paid; "pending" = at least one agent with pct>0 unpaid
+  function _orderPayState(o){
+    const aOwed=_agPct(o,'apo')>0,cOwed=_agPct(o,'clark')>0;
+    if(!aOwed&&!cOwed)return 'none';
+    const aOk=!aOwed||_agPaid(o,'apo'),cOk=!cOwed||_agPaid(o,'clark');
+    return (aOk&&cOk)?'paid':'pending';
+  }
+  // ---- Commission Paid: bulk mark via paste / photo (paper list) ----
+  function _normON(s){return String(s||'').toUpperCase().replace(/\s+/g,'').replace(/[^\w\/\-]/g,'');}
+  // match one paper-list line to a single order (order-no first, then bill-no)
+  function _commMatchLine(line){
+    const lineNorm=_normON(line);
+    const tokens=String(line).split(/[\s,;|]+/).filter(Boolean);
+    // 1) order-no match (substring, order_no must be reasonably long)
+    let byON=orders.filter(o=>{const on=_normON(o.order_no);return on.length>=6&&lineNorm.indexOf(on)>=0;});
+    byON=Array.from(new Map(byON.map(o=>[o.id,o])).values());
+    if(byON.length===1)return {o:byON[0],via:'order'};
+    if(byON.length>1)return {amb:byON,via:'order'};
+    // 2) bill-no match
+    const billToks=tokens.map(t=>t.replace(/\D/g,'')).filter(t=>t.length>=3);
+    if(billToks.length){
+      let byBill=orders.filter(o=>_billNums(o).some(n=>billToks.indexOf(n)>=0));
+      byBill=Array.from(new Map(byBill.map(o=>[o.id,o])).values());
+      if(byBill.length===1)return {o:byBill[0],via:'bill'};
+      if(byBill.length>1)return {amb:byBill,via:'bill'};
+    }
+    return {none:true};
+  }
+  function _commPaidHtml(){
+    const ag=_commPayAgent,agL=_agLabel(ag);
+    return `<details class="egpbulk"><summary>💵 Commission Paid — ${agL}-க்கு கொடுத்ததை mark பண்ணு (paper list)</summary>
+      <div class="modetoggle" style="margin:8px 13px 4px">
+        <button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button>
+        <button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin:0 13px 6px">Order No அல்லது Bill No list-ஐ கீழ paste பண்ணு — illa paper-ஐ photo எடுத்து AI படிக்கட்டும். ஒவ்வொரு வரியிலும் ஒரு order.</div>
+      <textarea id="cpayText" class="pastebox" style="margin:0 13px;width:calc(100% - 26px);min-height:90px" placeholder="உதா:&#10;WNA/APO/PO/2026/0123   4498&#10;ENA/APO/PO/2026/0210   4311&#10;4357"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin:8px 13px 2px;flex-wrap:wrap">
+        <label class="filechip" style="cursor:pointer">📷 Photo/PDF<input type="file" id="cpayFile" accept="image/*,application/pdf" style="display:none"></label>
+        <button class="copyprev" id="cpayRead" style="width:auto;margin:0;padding:8px 12px" disabled>🤖 List படி (AI)</button>
+        <span id="cpayMsg" style="font-size:11.5px"></span>
+      </div>
+      <div class="grid2" style="padding:6px 13px 2px"><div class="fld"><label>Paid date</label><input type="date" id="cpayDate"></div><div class="fld"><label>&nbsp;</label><button class="copyprev" id="cpayPreview" style="margin:0;padding:11px">🔍 Match / Preview</button></div></div>
+      <div id="cpayResult" class="note" style="text-align:left;padding:2px 13px"></div>
+      <button class="btn gold" id="cpayDo" style="margin:6px 13px 12px" disabled>✅ ${agL} Paid mark பண்ணு</button>
+    </details>`;
+  }
+  function _wireCommPaid(){
+    const ag=_commPayAgent;
+    document.querySelectorAll('[data-cpag]').forEach(el=>el.addEventListener('click',()=>{_commPayAgent=el.dataset.cpag;_commPayStaged=null;renderCommission();}));
+    const tEl=$('cpayText');if(tEl&&_cpayDraft!=null)tEl.value=_cpayDraft;
+    if(tEl)tEl.addEventListener('input',()=>{_cpayDraft=tEl.value;});
+    // photo AI read
+    const cf=$('cpayFile');if(cf)cf.addEventListener('change',e=>{_commPayFileObj=e.target.files&&e.target.files[0];const rb=$('cpayRead');if(rb)rb.disabled=!_commPayFileObj;$('cpayMsg').innerHTML=_commPayFileObj?'<span style="color:var(--muted)">'+esc(_commPayFileObj.name)+' ready</span>':'';});
+    const cr=$('cpayRead');if(cr)cr.addEventListener('click',async()=>{
+      if(!_commPayFileObj)return;
+      cr.disabled=true;cr.innerHTML='<span class="spin"></span>படிக்கிறேன்...';$('cpayMsg').innerHTML='';
+      try{
+        const f=_commPayFileObj;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+        const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
+        const P='This is a hand-written or printed list of orders for which commission has been paid to an agent. Each row identifies one order, usually by an Order Number (e.g. WNA/APO/PO/2026/0123) and/or a Bill/Invoice number (e.g. 4498). Return ONLY JSON, no markdown: {"rows":[{"order_no":"WNA/APO/PO/2026/0123","bill_no":"4498"}]}. If a field is missing leave it as empty string. Keep order numbers exactly as written.';
+        const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[block,{type:'text',text:P}]})});
+        if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+        const data=await resp.json();
+        const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
+        const rec=_parseAIjson(text);const rows=Array.isArray(rec.rows)?rec.rows:[];
+        if(!rows.length)throw new Error('List-ல order கண்டுபிடிக்கல');
+        const txt=rows.map(r=>[r.order_no||'',r.bill_no||''].filter(Boolean).join('   ')).join('\n');
+        if(tEl){tEl.value=txt;_cpayDraft=txt;}
+        $('cpayMsg').innerHTML='<span style="color:var(--green);font-weight:700">✅ '+rows.length+' வரி படிச்சேன் — Match பண்ணு</span>';
+        _commPayFileObj=null;if(cf)cf.value='';
+      }catch(err){$('cpayMsg').innerHTML='<span style="color:var(--red)">⚠️ '+esc(err.message)+'</span>';}
+      finally{cr.innerHTML='🤖 List படி (AI)';cr.disabled=!!_commPayFileObj;}
+    });
+    // preview / match
+    const pv=$('cpayPreview');if(pv)pv.addEventListener('click',()=>{
+      const lines=($('cpayText').value||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
+      if(!lines.length){$('cpayResult').innerHTML='<span style="color:var(--red)">List காலியா இருக்கு</span>';return;}
+      const agL=_agLabel(ag);const matched=[],already=[],noComm=[],amb=[],none=[];const seen={};
+      lines.forEach(ln=>{
+        const r=_commMatchLine(ln);
+        if(r.none){none.push(ln);return;}
+        if(r.amb){amb.push({ln,n:r.amb.length});return;}
+        const o=r.o;
+        if(seen[o.id]){return;} seen[o.id]=1;
+        if(_agPct(o,ag)<=0){noComm.push(o);return;}
+        if(_agPaid(o,ag)){already.push(o);return;}
+        matched.push(o);
+      });
+      _commPayStaged=matched;
+      let h='';
+      if(matched.length){h+='<div class="dpanel" style="margin-top:6px"><div style="padding:8px 13px;font-weight:700;background:#e9f7ec;color:#1b6b2e">✅ '+matched.length+' order — '+esc(agL)+' paid mark ஆகும்</div><div class="tablewrap"><table><thead><tr><th>Order No</th><th class="num">Value</th><th class="num">'+esc(agL)+' Comm</th></tr></thead><tbody>'+matched.map(o=>`<tr><td>${esc(o.order_no)}</td><td class="num">${fmt(o.sell)}</td><td class="num">${fmt(_agComm(o,ag))}</td></tr>`).join('')+'</tbody></table></div></div>';}
+      if(already.length)h+='<div class="dpanel" style="margin-top:6px"><div style="padding:8px 13px;font-weight:700;background:#fff8e6;color:#9a6b00">🔁 '+already.length+' order — ஏற்கனவே '+esc(agL)+' paid (skip ஆகும், double-pay தடுக்கப்பட்டது)</div><div class="tablewrap"><table><tbody>'+already.map(o=>`<tr><td>${esc(o.order_no)}</td><td class="num" style="color:var(--muted)">${esc(_agPaidDate(o,ag)||'paid')}</td></tr>`).join('')+'</tbody></table></div></div>';
+      if(noComm.length)h+='<div style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ '+noComm.length+' order-ல '+esc(agL)+' commission % இல்ல (0%) — skip: '+noComm.map(o=>esc(o.order_no)).join(', ')+'</div>';
+      if(amb.length)h+='<div style="font-size:12px;color:var(--red);margin-top:6px">⚠️ '+amb.length+' வரி-க்கு ஒன்னுக்கு மேல order match ஆச்சு — Order No முழுசா போடு: '+amb.map(a=>esc(a.ln)).join(' / ')+'</div>';
+      if(none.length)h+='<div style="font-size:12px;color:var(--red);margin-top:6px">❌ Match ஆகல ('+none.length+'): '+none.map(esc).join(', ')+'</div>';
+      $('cpayResult').innerHTML=h||'<span style="color:var(--muted)">ஒன்னும் match ஆகல</span>';
+      const doB=$('cpayDo');if(doB)doB.disabled=matched.length===0;
+    });
+    // mark paid
+    const doB=$('cpayDo');if(doB)doB.addEventListener('click',async()=>{
+      if(!_commPayStaged||!_commPayStaged.length){alert('முதல்ல Match/Preview பண்ணு');return;}
+      const agL=_agLabel(ag);const dt=$('cpayDate').value||new Date().toISOString().slice(0,10);
+      if(!confirm(_commPayStaged.length+' order-க்கு '+agL+' commission paid mark பண்ணவா?'))return;
+      doB.disabled=true;doB.textContent='Update ஆகுது...';let n=0;
+      for(const o of _commPayStaged){
+        if(ag==='apo'){o.apo_paid=true;o.apo_paid_date=dt;o.apo_paid_amt=_agComm(o,'apo');}
+        else{o.clark_paid=true;o.clark_paid_date=dt;o.clark_paid_amt=_agComm(o,'clark');}
+        try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}
+      }
+      await loadOrders();
+      _commPayStaged=null;_cpayDraft='';
+      renderCommission();
+      setTimeout(()=>{const rb=$('cpayResult');if(rb)rb.innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ '+n+' order — '+esc(agL)+' commission paid ✓ ('+esc(dt)+')</div>';},60);
+    });
+  }
+  let _cpayDraft=null;
   function renderCommission(){
     const wrap=$('repCommWrap');
     const all=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
@@ -1565,9 +1688,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const sup0=_commCamp==='all'?all:all.filter(o=>_campOf(o)===_commCamp);
     const sup=_commEgp==='all'?sup0:sup0.filter(o=>_commEgp==='egp'?_isEgp(o):!_isEgp(o));
     let apoT=0,clkT=0;
-    const rows=sup.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{
+    // paid/pending split over the camp+egp filtered set
+    let apoPaidT=0,apoPendT=0,clkPaidT=0,clkPendT=0;
+    sup.forEach(o=>{const ac=_agComm(o,'apo'),cc=_agComm(o,'clark');
+      if(_agPct(o,'apo')>0){_agPaid(o,'apo')?apoPaidT+=ac:apoPendT+=ac;}
+      if(_agPct(o,'clark')>0){_agPaid(o,'clark')?clkPaidT+=cc:clkPendT+=cc;}});
+    // table view filter: all / pending / paid (order-level)
+    const supView=_commPaid==='all'?sup:sup.filter(o=>_orderPayState(o)===_commPaid);
+    const tick=ok=>ok?' <span style="color:#1b6b2e;font-weight:800">✓</span>':' <span style="color:#c0392b;font-size:10px">⏳</span>';
+    const rows=supView.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{
       const s=Number(o.sell)||0;const ac=s*(o.apo_pct||0)/100,cc=s*(o.clark_pct||0)/100;apoT+=ac;clkT+=cc;
-      return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td class="num">${fmt(s)}</td><td class="num">${o.apo_pct||0}% · ${fmt(ac)}</td><td class="num">${o.clark_pct||0}% · ${fmt(cc)}</td></tr>`;
+      const apoCell=(o.apo_pct||0)>0?`${o.apo_pct||0}% · ${fmt(ac)}${tick(_agPaid(o,'apo'))}`:'—';
+      const clkCell=(o.clark_pct||0)>0?`${o.clark_pct||0}% · ${fmt(cc)}${tick(_agPaid(o,'clark'))}`:'—';
+      return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td class="num">${fmt(s)}</td><td class="num">${apoCell}</td><td class="num">${clkCell}</td></tr>`;
     }).join('');
     // camp-wise summary (all)
     const byCamp={};all.forEach(o=>{const k=_campOf(o);const s=Number(o.sell)||0;const m=byCamp[k]||(byCamp[k]={a:0,c:0});m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
@@ -1583,11 +1716,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       ${egpBtns}
       ${_bulkPctHtml()}
       ${_egpBulkHtml()}
+      ${_commPaidHtml()}
       <div class="drow">
         <div class="dstat gold"><div class="k">🤝 Apo${_commCamp==='all'?'':' ('+esc(_commCamp.slice(0,14))+')'}</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
         <div class="dstat gold"><div class="k">🤝 Clark</div><div class="v">${fmt(clkT)}</div><div class="s">Rs</div></div>
       </div>
       <div class="dstat g" style="margin:8px 0"><div class="k">மொத்த Commission</div><div class="v">${fmt(apoT+clkT)}</div><div class="s">Rs · ${sup.length} orders</div></div>
+      <div class="drow" style="margin-bottom:4px">
+        <div class="dstat" style="border-top-color:#1b6b2e"><div class="k">✓ Paid (Apo+Clark)</div><div class="v" style="color:#1b6b2e">${fmt(apoPaidT+clkPaidT)}</div><div class="s">Apo ${fmt(apoPaidT)} · Clark ${fmt(clkPaidT)}</div></div>
+        <div class="dstat" style="border-top-color:#c0392b"><div class="k">⏳ Pending</div><div class="v" style="color:#c0392b">${fmt(apoPendT+clkPendT)}</div><div class="s">Apo ${fmt(apoPendT)} · Clark ${fmt(clkPendT)}</div></div>
+      </div>
       <div class="drow" style="margin-bottom:8px">
         <button class="btn" id="commApoPdf" style="margin-top:0;background:#0b2a4a">📄 Apo PDF</button>
         <button class="btn" id="commClarkPdf" style="margin-top:0;background:#0b2a4a">📄 Clark PDF</button>
@@ -1598,6 +1736,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Apo · Non-eGP %</label><input type="number" inputmode="decimal" id="apoNon" value="10"></div><div class="fld"><label>Apo · eGP %</label><input type="number" inputmode="decimal" id="apoEgp" value="1"></div></div>
         <div class="grid2" style="padding:0 13px 10px"><div class="fld"><label>Clark · Non-eGP %</label><input type="number" inputmode="decimal" id="clkNon" value="5"></div><div class="fld"><label>Clark · eGP %</label><input type="number" inputmode="decimal" id="clkEgp" value="0.5"></div></div>
       </details>
+      <div class="modetoggle" style="margin:6px 0 8px"><button class="mbtn ${_commPaid==='all'?'on':''}" data-cpaid="all" type="button">எல்லாம் (${sup.length})</button><button class="mbtn ${_commPaid==='pending'?'on':''}" data-cpaid="pending" type="button">⏳ Pending</button><button class="mbtn ${_commPaid==='paid'?'on':''}" data-cpaid="paid" type="button">✓ Paid</button></div>
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>
       <div class="dsec">${monthTitle}</div>
@@ -1607,7 +1746,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dpanel">${campSummary}</div>`;
     $('commCampSel').onchange=e=>{_commCamp=e.target.value;renderCommission();};
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
+    wrap.querySelectorAll('[data-cpaid]').forEach(el=>el.addEventListener('click',()=>{_commPaid=el.dataset.cpaid;renderCommission();}));
     _wireEgpBulk();
+    _wireCommPaid();
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
     $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
     $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
