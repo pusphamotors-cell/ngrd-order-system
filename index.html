@@ -1593,7 +1593,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="btn" id="commClarkPdf" style="margin-top:0;background:#0b2a4a">📄 Clark PDF</button>
       </div>
       <details class="egpbulk" open><summary>📄 PDF settings — Month & % (நீ select பண்ணு)</summary>
-        <div class="fld" style="margin:4px 13px"><label>Month</label><select id="commMonth"><option value="all">எல்லா Month</option>${_commMonths.map(mk=>`<option value="${esc(mk)}">${esc(mk)}</option>`).join('')}</select></div>
+        <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Month — From</label><select id="commMonthFrom"><option value="all">ஆரம்பம் (எல்லா)</option>${_commMonths.map(mk=>`<option value="${esc(mk)}">${esc(mk)}</option>`).join('')}</select></div><div class="fld"><label>Month — To</label><select id="commMonthTo"><option value="all">இறுதி (எல்லா)</option>${_commMonths.map(mk=>`<option value="${esc(mk)}">${esc(mk)}</option>`).join('')}</select></div></div>
+        <div style="font-size:10.5px;color:var(--muted);margin:0 13px 4px">💡 2-3 மாசம் சேர்த்து வேணும்னா From + To தேர்ந்தெடு (ஒரே மாசம்: ரெண்டிலயும் same month)</div>
         <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Apo · Non-eGP %</label><input type="number" inputmode="decimal" id="apoNon" value="10"></div><div class="fld"><label>Apo · eGP %</label><input type="number" inputmode="decimal" id="apoEgp" value="1"></div></div>
         <div class="grid2" style="padding:0 13px 10px"><div class="fld"><label>Clark · Non-eGP %</label><input type="number" inputmode="decimal" id="clkNon" value="5"></div><div class="fld"><label>Clark · eGP %</label><input type="number" inputmode="decimal" id="clkEgp" value="0.5"></div></div>
       </details>
@@ -1608,20 +1609,21 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
     _wireEgpBulk();
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
-    $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{month:$('commMonth').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
-    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{month:$('commMonth').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
+    $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
+    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
   }
   function openCommissionPDF(name,sup,camp,opts){
     opts=opts||{};
-    const month=opts.month||'all',nonPct=Number(opts.nonPct)||0,egpPct=Number(opts.egpPct)||0;
+    const nonPct=Number(opts.nonPct)||0,egpPct=Number(opts.egpPct)||0;
+    const mFrom=(opts.mFrom&&opts.mFrom!=='all')?opts.mFrom:'',mTo=(opts.mTo&&opts.mTo!=='all')?opts.mTo:'';
     const monthOf=o=>{const d=o.egp_date||o.bill_date||o.order_date||'';return (String(d).match(/\d{4}-\d{2}/)||[''])[0];};
     const pctOf=o=>_isEgp(o)?egpPct:nonPct;
     let list=sup.slice();
-    if(month!=='all')list=list.filter(o=>monthOf(o)===month);
-    if(!list.length){alert(name+'-க்கு '+(month!=='all'?month+' ':'')+'commission இல்ல');return;}
+    if(mFrom||mTo)list=list.filter(o=>{const mk=monthOf(o);if(!mk)return false;if(mFrom&&mk<mFrom)return false;if(mTo&&mk>mTo)return false;return true;});
+    if(!list.length){alert(name+'-க்கு அந்த month range-ல commission இல்ல');return;}
+    const monTxt=(mFrom||mTo)?((mFrom||'ஆரம்பம்')+(mFrom===mTo?'':' → '+(mTo||'இறுதி'))):'எல்லா Month';
     const today=new Date().toLocaleDateString('en-GB');let total=0;let gn=0;let gvalue=0;
     const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
-    const monTxt=month!=='all'?month:'எல்லா Month';
     const rowCell=(n,o,s,c)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px;font-size:10px">${esc(_companyOf(o).replace(' Motors',''))}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.file_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${_isEgp(o)?esc(o.egp_ref||o.proc_ref||'-'):'-'}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${pctOf(o)}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
     const buildSec=(title,arr,bg)=>{
       if(!arr.length)return '';let sub=0,vsub=0;
