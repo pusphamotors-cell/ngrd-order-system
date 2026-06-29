@@ -1870,6 +1870,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     });
   }
   let _ledgerAgent='apo';
+  // ===== Commission Adjustments store (auto total stays safe; adj added on top) =====
+  // entry: {id, ag:'apo'|'clark', camp, month:'YYYY-MM', kind:'paid'|'total', amt:Number(+/-), person, note, date}
+  let _commAdj=[];
+  async function _loadCommAdj(){try{const r=await window.storage.get('commadj');_commAdj=(r&&r.value)?JSON.parse(r.value):[];if(!Array.isArray(_commAdj))_commAdj=[];}catch(e){_commAdj=[];}}
+  async function _saveCommAdj(){try{await window.storage.set('commadj',JSON.stringify(_commAdj));}catch(e){}}
+  function _adjFor(ag,camp,month){return _commAdj.filter(a=>a.ag===ag&&a.camp===camp&&a.month===month);}
+  function _adjSum(ag,camp,month,kind){return _adjFor(ag,camp,month).filter(a=>a.kind===kind).reduce((s,a)=>s+(Number(a.amt)||0),0);}
   function _ledgerData(ag){
     const uni=orders.filter(o=>(o.supplied||o.bill_no)&&_agPct(o,ag)>0);
     const byCamp={};
@@ -1886,13 +1893,22 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function _ledgerHtml(){
     const ag=_ledgerAgent,agL=_agLabel(ag);const byCamp=_ledgerData(ag);
     const camps=Object.keys(byCamp).sort((a,b)=>byCamp[b].total-byCamp[a].total);
-    let gT=0,gP=0;camps.forEach(c=>{gT+=byCamp[c].total;gP+=byCamp[c].paid;});
+    let gT=0,gP=0;camps.forEach(cn=>{const c=byCamp[cn];const tA=Object.keys(c.months).reduce((s,mk)=>s+_adjSum(ag,cn,mk,'total'),0);const pA=Object.keys(c.months).reduce((s,mk)=>s+_adjSum(ag,cn,mk,'paid'),0);gT+=c.total+tA;gP+=c.paid+pA;});
     const sections=camps.map(camp=>{
-      const c=byCamp[camp];const pend=c.total-c.paid;
-      const mrows=Object.keys(c.months).sort().reverse().map(mk=>{const m=c.months[mk];const mp=m.total-m.paid;
-        return `<tr><td>${esc(_mLab(mk))}</td><td class="num">${fmt(m.total)}</td><td class="num" style="color:#1b6b2e">${fmt(m.paid)}</td><td class="num" style="color:${mp>0.5?'#c0392b':'#999'}">${fmt(mp)}</td><td style="font-size:10px">${[...m.dates].join(', ')||'—'}</td><td style="font-size:10px">${[...m.persons].map(esc).join(', ')||'—'}</td></tr>`;}).join('');
-      return `<div class="dsec">🏕️ ${esc(camp)} — Total ${fmt(c.total)} · ✓ ${fmt(c.paid)} · ⏳ ${fmt(pend)}</div>
-        <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Pending</th><th>Paid date</th><th>Received</th></tr></thead><tbody>${mrows}</tbody></table></div></div>`;
+      const c=byCamp[camp];
+      const cTAdj=Object.keys(c.months).reduce((s,mk)=>s+_adjSum(ag,camp,mk,'total'),0);
+      const cPAdj=Object.keys(c.months).reduce((s,mk)=>s+_adjSum(ag,camp,mk,'paid'),0);
+      const cTotal=c.total+cTAdj,cPaid=c.paid+cPAdj,pend=cTotal-cPaid;
+      const mrows=Object.keys(c.months).sort().reverse().map(mk=>{const m=c.months[mk];
+        const tAdj=_adjSum(ag,camp,mk,'total'),pAdj=_adjSum(ag,camp,mk,'paid');
+        const fT=m.total+tAdj,fP=m.paid+pAdj,mp=fT-fP;
+        const adjs=_adjFor(ag,camp,mk);const persons=new Set([...m.persons]);adjs.forEach(a=>{if(a.person)persons.add(a.person);});
+        const dates=new Set([...m.dates]);adjs.forEach(a=>{if(a.date)dates.add(a.date);});
+        const tCell=fmt(fT)+(tAdj?`<br><span style="font-size:9px;color:#b06a00">auto ${fmt(m.total)} ${tAdj>0?'+':''}${fmt(tAdj)}</span>`:'');
+        const pCell=fmt(fP)+(pAdj?`<br><span style="font-size:9px;color:#b06a00">auto ${fmt(m.paid)} ${pAdj>0?'+':''}${fmt(pAdj)}</span>`:'');
+        return `<tr><td>${esc(_mLab(mk))}</td><td class="num">${tCell}</td><td class="num" style="color:#1b6b2e">${pCell}</td><td class="num" style="color:${mp>0.5?'#c0392b':'#999'}">${fmt(mp)}</td><td style="font-size:10px">${[...dates].join(', ')||'—'}</td><td style="font-size:10px">${[...persons].map(esc).join(', ')||'—'}</td><td><button class="copyprev" data-ledadj="${ag}|${esc(camp)}|${esc(mk)}" style="margin:0;padding:4px 7px;width:auto">➕</button></td></tr>`;}).join('');
+      return `<div class="dsec">🏕️ ${esc(camp)} — Total ${fmt(cTotal)} · ✓ ${fmt(cPaid)} · ⏳ ${fmt(pend)}</div>
+        <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Pending</th><th>Paid date</th><th>Received</th><th></th></tr></thead><tbody>${mrows}</tbody></table></div></div>`;
     }).join('');
     return `<details class="egpbulk"><summary>📋 Paid Ledger — Camp · Month (${agL})</summary>
       <div class="modetoggle" style="margin:8px 13px 4px"><button class="mbtn ${ag==='apo'?'on':''}" data-ledag="apo" type="button">🤝 Apo</button><button class="mbtn ${ag==='clark'?'on':''}" data-ledag="clark" type="button">🤝 Clark</button></div>
@@ -1901,6 +1917,33 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <button class="btn" id="ledPdf" style="margin:8px 13px;background:#0b2a4a">📄 ${esc(agL)} Ledger PDF</button>
     </details>`;
   }
+  function _openAdjEdit(ag,camp,month){
+    const list=_adjFor(ag,camp,month);
+    const rowHtml=a=>`<tr><td style="font-size:10.5px">${a.kind==='paid'?'Paid':'Total'}</td><td class="num" style="color:${(Number(a.amt)||0)<0?'#c0392b':'#1b6b2e'}">${(Number(a.amt)||0)>0?'+':''}${fmt(a.amt)}</td><td style="font-size:10px">${esc(a.person||'—')}</td><td style="font-size:10px">${esc(a.note||'')}</td><td><button class="copyprev" data-adjdel="${esc(a.id)}" style="margin:0;padding:3px 7px;width:auto">🗑️</button></td></tr>`;
+    const ov=document.createElement('div');ov.className='modal';
+    ov.innerHTML=`<div class="modalbox" style="max-width:440px"><h3>➕ Adjustment — ${esc(_agLabel(ag))} · ${esc(camp)} · ${esc(_mLab(month))}</h3>
+      ${list.length?`<div class="dpanel" style="margin-bottom:8px"><div class="tablewrap"><table><thead><tr><th>Type</th><th class="num">Amt</th><th>Person</th><th>Note</th><th></th></tr></thead><tbody>${list.map(rowHtml).join('')}</tbody></table></div></div>`:'<div style="font-size:12px;color:var(--muted);margin-bottom:8px">இன்னும் adjustment இல்ல</div>'}
+      <div style="border:1px solid var(--line);border-radius:9px;padding:9px">
+        <div class="grid2"><div class="fld"><label>Type</label><select id="adjKind"><option value="paid">Paid adjust (advance/bonus/round)</option><option value="total">Total/earned adjust</option></select></div><div class="fld"><label>Amount (+/−)</label><input type="number" inputmode="decimal" id="adjAmt" placeholder="உதा: -5000 / 2000"></div></div>
+        <div class="grid2"><div class="fld"><label>Handover person (யாரு கொடுத்த/வாங்கின)</label><input id="adjPerson" placeholder="name"></div><div class="fld"><label>Date</label><input type="date" id="adjDate" value="${new Date().toISOString().slice(0,10)}"></div></div>
+        <div class="fld"><label>Note / காரணம்</label><input id="adjNote" placeholder="advance / bonus / round / ..."></div>
+        <button class="btn gold" id="adjAdd" style="margin-top:6px">➕ Add adjustment</button>
+      </div>
+      <button class="btn" id="adjClose" style="margin-top:10px;background:#777">மூடு</button></div>`;
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    document.body.appendChild(ov);
+    ov.querySelector('#adjClose').onclick=()=>{ov.remove();renderCommission();};
+    ov.querySelectorAll('[data-adjdel]').forEach(b=>b.addEventListener('click',async()=>{
+      if(!confirm('இந்த adjustment delete பண்ணவா?'))return;
+      _commAdj=_commAdj.filter(x=>x.id!==b.dataset.adjdel);await _saveCommAdj();ov.remove();_openAdjEdit(ag,camp,month);
+    }));
+    ov.querySelector('#adjAdd').onclick=async()=>{
+      const amt=Number(ov.querySelector('#adjAmt').value);
+      if(!amt){alert('Amount போடு (+/−)');return;}
+      const e={id:'adj:'+Date.now(),ag,camp,month,kind:ov.querySelector('#adjKind').value||'paid',amt,person:(ov.querySelector('#adjPerson').value||'').trim(),note:(ov.querySelector('#adjNote').value||'').trim(),date:ov.querySelector('#adjDate').value||''};
+      _commAdj.push(e);await _saveCommAdj();ov.remove();_openAdjEdit(ag,camp,month);
+    };
+  }
   function openLedgerPDF(ag){
     const agL=_agLabel(ag);const byCamp=_ledgerData(ag);
     const camps=Object.keys(byCamp).sort((a,b)=>byCamp[b].total-byCamp[a].total);
@@ -1908,10 +1951,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const today=new Date().toLocaleDateString('en-GB');let gT=0,gP=0;
     const cell=(v,al,b,c)=>`<td style="border:1px solid #ccc;padding:5px;${al?'text-align:'+al+';':''}${b?'font-weight:700;':''}${c?'color:'+c+';':''}">${v}</td>`;
     const sections=camps.map(camp=>{
-      const c=byCamp[camp];gT+=c.total;gP+=c.paid;const pend=c.total-c.paid;
-      const mrows=Object.keys(c.months).sort().reverse().map(mk=>{const m=c.months[mk];const mp=m.total-m.paid;
-        return `<tr>${cell(esc(_mLab(mk)))}${cell(fmt(m.total),'right')}${cell(fmt(m.paid),'right',0,'#1b6b2e')}${cell(fmt(mp),'right',0,mp>0.5?'#c0392b':'#999')}${cell([...m.dates].join(', ')||'-')}${cell([...m.persons].map(esc).join(', ')||'-')}</tr>`;}).join('');
-      return `<tr><td colspan="6" style="background:#eef2f8;border:1px solid #ccc;padding:6px;font-weight:800;color:#0b2a4a">🏕️ ${esc(camp)} — Total ${fmt(c.total)} · Paid ${fmt(c.paid)} · Pending ${fmt(pend)}</td></tr>${mrows}`;
+      const c=byCamp[camp];
+      const cTAdj=Object.keys(c.months).reduce((s,mk)=>s+_adjSum(ag,camp,mk,'total'),0);
+      const cPAdj=Object.keys(c.months).reduce((s,mk)=>s+_adjSum(ag,camp,mk,'paid'),0);
+      const cT=c.total+cTAdj,cP=c.paid+cPAdj;gT+=cT;gP+=cP;const pend=cT-cP;
+      const mrows=Object.keys(c.months).sort().reverse().map(mk=>{const m=c.months[mk];
+        const tAdj=_adjSum(ag,camp,mk,'total'),pAdj=_adjSum(ag,camp,mk,'paid');const fT=m.total+tAdj,fP=m.paid+pAdj,mp=fT-fP;
+        const adjs=_adjFor(ag,camp,mk);const persons=new Set([...m.persons]);adjs.forEach(a=>{if(a.person)persons.add(a.person);});const dates=new Set([...m.dates]);adjs.forEach(a=>{if(a.date)dates.add(a.date);});
+        return `<tr>${cell(esc(_mLab(mk))+(tAdj||pAdj?' *':''))}${cell(fmt(fT),'right')}${cell(fmt(fP),'right',0,'#1b6b2e')}${cell(fmt(mp),'right',0,mp>0.5?'#c0392b':'#999')}${cell([...dates].join(', ')||'-')}${cell([...persons].map(esc).join(', ')||'-')}</tr>`;}).join('');
+      return `<tr><td colspan="6" style="background:#eef2f8;border:1px solid #ccc;padding:6px;font-weight:800;color:#0b2a4a">🏕️ ${esc(camp)} — Total ${fmt(cT)} · Paid ${fmt(cP)} · Pending ${fmt(pend)}</td></tr>${mrows}`;
     }).join('');
     const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
       <div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px"><div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div><div style="font-size:11px;color:#333">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10 &bull; Tel: 011 244 9385</div></div>
@@ -2030,6 +2078,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.querySelectorAll('[data-cpaid]').forEach(el=>el.addEventListener('click',()=>{_commPaid=el.dataset.cpaid;renderCommission();}));
     wrap.querySelectorAll('[data-cpedit]').forEach(el=>el.addEventListener('click',()=>_openPaidEdit(el.dataset.cpedit)));
     wrap.querySelectorAll('[data-ledag]').forEach(el=>el.addEventListener('click',()=>{_ledgerAgent=el.dataset.ledag;renderCommission();}));
+    wrap.querySelectorAll('[data-ledadj]').forEach(el=>el.addEventListener('click',()=>{const p=el.dataset.ledadj.split('|');_openAdjEdit(p[0],p[1],p[2]);}));
     const _lpdf=$('ledPdf');if(_lpdf)_lpdf.onclick=()=>openLedgerPDF(_ledgerAgent);
     _wireEgpBulk();
     _wireCommPaid();
@@ -2592,7 +2641,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         else if(t==='camp')gotoList({t:'camp',v});
         else gotoList({t});});});
   }
-  loadOrders().then(()=>{_loadEgpReg();renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();_wireEgpSync();});
+  loadOrders().then(()=>{_loadEgpReg();_loadCommAdj();renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();_wireEgpSync();});
   function _wireEgpSync(){
     const b=$('egpSyncBtn');if(!b)return;
     b.onclick=async()=>{
