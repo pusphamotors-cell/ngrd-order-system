@@ -1572,22 +1572,36 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   // ---- Commission Paid: bulk mark via paste / photo (paper list) ----
   function _normON(s){return String(s||'').toUpperCase().replace(/\s+/g,'').replace(/[^\w\/\-]/g,'');}
-  // match one paper-list line to a single order (order-no first, then bill-no)
+  // match one paper-list line to a single order: order-no (partial ok) → bill-no → bill amount
   function _commMatchLine(line){
-    const lineNorm=_normON(line);
-    const tokens=String(line).split(/[\s,;|]+/).filter(Boolean);
-    // 1) order-no match (substring, order_no must be reasonably long)
-    let byON=orders.filter(o=>{const on=_normON(o.order_no);return on.length>=6&&lineNorm.indexOf(on)>=0;});
-    byON=Array.from(new Map(byON.map(o=>[o.id,o])).values());
-    if(byON.length===1)return {o:byON[0],via:'order'};
-    if(byON.length>1)return {amb:byON,via:'order'};
-    // 2) bill-no match
-    const billToks=tokens.map(t=>t.replace(/\D/g,'')).filter(t=>t.length>=3);
+    const tokens=String(line).split(/\s+/).filter(Boolean);
+    // pick the order-no-ish token: most '/', normalized length>=8, has a digit
+    let orderTok='';
+    tokens.forEach(t=>{const sl=(t.match(/\//g)||[]).length;if(sl>=1&&_normON(t).length>=8&&/\d/.test(t)){if(sl>((orderTok.match(/\//g)||[]).length))orderTok=t;}});
+    // 1) order-no match — bidirectional substring (handles short "PO/2026/1009" vs full "WNA/APOW/PO/2026/1009")
+    if(orderTok){
+      const ot=_normON(orderTok);
+      let byON=orders.filter(o=>{const on=_normON(o.order_no);if(on.length<8)return false;return on.indexOf(ot)>=0||(ot.length>=8&&ot.indexOf(on)>=0);});
+      byON=Array.from(new Map(byON.map(o=>[o.id,o])).values());
+      if(byON.length===1)return {o:byON[0],via:'order'};
+      if(byON.length>1)return {amb:byON,via:'order'};
+    }
+    const rest=tokens.filter(t=>t!==orderTok);
+    // 2) bill-no match — split on / , ; | so "RA6/0175"→0175 and "4495/4496/4497"→3 bills
+    const billToks=[];rest.forEach(t=>t.split(/[\/,;|]+/).forEach(p=>{const d=p.replace(/\D/g,'');if(d.length>=3)billToks.push(d);}));
     if(billToks.length){
       let byBill=orders.filter(o=>_billNums(o).some(n=>billToks.indexOf(n)>=0));
       byBill=Array.from(new Map(byBill.map(o=>[o.id,o])).values());
       if(byBill.length===1)return {o:byBill[0],via:'bill'};
       if(byBill.length>1)return {amb:byBill,via:'bill'};
+    }
+    // 3) bill amount — exact Order Value match (token has comma/decimal OR >=10000, so bill nos aren't mistaken for amounts)
+    const amts=[];rest.forEach(t=>{const raw=t.replace(/[,\s]/g,'');const v=Number(raw);if(!isNaN(v)&&v>0&&(/[.,]/.test(t)||v>=10000))amts.push(Math.round(v));});
+    if(amts.length){
+      let byAmt=orders.filter(o=>amts.indexOf(Math.round(Number(o.sell)||0))>=0);
+      byAmt=Array.from(new Map(byAmt.map(o=>[o.id,o])).values());
+      if(byAmt.length===1)return {o:byAmt[0],via:'amount'};
+      if(byAmt.length>1)return {amb:byAmt,via:'amount'};
     }
     return {none:true};
   }
@@ -1598,7 +1612,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button>
         <button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin:0 13px 6px">Order No அல்லது Bill No list-ஐ கீழ paste பண்ணு — illa paper-ஐ photo எடுத்து AI படிக்கட்டும். ஒவ்வொரு வரியிலும் ஒரு order.</div>
+      <div style="font-size:11px;color:var(--muted);margin:0 13px 6px">Order No / Bill No / Bill Amount — எதுவானாலும் match ஆகும். Order No சுருக்கமா (PO/2026/1009) இருந்தாலும் சரி. ஒவ்வொரு வரியிலும் ஒரு order.</div>
       <textarea id="cpayText" class="pastebox" style="margin:0 13px;width:calc(100% - 26px);min-height:90px" placeholder="உதா:&#10;WNA/APO/PO/2026/0123   4498&#10;ENA/APO/PO/2026/0210   4311&#10;4357"></textarea>
       <div style="display:flex;gap:8px;align-items:center;margin:8px 13px 2px;flex-wrap:wrap">
         <label class="filechip" style="cursor:pointer">📷 Photo/PDF<input type="file" id="cpayFile" accept="image/*,application/pdf" style="display:none"></label>
@@ -1650,11 +1664,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         if(seen[o.id]){return;} seen[o.id]=1;
         if(_agPct(o,ag)<=0){noComm.push(o);return;}
         if(_agPaid(o,ag)){already.push(o);return;}
-        matched.push(o);
+        matched.push({o,via:r.via});
       });
-      _commPayStaged=matched;
+      _commPayStaged=matched.map(m=>m.o);
+      const viaTag={order:'order no',bill:'bill no',amount:'amount'};
       let h='';
-      if(matched.length){h+='<div class="dpanel" style="margin-top:6px"><div style="padding:8px 13px;font-weight:700;background:#e9f7ec;color:#1b6b2e">✅ '+matched.length+' order — '+esc(agL)+' paid mark ஆகும்</div><div class="tablewrap"><table><thead><tr><th>Order No</th><th class="num">Value</th><th class="num">'+esc(agL)+' Comm</th></tr></thead><tbody>'+matched.map(o=>`<tr><td>${esc(o.order_no)}</td><td class="num">${fmt(o.sell)}</td><td class="num">${fmt(_agComm(o,ag))}</td></tr>`).join('')+'</tbody></table></div></div>';}
+      if(matched.length){h+='<div class="dpanel" style="margin-top:6px"><div style="padding:8px 13px;font-weight:700;background:#e9f7ec;color:#1b6b2e">✅ '+matched.length+' order — '+esc(agL)+' paid mark ஆகும்</div><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Match</th><th class="num">Value</th><th class="num">'+esc(agL)+' Comm</th></tr></thead><tbody>'+matched.map(m=>`<tr><td>${esc(m.o.order_no)}</td><td style="font-size:10.5px;color:var(--muted)">${viaTag[m.via]||m.via}</td><td class="num">${fmt(m.o.sell)}</td><td class="num">${fmt(_agComm(m.o,ag))}</td></tr>`).join('')+'</tbody></table></div></div>';}
       if(already.length)h+='<div class="dpanel" style="margin-top:6px"><div style="padding:8px 13px;font-weight:700;background:#fff8e6;color:#9a6b00">🔁 '+already.length+' order — ஏற்கனவே '+esc(agL)+' paid (skip ஆகும், double-pay தடுக்கப்பட்டது)</div><div class="tablewrap"><table><tbody>'+already.map(o=>`<tr><td>${esc(o.order_no)}</td><td class="num" style="color:var(--muted)">${esc(_agPaidDate(o,ag)||'paid')}</td></tr>`).join('')+'</tbody></table></div></div>';
       if(noComm.length)h+='<div style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ '+noComm.length+' order-ல '+esc(agL)+' commission % இல்ல (0%) — skip: '+noComm.map(o=>esc(o.order_no)).join(', ')+'</div>';
       if(amb.length)h+='<div style="font-size:12px;color:var(--red);margin-top:6px">⚠️ '+amb.length+' வரி-க்கு ஒன்னுக்கு மேல order match ஆச்சு — Order No முழுசா போடு: '+amb.map(a=>esc(a.ln)).join(' / ')+'</div>';
