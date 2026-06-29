@@ -1015,7 +1015,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="fld"><label>Apo %</label><div style="display:flex;gap:8px;align-items:center"><input type="number" inputmode="decimal" id="e_apoPct" value="${o.apo_pct!=null?o.apo_pct:''}" placeholder="10" style="flex:1"><span style="font-size:12px;color:var(--muted);white-space:nowrap">Rs <b id="e_apoRs" style="color:var(--navy)">0</b></span></div></div>
         <div class="fld"><label>Clark %</label><div style="display:flex;gap:8px;align-items:center"><input type="number" inputmode="decimal" id="e_clarkPct" value="${o.clark_pct!=null?o.clark_pct:''}" placeholder="5" style="flex:1"><span style="font-size:12px;color:var(--muted);white-space:nowrap">Rs <b id="e_clarkRs" style="color:var(--navy)">0</b></span></div></div>
       </div>
-      <div style="padding:4px 13px 0;font-size:11px;color:var(--muted)">காலியா விட்டா commission இல்ல (0%). Order value: Rs ${fmt(o.sell)}</div>`:''}
+      <div style="padding:4px 13px 0;font-size:11px;color:var(--muted)">காலியா விட்டா commission இல்ல (0%). Order value: Rs ${fmt(o.sell)}</div>
+      <details class="egpbulk" style="margin:8px 13px"${(o.apo_paid||o.clark_paid)?' open':''}><summary>💵 Commission Paid status (edit)</summary>
+        <div style="padding:6px 13px 2px;font-weight:700;font-size:12.5px;color:var(--navy)">🤝 Apo</div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:0 13px 4px"><input type="checkbox" id="e_apoPaid" ${o.apo_paid?'checked':''}> Apo-க்கு கொடுத்தாச்சு (paid)</label>
+        <div class="grid2" style="padding:0 13px"><div class="fld"><label>Paid date</label><input type="date" id="e_apoPaidDate" value="${esc(o.apo_paid_date||'')}"></div><div class="fld"><label>Via</label><select id="e_apoPaidMode"><option value="cash" ${o.apo_paid_mode!=='bank'?'selected':''}>💵 Cash</option><option value="bank" ${o.apo_paid_mode==='bank'?'selected':''}>🏦 Bank</option></select></div></div>
+        <div class="grid2" style="padding:0 13px"><div class="fld"><label>Paid to / cash கொண்டு போனவர்</label><input id="e_apoPaidTo" value="${esc(o.apo_paid_to||'')}" placeholder="name"></div><div class="fld"><label>Bank / Slip ref</label><input id="e_apoPaidRef" value="${esc(o.apo_paid_ref||'')}" placeholder="ref"></div></div>
+        <div style="padding:8px 13px 2px;font-weight:700;font-size:12.5px;color:var(--navy);border-top:1px solid var(--line);margin-top:8px">🤝 Clark</div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:0 13px 4px"><input type="checkbox" id="e_clarkPaid" ${o.clark_paid?'checked':''}> Clark-க்கு கொடுத்தாச்சு (paid)</label>
+        <div class="grid2" style="padding:0 13px"><div class="fld"><label>Paid date</label><input type="date" id="e_clarkPaidDate" value="${esc(o.clark_paid_date||'')}"></div><div class="fld"><label>Via</label><select id="e_clarkPaidMode"><option value="cash" ${o.clark_paid_mode!=='bank'?'selected':''}>💵 Cash</option><option value="bank" ${o.clark_paid_mode==='bank'?'selected':''}>🏦 Bank</option></select></div></div>
+        <div class="grid2" style="padding:0 13px 8px"><div class="fld"><label>Paid to / cash கொண்டு போனவர்</label><input id="e_clarkPaidTo" value="${esc(o.clark_paid_to||'')}" placeholder="name"></div><div class="fld"><label>Bank / Slip ref</label><input id="e_clarkPaidRef" value="${esc(o.clark_paid_ref||'')}" placeholder="ref"></div></div>
+      </details>`:''}
       <div style="padding:13px 13px;display:flex;gap:10px">
         <button class="btn" id="e_cancel" style="margin-top:0;flex:1;background:#7a8295">Cancel</button>
         <button class="btn gold" id="e_save" style="margin-top:0;flex:2">💾 Save</button>
@@ -1181,6 +1191,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
       if(_apoP){const a=_apoP.value.trim();o.apo_pct=a===''?null:Number(a)||0;o.apo_comm=(Number(o.sell)||0)*(o.apo_pct||0)/100;}
       if(_clkP){const c=_clkP.value.trim();o.clark_pct=c===''?null:Number(c)||0;o.clark_comm=(Number(o.sell)||0)*(o.clark_pct||0)/100;}
+      const _apd=box.querySelector('#e_apoPaid');
+      if(_apd){o.apo_paid=_apd.checked;if(o.apo_paid){o.apo_paid_date=box.querySelector('#e_apoPaidDate').value||o.apo_paid_date||new Date().toISOString().slice(0,10);o.apo_paid_mode=box.querySelector('#e_apoPaidMode').value||'cash';o.apo_paid_to=(box.querySelector('#e_apoPaidTo').value||'').trim()||'Apo';o.apo_paid_ref=(box.querySelector('#e_apoPaidRef').value||'').trim();o.apo_paid_amt=_agComm(o,'apo');}else{o.apo_paid_date='';o.apo_paid_mode='';o.apo_paid_to='';o.apo_paid_ref='';o.apo_paid_amt=0;}}
+      const _cpd=box.querySelector('#e_clarkPaid');
+      if(_cpd){o.clark_paid=_cpd.checked;if(o.clark_paid){o.clark_paid_date=box.querySelector('#e_clarkPaidDate').value||o.clark_paid_date||new Date().toISOString().slice(0,10);o.clark_paid_mode=box.querySelector('#e_clarkPaidMode').value||'cash';o.clark_paid_to=(box.querySelector('#e_clarkPaidTo').value||'').trim()||'Clark';o.clark_paid_ref=(box.querySelector('#e_clarkPaidRef').value||'').trim();o.clark_paid_amt=_agComm(o,'clark');}else{o.clark_paid_date='';o.clark_paid_mode='';o.clark_paid_to='';o.clark_paid_ref='';o.clark_paid_amt=0;}}
       const _on=box.querySelector('#e_orderNo');if(_on)o.order_no=_on.value.trim();
       const _nh=box.querySelector('#e_naha');if(_nh)o.naha_no=_nh.value.trim();
       const _cv=box.querySelector('#e_civil');if(_cv)o.civil_no=_cv.value.trim();
