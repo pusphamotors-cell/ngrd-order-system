@@ -1602,26 +1602,26 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
     _wireEgpBulk();
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
-    $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup,_commCamp);
-    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup,_commCamp);
+    $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup0,_commCamp);
+    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup0,_commCamp);
   }
   function openCommissionPDF(name,pctKey,sup,camp){
     const list=sup.filter(o=>Number(o[pctKey])>0);
     if(!list.length){alert(name+'-க்கு commission இல்ல');return;}
-    const today=new Date().toLocaleDateString('en-GB');let total=0;let gn=0;
+    const today=new Date().toLocaleDateString('en-GB');let total=0;let gn=0;let gvalue=0;
     const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
     const rowCell=(n,o,s,c)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
     const buildSec=(title,arr,bg)=>{
-      if(!arr.length)return '';let sub=0;
-      const rws=arr.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;sub+=c;total+=c;return rowCell(gn,o,s,c);}).join('');
-      return `<tr><td colspan="9" style="background:${bg};border:1px solid #ccc;padding:7px;font-weight:800;color:#0b2a4a;font-size:12px">${title} (${arr.length} orders)</td></tr>${rws}<tr><td colspan="8" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${title} — Subtotal (Rs)</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(sub)}</td></tr>`;
+      if(!arr.length)return '';let sub=0,vsub=0;
+      const rws=arr.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;sub+=c;vsub+=s;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
+      return `<tr><td colspan="9" style="background:${bg};border:1px solid #ccc;padding:7px;font-weight:800;color:#0b2a4a;font-size:12px">${title} (${arr.length} orders)</td></tr>${rws}<tr><td colspan="6" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${title} — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(vsub)}</td><td style="border:1px solid #ccc;background:#fafafa"></td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(sub)}</td></tr>`;
     };
     const egpList=list.filter(_isEgp),nonList=list.filter(o=>!_isEgp(o));
     let rows;
     if(egpList.length&&nonList.length){
       rows=buildSec('Non-eGP Orders',nonList,'#eef2f8')+buildSec('🏛️ eGP Orders',egpList,'#e7f0ff');
     }else{
-      rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;return rowCell(gn,o,s,c);}).join('');
+      rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
     }
     const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
       <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
@@ -1644,7 +1644,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           <th style="padding:6px;border:1px solid #0b2a4a;width:38px">%</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:76px">Commission</th>
         </tr></thead><tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="8" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
+        <tfoot><tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Value / Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gvalue)}</td><td style="border:1px solid #ccc"></td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
       </table>
       <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
         <div>__________________________<br>Received by (${esc(name)})</div>
