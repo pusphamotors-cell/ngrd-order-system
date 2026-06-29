@@ -2025,7 +2025,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const s=Number(o.sell)||0;const ac=s*(o.apo_pct||0)/100,cc=s*(o.clark_pct||0)/100;apoT+=ac;clkT+=cc;
       const apoCell=(o.apo_pct||0)>0?`${o.apo_pct||0}% · ${fmt(ac)}${tick(_agPaid(o,'apo'))}`:'—';
       const clkCell=(o.clark_pct||0)>0?`${o.clark_pct||0}% · ${fmt(cc)}${tick(_agPaid(o,'clark'))}`:'—';
-      return `<tr><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td class="num">${fmt(s)}</td><td class="num">${apoCell}</td><td class="num">${clkCell}</td><td><button class="copyprev" data-cpedit="${esc(o.id)}" style="margin:0;padding:5px 9px;width:auto">✏️</button></td></tr>`;
+      return `<tr data-srch="${esc((o.order_no+' '+_campOf(o)).toLowerCase())}"><td>${esc(o.order_no)}</td><td>${esc(_campOf(o))}</td><td class="num">${fmt(s)}</td><td class="num">${apoCell}</td><td class="num">${clkCell}</td><td><button class="copyprev" data-cpedit="${esc(o.id)}" style="margin:0;padding:5px 9px;width:auto">✏️</button></td></tr>`;
     }).join('');
     // camp-wise summary (all)
     const byCamp={};all.forEach(o=>{const k=_campOf(o);const s=Number(o.sell)||0;const m=byCamp[k]||(byCamp[k]={a:0,c:0});m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
@@ -2066,6 +2066,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="grid2" style="padding:0 13px 10px"><div class="fld"><label>Clark · Non-eGP %</label><input type="number" inputmode="decimal" id="clkNon" value="5"></div><div class="fld"><label>Clark · eGP %</label><input type="number" inputmode="decimal" id="clkEgp" value="0.5"></div></div>
       </details>
       <div class="modetoggle" style="margin:6px 0 8px"><button class="mbtn ${_commPaid==='all'?'on':''}" data-cpaid="all" type="button">எல்லாம் (${sup.length})</button><button class="mbtn ${_commPaid==='pending'?'on':''}" data-cpaid="pending" type="button">⏳ Pending</button><button class="mbtn ${_commPaid==='paid'?'on':''}" data-cpaid="paid" type="button">✓ Paid</button></div>
+      <div class="fld" style="margin-bottom:6px"><input id="commRowSearch" placeholder="🔍 Order No / Camp தேடு…" autocomplete="off"><div id="commRowCount" style="font-size:10.5px;color:var(--muted);margin-top:3px"></div></div>
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th><th></th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td><td></td></tr></tfoot></table></div></div>
       <div class="dsec">${monthTitle}</div>
@@ -2078,6 +2079,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
     wrap.querySelectorAll('[data-cpaid]').forEach(el=>el.addEventListener('click',()=>{_commPaid=el.dataset.cpaid;renderCommission();}));
     wrap.querySelectorAll('[data-cpedit]').forEach(el=>el.addEventListener('click',()=>_openPaidEdit(el.dataset.cpedit)));
+    const _rs=$('commRowSearch'),_rc=$('commRowCount');
+    if(_rs){const _trs=[...wrap.querySelectorAll('tbody [data-srch]')];
+      const _doFilter=()=>{const q=_rs.value.trim().toLowerCase();let n=0;_trs.forEach(tr=>{const ok=!q||tr.dataset.srch.indexOf(q)>=0;tr.style.display=ok?'':'none';if(ok)n++;});if(_rc)_rc.textContent=q?(n+' / '+_trs.length+' order'):'';};
+      _rs.addEventListener('input',_doFilter);}
     wrap.querySelectorAll('[data-ledag]').forEach(el=>el.addEventListener('click',()=>{_ledgerAgent=el.dataset.ledag;renderCommission();}));
     wrap.querySelectorAll('[data-ledadj]').forEach(el=>el.addEventListener('click',()=>{const p=el.dataset.ledadj.split('|');_openAdjEdit(p[0],p[1],p[2]);}));
     const _lpdf=$('ledPdf');if(_lpdf)_lpdf.onclick=()=>openLedgerPDF(_ledgerAgent);
