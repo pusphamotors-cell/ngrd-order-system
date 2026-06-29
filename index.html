@@ -331,6 +331,8 @@
 
   <div class="wrap" id="viewDash">
     <div id="backupNudge"></div>
+    <button class="btn gold" id="egpSyncBtn" style="margin:0 0 10px">🔄 eGP Sync — V3 + Register apply</button>
+    <div id="egpSyncMsg" class="note" style="text-align:left;margin:0 0 12px;display:none"></div>
     <div class="dsearch">
       <input id="dashSearch" type="text" autocomplete="off" placeholder="🔍 தேடு — Customer / Camp · File No · Vehicle No · Order No">
       <span class="clr" id="dashSearchClear">✕</span>
@@ -2501,7 +2503,24 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         else if(t==='camp')gotoList({t:'camp',v});
         else gotoList({t});});});
   }
-  loadOrders().then(()=>{_loadEgpReg();renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();});
+  loadOrders().then(()=>{_loadEgpReg();renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();_wireEgpSync();});
+  function _wireEgpSync(){
+    const b=$('egpSyncBtn');if(!b)return;
+    b.onclick=async()=>{
+      b.disabled=true;const orig=b.textContent;b.innerHTML='<span class="spin"></span> Sync ஆகுது...';
+      const msg=$('egpSyncMsg');if(msg){msg.style.display='block';msg.innerHTML='⏳ V3 படிக்கிறேன்...';}
+      let v3={marked:0,matched:0,already:0,err:null};
+      try{v3=await _v3EgpSync();}catch(e){v3={err:e.message||'V3 connect ஆகல'};}
+      let applied=0;
+      try{applied=await _applyEgpRegToOrders();}catch(e){}
+      if(msg){
+        if(v3.err)msg.innerHTML='<span style="color:var(--red)">⚠️ V3: '+esc(v3.err)+'</span><br>📚 Register apply: <b>'+applied+'</b> order eGP ஆச்சு';
+        else msg.innerHTML='✅ V3: <b>'+(v3.marked||0)+'</b> புதுசா mark ('+(v3.matched||0)+'/'+(v3.total||0)+' quote match) · 📚 Register: <b>'+applied+'</b> order eGP ஆச்சு';
+      }
+      b.disabled=false;b.textContent=orig;
+      renderDash();
+    };
+  }
   _loadParts();
   _loadSettlements();
   $('repDownload').addEventListener('click',downloadReport);
