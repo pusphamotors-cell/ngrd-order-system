@@ -959,7 +959,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row('Bill Amount',fmt(o.bill_amt))}</div>
       ${showPay?`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
-      ${(!st&&(o.apo_pct!=null||o.clark_pct!=null))?`<div class="sec">🤝 Commission</div><div class="metarow">${row('Apo',(o.apo_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.apo_pct||0)/100)+(o.apo_pct>0?(o.apo_paid?' ✓ Paid'+(o.apo_paid_date?' ('+esc(o.apo_paid_date)+')':''):' ⏳ Pending'):''))}${row('Clark',(o.clark_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.clark_pct||0)/100)+(o.clark_pct>0?(o.clark_paid?' ✓ Paid'+(o.clark_paid_date?' ('+esc(o.clark_paid_date)+')':''):' ⏳ Pending'):''))}</div>`:''}
+      ${(!st&&(o.apo_pct!=null||o.clark_pct!=null))?`<div class="sec">🤝 Commission</div><div class="metarow">${row('Apo',(o.apo_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.apo_pct||0)/100)+_agPaidInfo(o,'apo'))}${row('Clark',(o.clark_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.clark_pct||0)/100)+_agPaidInfo(o,'clark'))}</div>`:''}
       <div style="padding:11px 13px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn gold" data-edit="${esc(o.id)}" style="margin-top:0;flex:1;min-width:140px">✏️ ${st?'Purchasing / Supply':'Edit (supply / payment / cost)'}</button>
         ${CURRENT&&CURRENT.role==='admin'?`<button class="btn" data-assign="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#5a3fb0">👷 Assign</button>`:''}
@@ -1570,6 +1570,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const aOk=!aOwed||_agPaid(o,'apo'),cOk=!cOwed||_agPaid(o,'clark');
     return (aOk&&cOk)?'paid':'pending';
   }
+  // full paid status text incl. mode/to/ref (esc-safe)
+  function _agPaidInfo(o,ag){
+    if(_agPct(o,ag)<=0)return '';
+    if(!_agPaid(o,ag))return ' ⏳ Pending';
+    const d=_agPaidDate(o,ag);const mode=ag==='apo'?o.apo_paid_mode:o.clark_paid_mode;const to=ag==='apo'?o.apo_paid_to:o.clark_paid_to;const ref=ag==='apo'?o.apo_paid_ref:o.clark_paid_ref;
+    let s=' ✓ Paid';if(d)s+=' ('+esc(d)+')';
+    const ex=[];if(mode)ex.push(mode==='bank'?'🏦 Bank':'💵 Cash');if(to)ex.push('→ '+esc(to));if(ref)ex.push('ref '+esc(ref));
+    if(ex.length)s+=' · '+ex.join(' ');
+    return s;
+  }
   // ---- Commission Paid: bulk mark via paste / photo (paper list) ----
   function _normON(s){return String(s||'').toUpperCase().replace(/\s+/g,'').replace(/[^\w\/\-]/g,'');}
   function _bnorm(s){return String(s).replace(/\D/g,'').replace(/^0+/,'')||'0';} // bill compare: ignore leading zeros ("0193"==="193")
@@ -1618,6 +1628,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <span id="cpayMsg" style="font-size:11.5px"></span>
       </div>
       <div class="grid2" style="padding:6px 13px 2px"><div class="fld"><label>Paid date</label><input type="date" id="cpayDate"></div><div class="fld"><label>&nbsp;</label><button class="copyprev" id="cpayPreview" style="margin:0;padding:11px">🔍 Match / Preview</button></div></div>
+      <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Paid via</label><select id="cpayMode"><option value="cash">💵 Cash</option><option value="bank">🏦 Bank deposit</option></select></div><div class="fld"><label>Paid to (name)</label><input id="cpayTo" placeholder="யாரு வாங்கினாங்க / account name"></div></div>
+      <div class="fld" style="padding:0 13px 4px"><label>Bank / A/C / Slip ref (deposit-னா)</label><input id="cpayRef" placeholder="உதா: HNB 12345 / slip no"></div>
       <div id="cpayResult" class="note" style="text-align:left;padding:2px 13px"></div>
       <button class="btn gold" id="cpayDo" style="margin:6px 13px 12px" disabled>✅ ${agL} Paid mark பண்ணு</button>
     </details>`;
@@ -1679,17 +1691,18 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const doB=$('cpayDo');if(doB)doB.addEventListener('click',async()=>{
       if(!_commPayStaged||!_commPayStaged.length){alert('முதல்ல Match/Preview பண்ணு');return;}
       const agL=_agLabel(ag);const dt=$('cpayDate').value||new Date().toISOString().slice(0,10);
+      const mode=($('cpayMode').value||'cash');const to=($('cpayTo').value||'').trim()||agL;const ref=($('cpayRef').value||'').trim();
       if(!confirm(_commPayStaged.length+' order-க்கு '+agL+' commission paid mark பண்ணவா?'))return;
       doB.disabled=true;doB.textContent='Update ஆகுது...';let n=0;
       for(const o of _commPayStaged){
-        if(ag==='apo'){o.apo_paid=true;o.apo_paid_date=dt;o.apo_paid_amt=_agComm(o,'apo');}
-        else{o.clark_paid=true;o.clark_paid_date=dt;o.clark_paid_amt=_agComm(o,'clark');}
+        if(ag==='apo'){o.apo_paid=true;o.apo_paid_date=dt;o.apo_paid_amt=_agComm(o,'apo');o.apo_paid_mode=mode;o.apo_paid_to=to;o.apo_paid_ref=ref;}
+        else{o.clark_paid=true;o.clark_paid_date=dt;o.clark_paid_amt=_agComm(o,'clark');o.clark_paid_mode=mode;o.clark_paid_to=to;o.clark_paid_ref=ref;}
         try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}
       }
       await loadOrders();
       _commPayStaged=null;_cpayDraft='';
       renderCommission();
-      setTimeout(()=>{const rb=$('cpayResult');if(rb)rb.innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ '+n+' order — '+esc(agL)+' commission paid ✓ ('+esc(dt)+')</div>';},60);
+      setTimeout(()=>{const rb=$('cpayResult');if(rb)rb.innerHTML='<div class="dpanel" style="padding:12px 13px;font-size:13px;color:var(--green);font-weight:700">✅ '+n+' order — '+esc(agL)+' commission paid ✓ ('+esc(dt)+')<br><span style="font-weight:500;color:var(--muted)">'+(mode==='bank'?'🏦 Bank deposit':'💵 Cash')+' → '+esc(to)+(ref?' · ref '+esc(ref):'')+'</span></div>';},60);
     });
   }
   let _cpayDraft=null;
