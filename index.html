@@ -1576,6 +1576,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const egpBtns=`<div class="modetoggle" style="margin:0 0 10px"><button class="mbtn ${_commEgp==='all'?'on':''}" data-cegp="all" type="button">எல்லாம்</button><button class="mbtn ${_commEgp==='egp'?'on':''}" data-cegp="egp" type="button">🏛️ eGP (${egpN})</button><button class="mbtn ${_commEgp==='non'?'on':''}" data-cegp="non" type="button">Non-eGP (${nonN})</button></div>`;
     const byMonth={};sup.forEach(o=>{const d=o.egp_date||o.bill_date||o.order_date||'';const mk=(String(d).match(/\d{4}-\d{2}/)||['—'])[0];const s=Number(o.sell)||0;const m=byMonth[mk]||(byMonth[mk]={n:0,v:0,a:0,c:0});m.n++;m.v+=s;m.a+=s*(o.apo_pct||0)/100;m.c+=s*(o.clark_pct||0)/100;});
     const monthRows=Object.keys(byMonth).sort().reverse().map(mk=>`<tr><td>${esc(mk)}</td><td class="num">${byMonth[mk].n}</td><td class="num">${fmt(byMonth[mk].v)}</td><td class="num">${fmt(byMonth[mk].a)}</td><td class="num">${fmt(byMonth[mk].c)}</td></tr>`).join('');
+    const _commMonths=[...new Set(sup0.map(o=>{const d=o.egp_date||o.bill_date||o.order_date||'';return (String(d).match(/\d{4}-\d{2}/)||[''])[0];}).filter(Boolean))].sort().reverse();
     const monthTitle=_commEgp==='egp'?'🏛️ eGP — Month-wise':_commEgp==='non'?'Non-eGP — Month-wise':'📅 Month-wise (எல்லாம்)';
     wrap.innerHTML=`
       <div class="fld" style="margin-bottom:10px"><label>Camp / Buyer</label><select id="commCampSel"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
@@ -1591,6 +1592,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <button class="btn" id="commApoPdf" style="margin-top:0;background:#0b2a4a">📄 Apo PDF</button>
         <button class="btn" id="commClarkPdf" style="margin-top:0;background:#0b2a4a">📄 Clark PDF</button>
       </div>
+      <details class="egpbulk" open><summary>📄 PDF settings — Month & % (நீ select பண்ணு)</summary>
+        <div class="fld" style="margin:4px 13px"><label>Month</label><select id="commMonth"><option value="all">எல்லா Month</option>${_commMonths.map(mk=>`<option value="${esc(mk)}">${esc(mk)}</option>`).join('')}</select></div>
+        <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Apo · Non-eGP %</label><input type="number" inputmode="decimal" id="apoNon" value="10"></div><div class="fld"><label>Apo · eGP %</label><input type="number" inputmode="decimal" id="apoEgp" value="1"></div></div>
+        <div class="grid2" style="padding:0 13px 10px"><div class="fld"><label>Clark · Non-eGP %</label><input type="number" inputmode="decimal" id="clkNon" value="5"></div><div class="fld"><label>Clark · eGP %</label><input type="number" inputmode="decimal" id="clkEgp" value="0.5"></div></div>
+      </details>
       <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th class="num">Value</th><th class="num">Apo</th><th class="num">Clark</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><td colspan="3" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(apoT)}</td><td class="num" style="font-weight:800">${fmt(clkT)}</td></tr></tfoot></table></div></div>
       <div class="dsec">${monthTitle}</div>
@@ -1602,18 +1608,24 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.querySelectorAll('[data-cegp]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cegp;renderCommission();}));
     _wireEgpBulk();
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
-    $('commApoPdf').onclick=()=>openCommissionPDF('Apo','apo_pct',sup0,_commCamp);
-    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark','clark_pct',sup0,_commCamp);
+    $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{month:$('commMonth').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
+    $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{month:$('commMonth').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
   }
-  function openCommissionPDF(name,pctKey,sup,camp){
-    const list=sup.filter(o=>Number(o[pctKey])>0);
-    if(!list.length){alert(name+'-க்கு commission இல்ல');return;}
+  function openCommissionPDF(name,sup,camp,opts){
+    opts=opts||{};
+    const month=opts.month||'all',nonPct=Number(opts.nonPct)||0,egpPct=Number(opts.egpPct)||0;
+    const monthOf=o=>{const d=o.egp_date||o.bill_date||o.order_date||'';return (String(d).match(/\d{4}-\d{2}/)||[''])[0];};
+    const pctOf=o=>_isEgp(o)?egpPct:nonPct;
+    let list=sup.slice();
+    if(month!=='all')list=list.filter(o=>monthOf(o)===month);
+    if(!list.length){alert(name+'-க்கு '+(month!=='all'?month+' ':'')+'commission இல்ல');return;}
     const today=new Date().toLocaleDateString('en-GB');let total=0;let gn=0;let gvalue=0;
     const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
-    const rowCell=(n,o,s,c)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${o[pctKey]||0}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
+    const monTxt=month!=='all'?month:'எல்லா Month';
+    const rowCell=(n,o,s,c)=>`<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${n}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(s)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px">${pctOf(o)}%</td><td style="text-align:right;border:1px solid #ccc;padding:5px;font-weight:600">${fmt(c)}</td></tr>`;
     const buildSec=(title,arr,bg)=>{
       if(!arr.length)return '';let sub=0,vsub=0;
-      const rws=arr.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;sub+=c;vsub+=s;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
+      const rws=arr.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*pctOf(o)/100;sub+=c;vsub+=s;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
       return `<tr><td colspan="9" style="background:${bg};border:1px solid #ccc;padding:7px;font-weight:800;color:#0b2a4a;font-size:12px">${title} (${arr.length} orders)</td></tr>${rws}<tr><td colspan="6" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${title} — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(vsub)}</td><td style="border:1px solid #ccc;background:#fafafa"></td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(sub)}</td></tr>`;
     };
     const egpList=list.filter(_isEgp),nonList=list.filter(o=>!_isEgp(o));
@@ -1621,7 +1633,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(egpList.length&&nonList.length){
       rows=buildSec('Non-eGP Orders',nonList,'#eef2f8')+buildSec('🏛️ eGP Orders',egpList,'#e7f0ff');
     }else{
-      rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*(Number(o[pctKey])||0)/100;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
+      rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*pctOf(o)/100;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
     }
     const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
       <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
@@ -1629,7 +1641,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
       ${head}
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
-        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)}</div>
+        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)} &nbsp;·&nbsp; Month: <b>${esc(monTxt)}</b><br><span style="font-size:10px;color:#666">Non-eGP ${nonPct}% · eGP ${egpPct}%</span></div>
         <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
