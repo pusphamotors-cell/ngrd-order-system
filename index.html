@@ -896,6 +896,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       supplied:$('supplied').checked,bill_no:$('billNo').value||'',bill_date:$('billDate').value||'',bill_amt:Number($('billAmt').value)||0,
       paid:$('paid').checked,cheque_no:$('chequeNo').value||'',pay_date:$('payDate').value||'',
       savedAt:new Date().toISOString()};
+    _egpStampOrder(o);
     try{await window.storage.set(o.id,JSON.stringify(o));orders.unshift(o);current=null;
       $('result').innerHTML='<div class="empty" style="border-color:var(--green);background:var(--green-bg);color:#155">✅ Save ஆச்சு! லாபம்: '+profitTxt(o)+'<br><small>"Saved Orders" tab-ல பாக்கலாம்</small></div>';
     }catch(e){$('errbox').innerHTML='<div class="err">⚠️ Save fail: '+esc(e.message)+'</div>';}
@@ -1238,18 +1239,22 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const rm=line.match(/\b20\d{11}\b/);
       if(om&&rm)targets.push({ordNo:om[0].replace(/\s+/g,''),ref:rm[0]});
     });
-    let marked=0,nomatch=0;const miss=[];
+    let marked=0,nomatch=0;const miss=[];let reg=0;
     for(const t of targets){
+      // 1) save to register (book source) — kept even if no order yet
+      if(_egpRegPut(t.ordNo,t.ref,'book'))reg++;
+      // 2) mark matching order if it exists
       const tn=_nk(t.ordNo);const tk=_tenderKey({order_no:t.ordNo,file_no:t.ordNo},t.ordNo);
       const o=orders.find(x=>_nk(x.order_no)===tn)
             ||orders.find(x=>x.file_no&&_nk(x.file_no)===tn)
             ||orders.find(x=>{const k=_tenderKey(x,x.file_no||x.order_no);return k&&tk&&k===tk;})
             ||orders.find(x=>{const k=_tenderKey(x,x.order_no);return k&&tk&&k===tk;});
       if(!o){nomatch++;if(miss.length<6)miss.push(t.ordNo);continue;}
-      o.egp=true;o.egp_ref=t.ref;
+      o.egp=true;o.egp_ref=t.ref;o.non_egp_confirmed=false;
       try{await window.storage.set(o.id,JSON.stringify(o));marked++;}catch(e){}
     }
-    return {total:targets.length,marked,nomatch,miss};
+    await _saveEgpReg();
+    return {total:targets.length,marked,nomatch,miss,reg};
   }
   async function _v3EgpSync(){
     let quotes;
@@ -1257,13 +1262,44 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     let marked=0,already=0,matched=0;
     for(const q of quotes){
       const m=_matchQuoteOrder(q);
+      const ref=q.refNo||'';
+      // register: V3 is authoritative — record by file no (E-Quotation No)
+      const fno=(m&&m.o&&m.o.file_no)||q.fileNo||q.file_no||(m&&m.o&&m.o.order_no)||'';
+      if(fno&&ref)_egpRegPut(fno,ref,'v3');
       if(!m)continue;matched++;
-      const o=m.o,ref=q.refNo||'';
+      const o=m.o;
       if(o.egp&&(!ref||o.egp_ref===ref)){already++;continue;}
-      o.egp=true;if(ref)o.egp_ref=ref;
+      o.egp=true;if(ref)o.egp_ref=ref;o.non_egp_confirmed=false;
       try{await window.storage.set(o.id,JSON.stringify(o));marked++;}catch(e){}
     }
+    await _saveEgpReg();
     return {total:quotes.length,matched,marked,already};
+  }
+  // ===== eGP Register store (persistent eGP truth: V3 > Book) =====
+  let _egpReg={};
+  function _egpRegKey(fileNo){return _nk(fileNo);}
+  async function _loadEgpReg(){try{const r=await window.storage.get('egpreg');_egpReg=(r&&r.value)?JSON.parse(r.value):{};}catch(e){_egpReg={};}}
+  async function _saveEgpReg(){try{await window.storage.set('egpreg',JSON.stringify(_egpReg));}catch(e){}}
+  // add/update an entry. v3 source has priority over book; book never overwrites a v3 entry.
+  function _egpRegPut(fileNo,ref,source,extra){
+    const k=_egpRegKey(fileNo);if(!k||k.length<6)return false;
+    const cur=_egpReg[k];
+    if(cur&&cur.source==='v3'&&source==='book')return false; // book can't overwrite V3
+    _egpReg[k]=Object.assign({file_no:fileNo,ref:ref||((cur&&cur.ref)||''),source:source||((cur&&cur.source)||'book')},extra||{});
+    return true;
+  }
+  function _egpLookup(fileNo){const k=_egpRegKey(fileNo);return k?(_egpReg[k]||null):null;}
+  // stamp one order from register (returns true if changed)
+  function _egpStampOrder(o){
+    if(!o)return false;const e=_egpLookup(o.file_no)||_egpLookup(o.order_no);
+    if(!e)return false;
+    if(o.egp&&o.egp_ref===e.ref)return false;
+    o.egp=true;if(e.ref)o.egp_ref=e.ref;o.non_egp_confirmed=false;return true;
+  }
+  // re-apply whole register to all orders
+  async function _applyEgpRegToOrders(){
+    let n=0;for(const o of orders){if(_egpStampOrder(o)){try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}}}
+    return n;
   }
   function _egpBulkHtml(){
     return `<div class="v3egp">
@@ -1282,7 +1318,30 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <button class="btn gold" id="egpBulkBtn" style="margin-top:8px">✓ Match பண்ணி eGP mark</button>
       <div id="egpBulkResult" class="note" style="text-align:left;margin-top:8px"></div>
     </details>
-    ${_egpReviewHtml()}`;
+    ${_egpReviewHtml()}
+    ${_egpRegHtml()}`;
+  }
+  function _egpRegRows(filter){
+    const f=_nk(filter||'');let keys=Object.keys(_egpReg);
+    if(f)keys=keys.filter(k=>k.indexOf(f)>=0||_nk(_egpReg[k].ref).indexOf(f)>=0);
+    keys.sort();const cap=80;const more=keys.length-cap;
+    const rows=keys.slice(0,cap).map(k=>{const e=_egpReg[k];const has=orders.some(o=>_nk(o.file_no)===k||_nk(o.order_no)===k);
+      return `<tr><td style="font-size:10.5px">${esc(e.file_no)}</td><td style="font-size:10.5px">${esc(e.ref||'-')}</td><td>${e.source==='v3'?'🟢 V3':'📗 Book'}</td><td>${has?'<span style="color:#1b6b2e">order ✓</span>':'<span style="color:var(--muted)">—</span>'}</td></tr>`;}).join('');
+    return rows+(more>0?`<tr><td colspan="4" style="text-align:center;color:var(--muted);font-size:11px">… +${more} more (தேடு)</td></tr>`:'')||'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:10px">இல்ல</td></tr>';
+  }
+  function _egpRegHtml(){
+    const keys=Object.keys(_egpReg);const v3=keys.filter(k=>_egpReg[k].source==='v3').length;const bk=keys.length-v3;
+    return `<details class="egpbulk"><summary>📚 eGP Register — saved truth (${keys.length})</summary>
+      <div class="drow" style="margin:8px 0">
+        <div class="dstat"><div class="k">📚 Total</div><div class="v">${keys.length}</div><div class="s">File No entries</div></div>
+        <div class="dstat" style="border-top-color:#0b66c3"><div class="k">🟢 V3</div><div class="v" style="color:#0b66c3">${v3}</div><div class="s">main</div></div>
+        <div class="dstat" style="border-top-color:#7a5b00"><div class="k">📗 Book</div><div class="v" style="color:#7a5b00">${bk}</div><div class="s">gap-fill</div></div>
+      </div>
+      <div class="fld" style="margin-bottom:6px"><input id="egpRegSearch" placeholder="🔍 File No / Ref தேடு"></div>
+      <div class="dpanel"><div class="tablewrap" style="max-height:300px;overflow:auto"><table><thead><tr><th>File No</th><th>eGP Ref</th><th>Src</th><th>System</th></tr></thead><tbody id="egpRegBody">${_egpRegRows('')}</tbody></table></div></div>
+      <button class="btn gold" id="egpRegApply" style="margin-top:8px">🔄 Register-ஐ எல்லா order-க்கும் apply பண்ணு</button>
+      <div id="egpRegApplyMsg" class="note" style="text-align:left;margin-top:6px;font-size:11px;color:var(--muted)">V3/Book-ல இருக்கற File No → order-ஐ auto eGP mark. புது order போட்டாலும் auto ஆகும்.</div>
+    </details>`;
   }
   // eGP Review: V3→eGP / Book→eGP / neither→non-eGP. Show non-eGP for the user to eyeball + confirm.
   function _egpReviewHtml(){
@@ -1321,6 +1380,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       for(const o of nonU){o.non_egp_confirmed=true;try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}}
       renderCommission();
     });
+    // eGP Register: search + apply
+    const _rs=$('egpRegSearch');if(_rs)_rs.addEventListener('input',()=>{const b=$('egpRegBody');if(b)b.innerHTML=_egpRegRows(_rs.value);});
+    const _ra=$('egpRegApply');if(_ra)_ra.addEventListener('click',async()=>{
+      _ra.disabled=true;_ra.textContent='⏳ apply பண்றேன்...';
+      const n=await _applyEgpRegToOrders();
+      const m=$('egpRegApplyMsg');if(m)m.innerHTML='<span style="color:var(--green);font-weight:700">✅ '+n+' order புதுசா eGP mark ஆச்சு (register-ல இருந்து)</span>';
+      _ra.disabled=false;_ra.textContent='🔄 Register-ஐ எல்லா order-க்கும் apply பண்ணு';
+      setTimeout(renderCommission,1200);
+    });
     const ef=$('egpFile');if(ef)ef.addEventListener('change',e=>{_egpFileObj=e.target.files&&e.target.files[0];const rb=$('egpRead');if(rb)rb.disabled=!_egpFileObj;const m=$('egpReadMsg');if(m)m.innerHTML=_egpFileObj?'<span style="color:var(--muted)">'+esc(_egpFileObj.name)+' ready</span>':'';});
     const er=$('egpRead');if(er)er.addEventListener('click',async()=>{
       if(!_egpFileObj)return;
@@ -1357,7 +1425,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const txt=($('egpBulkText')||{}).value||'';const res=$('egpBulkResult');
       _ebb.disabled=true;_ebb.textContent='⏳ mark பண்றேன்...';
       const r=await _bulkEgpMark(txt);
-      if(res)res.innerHTML=`✅ <b>${r.marked}</b> order eGP-ஆ mark ஆச்சு${r.nomatch?(' · ⚠️ '+r.nomatch+' match ஆகல'+(r.miss.length?'<br><small style="color:var(--muted)">match ஆகாதது: '+r.miss.map(esc).join(', ')+'</small>':'')):''}${r.total===0?'<br><span style="color:var(--red)">Order No + 13-digit eGP Ref உள்ள வரி கிடைக்கல</span>':''}`;
+      if(res)res.innerHTML=`✅ <b>${r.marked}</b> order eGP-ஆ mark · 📚 <b>${r.reg||0}</b> register-ல save${r.nomatch?(' · ⚠️ '+r.nomatch+' order இன்னும் system-ல இல்ல (register-ல வெச்சுட்டேன், order வந்ததும் auto eGP ஆகும்)'+(r.miss.length?'<br><small style="color:var(--muted)">உதா: '+r.miss.map(esc).join(', ')+'</small>':'')):''}${r.total===0?'<br><span style="color:var(--red)">File No + 13-digit eGP Ref உள்ள வரி கிடைக்கல</span>':''}`;
       _ebb.disabled=false;_ebb.textContent='✓ Match பண்ணி eGP mark';
       if(r.marked)setTimeout(renderCommission,1200);
     };
@@ -2433,7 +2501,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         else if(t==='camp')gotoList({t:'camp',v});
         else gotoList({t});});});
   }
-  loadOrders().then(()=>{renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();});
+  loadOrders().then(()=>{_loadEgpReg();renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();});
   _loadParts();
   _loadSettlements();
   $('repDownload').addEventListener('click',downloadReport);
