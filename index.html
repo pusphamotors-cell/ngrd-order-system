@@ -308,6 +308,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="busy_items.js"></script>
 </head>
 <body>
   <div class="gate" id="loginGate">
@@ -537,10 +538,12 @@
       <div style="padding:4px 13px">
         <label style="font-size:12px;font-weight:700;color:var(--navy)">எந்த orders export பண்ணணும்?</label>
         <select id="busyScope" style="width:100%;margin-top:5px;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-size:13px">
-          <option value="new">இன்னும் export பண்ணாதது மட்டும் (recommended)</option>
+          <option value="one">ஒரு order மட்டும் (sample test) ⭐</option>
+          <option value="new">இன்னும் export பண்ணாதது மட்டும்</option>
           <option value="all">எல்லா orders-ம்</option>
           <option value="unbilled">Bill போடாதது மட்டும் (Pending)</option>
         </select>
+        <select id="busyOneOrder" style="display:none;width:100%;margin-top:6px;padding:9px;border:1.5px solid var(--gold);border-radius:10px;font-size:12px"></select>
       </div>
       <div style="padding:8px 13px 4px">
         <button class="btn gold" id="busyExport" style="margin-top:0">🧾 Busy Excel எடு (.xls)</button>
@@ -1018,7 +1021,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
   async function loadOrders(){try{const res=await window.storage.list('order:');const keys=(res&&res.keys)||[];const arr=[];
     for(const k of keys){try{const r=await window.storage.get(k);if(r&&r.value)arr.push(JSON.parse(r.value));}catch(e){}}
-    arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}}
+    arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}
+    try{if(typeof _busyFillOnePicker==='function')_busyFillOnePicker();}catch(e){}}
 
   function detailHtml(o){
     const st=!can('value');const showPay=can('payment');
@@ -2964,7 +2968,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const firm=_busyFirm();
     const done=_busyExportedLoad();
     let list=orders.filter(o=>_companyOf(o)===firm);   // <-- only this shop's orders
-    if(scope==='new')list=list.filter(o=>done.indexOf(o.id)<0);
+    if(scope==='one'){const oid=($('busyOneOrder')||{}).value||'';list=list.filter(o=>o.id===oid);}
+    else if(scope==='new')list=list.filter(o=>done.indexOf(o.id)<0);
     else if(scope==='unbilled')list=list.filter(o=>!(o.supplied||o.bill_no));
     return list;
   }
@@ -3025,11 +3030,27 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   let _busyItemMap=null;          // saved links: orderItemKey -> busy item name
   function _bnorm(s){return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();}
   function _btokens(s){return _bnorm(s).split(' ').filter(w=>w.length>1);}
+  function _busyParseBlob(){
+    // parse embedded window.__BUSY_ITEMS_BLOB into array
+    try{
+      const blob=window.__BUSY_ITEMS_BLOB;if(!blob)return [];
+      return blob.split('§').map(line=>{const p=line.split('¦');return {n:p[0]||'',a:p[1]||'',g:p[2]||'',u:p[3]||'NOS'};}).filter(x=>x.n);
+    }catch(e){return [];}
+  }
   async function _busyItemsLoad(){
     try{if(!_fbOk)throw 0;const s=await firebase.database().ref('busyItems').once('value');const v=s.val();
       _busyItems=Array.isArray(v)?v:(v?Object.values(v):[]);
       try{localStorage.setItem('__busyItems',JSON.stringify(_busyItems));}catch(e){}
     }catch(e){try{_busyItems=JSON.parse(localStorage.getItem('__busyItems')||'[]');}catch(_){_busyItems=[];}}
+    // A) if still empty, seed from embedded blob (and push to Firebase once)
+    if((!_busyItems||!_busyItems.length)){
+      const seed=_busyParseBlob();
+      if(seed.length){
+        _busyItems=seed;
+        try{localStorage.setItem('__busyItems',JSON.stringify(seed));}catch(e){}
+        try{if(_fbOk)await firebase.database().ref('busyItems').set(seed);}catch(e){}
+      }
+    }
     return _busyItems;
   }
   async function _busyItemMapLoad(){
@@ -3124,7 +3145,18 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   const _busyFirmSel=$('busyFirm');if(_busyFirmSel)_busyFirmSel.addEventListener('change',()=>{
     const box=$('busyMapBox');if(box&&box.style.display!=='none')_busyRenderMap();
     $('busyExportNote').innerHTML='';
+    _busyFillOnePicker();
   });
+  function _busyFillOnePicker(){
+    const sc=($('busyScope')||{}).value;const pick=$('busyOneOrder');if(!pick)return;
+    if(sc!=='one'){pick.style.display='none';return;}
+    const firm=_busyFirm();
+    const list=orders.filter(o=>_companyOf(o)===firm);
+    pick.style.display='block';
+    pick.innerHTML='<option value="">— order தேர்ந்தெடு —</option>'+list.slice(0,200).map(o=>'<option value="'+esc(o.id)+'">'+esc(o.order_no||'(no#)')+' · '+esc(_campOf(o))+' · '+((o.items||[]).length)+' item</option>').join('');
+  }
+  const _busyScopeSel=$('busyScope');if(_busyScopeSel)_busyScopeSel.addEventListener('change',()=>{_busyFillOnePicker();$('busyExportNote').innerHTML='';});
+
   const _busyExp=$('busyExport');if(_busyExp)_busyExp.addEventListener('click',async()=>{
     const scope=($('busyScope')||{}).value||'new';
     const firm=_busyFirm();
