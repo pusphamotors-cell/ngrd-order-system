@@ -2937,10 +2937,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return s;
   }
   function _busyOrderDate(o){
-    const d=o.order_date||o.po_date||o.bill_date||o.quotation_date||'';
-    if(d)return d;
-    // no date on order → use today (Busy needs a date; blank date can break the row)
-    const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+    // real order date (PO date). order_date = po_date saved at order creation.
+    return o.order_date||o.po_date||o.quotation_date||o.bill_date||'';
   }
   // CSV builder (kept as fallback)
   function _csvFromRows(rows){
@@ -2990,6 +2988,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           // only flag as unmatched if we actually have a busy list to match against
           unmatched.push({orderId:o.id,order_no:o.order_no||'',model:o.model||'',desc:desc});
         }
+        const qty=Number(it.qty)||0;
+        const price=Number(it.unit_price)||0;
+        const amount=(price>0)?+(qty*price).toFixed(2):'';
         rows.push([
           series,                            // A series (NGRD / PUSHPA)
           _busyDate(_busyOrderDate(o)),      // B date
@@ -2998,10 +2999,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           party,                             // E party name
           BUSY_MC,                           // F item MC name
           itemName,                          // G item name (Busy-matched if linked)
-          Number(it.qty)||0,                 // H quantity
+          qty,                               // H quantity
           'Nos',                             // I unit
-          '',                                // J price (order stage: blank)
-          ''                                 // K amount (blank)
+          (price>0?price:''),                // J price (order's unit_price)
+          amount                             // K amount (qty x price)
         ]);
         lineCount++;
       });
