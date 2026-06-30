@@ -614,8 +614,15 @@
   // ===== Keyboard shortcuts (Busy-style) =====
   document.addEventListener('keydown',e=>{
     const t=e.target,tag=(t&&t.tagName)||'';const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(tag)||(t&&t.isContentEditable);
-    // Esc — close top-most popup/modal
-    if(e.key==='Escape'){const ov=[...document.querySelectorAll('.modal')].pop();if(ov){ov.remove();e.preventDefault();}return;}
+    // Esc — close top popup; else cancel field / clear search
+    if(e.key==='Escape'||e.key==='Esc'){
+      const ov=[...document.querySelectorAll('.modal')].pop();
+      if(ov){ov.remove();e.preventDefault();return;}
+      const ds=$('dashSearch');
+      if(ds&&(document.activeElement===ds||ds.value)){ds.value='';if(ds.dispatchEvent)ds.dispatchEvent(new Event('input',{bubbles:true}));ds.blur();e.preventDefault();return;}
+      if(t&&typing&&t.blur){t.blur();e.preventDefault();return;}
+      return;
+    }
     // "/" — focus dashboard search (only when not typing)
     if(e.key==='/'&&!typing){const ds=$('dashSearch');if(ds){if($('viewDash').classList.contains('hide')){setTab('dash');renderDash();}setTimeout(()=>{const d=$('dashSearch');if(d)d.focus();},60);e.preventDefault();}return;}
     // "?" — toggle shortcut bar (not while typing)
