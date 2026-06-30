@@ -307,6 +307,7 @@
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="gate" id="loginGate">
@@ -2934,15 +2935,27 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     // no date on order → use today (Busy needs a date; blank date can break the row)
     const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
   }
-  // build .xls (Excel XML – Busy reads it cleanly, column A,B,C exact)
-  function _xlsFromRows(rows){
-    // plain CSV — Busy reads column-by-column reliably; empty cells stay as consecutive commas (no shift)
+  // CSV builder (kept as fallback)
+  function _csvFromRows(rows){
     const ce=v=>{
       if(v==null)v='';
       v=String(v);
       return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
     };
     return '\ufeff'+rows.map(r=>r.map(ce).join(',')).join('\r\n');
+  }
+  // real .xlsx via SheetJS (Busy import accepts .xls/.xlsx only)
+  function _busyDownloadWorkbook(rows,fname){
+    if(typeof XLSX==='undefined'||!XLSX.utils){
+      // library not loaded → fallback to CSV so user still gets a file
+      _dl(fname.replace(/\.xlsx?$/i,'')+'.csv',_csvFromRows(rows),'text/csv;charset=utf-8;');
+      return 'csv';
+    }
+    const ws=XLSX.utils.aoa_to_sheet(rows);   // array-of-arrays → worksheet (empty strings stay in place, no shift)
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'SalesOrder');
+    XLSX.writeFile(wb,fname);                  // triggers browser download
+    return 'xlsx';
   }
   function _busyPickOrders(scope){
     const firm=_busyFirm();
@@ -3017,12 +3030,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       note.innerHTML='⚠️ '+esc(firm)+' — இந்த camp-க்கு Busy Party பேர் இல்ல: <b>'+missing.map(esc).join(', ')+'</b><br>முதல்ல "⚙️ Camp → Busy Party" அழுத்தி பேர் போடு. அப்புறம் export பண்ணு.';
       return;
     }
-    const fname='Busy_'+_busyFirmKey()+'_SalesOrder_'+_stamp()+'.csv';
-    _dl(fname,_xlsFromRows(rows),'text/csv;charset=utf-8;');
+    const fname='Busy_'+_busyFirmKey()+'_SalesOrder_'+_stamp()+'.xlsx';
+    const kind=_busyDownloadWorkbook(rows,fname);
     if(scope!=='unbilled'){
       const done=_busyExportedLoad();list.forEach(o=>{if(done.indexOf(o.id)<0)done.push(o.id);});_busyExportedSave(done);
     }
-    note.innerHTML='✅ '+esc(firm)+': '+list.length+' order ('+lineCount+' line) export ஆச்சு.<br>Busy-ல <b>'+esc(firm)+'</b> company திற → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b> → இந்த .xls (<b>'+esc(fname)+'</b>) select பண்ணி Import.';
+    const realName=(kind==='csv')?fname.replace(/\.xlsx?$/i,'')+'.csv':fname;
+    const warn=(kind==='csv')?'<br>⚠️ Excel library load ஆகல (internet?) — .csv வந்திருக்கு. Busy .csv ஏத்தலைனா, internet on பண்ணி மறுபடி எடு.':'';
+    note.innerHTML='✅ '+esc(firm)+': '+list.length+' order ('+lineCount+' line) export ஆச்சு.<br>Busy-ல <b>'+esc(firm)+'</b> company திற → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b> → இந்த file (<b>'+esc(realName)+'</b>) select பண்ணி Import.'+warn;
   });
 
   const _bkE=$('bkExcel');if(_bkE)_bkE.addEventListener('click',()=>{
