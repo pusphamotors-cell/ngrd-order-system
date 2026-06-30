@@ -2694,17 +2694,18 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;else if(a&&a.lvl===1)soon++;
       const sup=(o.supplier||'').toLowerCase();const c=sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';
       comp[c]=comp[c]||{n:0,v:0,p:0};comp[c].n++;comp[c].v+=Number(o.sell)||0;if(pv!==null)comp[c].p+=pv;
-      const b=_campOf(o);camp[b]=camp[b]||{n:0,v:0};camp[b].n++;camp[b].v+=Number(o.sell)||0;
+      const b=_campOf(o);camp[b]=camp[b]||{n:0,v:0,p:0,i:0,d:0};camp[b].n++;camp[b].v+=Number(o.sell)||0;
+      if(o.paid)camp[b].d++;else if(o.supplied||o.bill_no)camp[b].i++;else camp[b].p++;
     });
     const tot=orders.length;
     const sb=(n,col)=>n>0?`<div style="flex:${n};background:${col}">${n}</div>`:'';
     const compRows=Object.keys(comp).map(k=>`<div class="brow" data-fltt="company" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${comp[k].n} orders · Rs ${fmt(comp[k].v)}</span><span class="vl">Rs ${fmt(comp[k].p)}</span></div>`).join('');
-    const campRows=Object.keys(camp).sort((a,b)=>camp[b].v-camp[a].v).map(k=>`<div class="brow" data-fltt="camp" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${camp[k].n} orders</span><span class="vl">Rs ${fmt(camp[k].v)}</span></div>`).join('');
+    const campRows=Object.keys(camp).sort((a,b)=>camp[b].n-camp[a].n).map(k=>`<div class="brow" data-fltt="camp" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct" style="font-size:11px">🔵${camp[k].p} 🟠${camp[k].i} 🟢${camp[k].d}</span><span class="vl">${camp[k].n}</span></div>`).join('');
     // chart data: last 6 months sales (bill date else order date)
     const months=[];const now=new Date();
-    for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:d.toLocaleDateString('en-GB',{month:'short'}),value:0});}
+    for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:d.toLocaleDateString('en-GB',{month:'short'}),value:0,n:0,p:0,i:0,d:0});}
     const mIdx={};months.forEach((m,i)=>mIdx[m.key]=i);
-    orders.forEach(o=>{const bd=parseDate(o.bill_date||o.order_date);if(!bd)return;const key=bd.getFullYear()+'-'+String(bd.getMonth()+1).padStart(2,'0');if(mIdx[key]!=null)months[mIdx[key]].value+=Number(o.sell)||0;});
+    orders.forEach(o=>{const bd=parseDate(o.bill_date||o.order_date);if(!bd)return;const key=bd.getFullYear()+'-'+String(bd.getMonth()+1).padStart(2,'0');if(mIdx[key]!=null){const mm=months[mIdx[key]];mm.value+=Number(o.sell)||0;mm.n++;if(o.paid)mm.d++;else if(o.supplied||o.bill_no)mm.i++;else mm.p++;}});
     const topCamps=Object.keys(camp).map(k=>({label:k,value:camp[k].v,n:camp[k].n})).sort((a,b)=>b.value-a.value).slice(0,5);
     const chartsHtml=`
       <div class="dsec">📊 Sales — கடைசி 6 மாசம்</div>
@@ -2735,7 +2736,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dsec">🏢 Company-wise</div>
       <div class="dpanel">${compRows}</div>
       <div class="dsec">🏕️ Camp-wise (Naval Command)</div>
+      <div style="font-size:11px;color:var(--muted);padding:0 13px 4px">🔵 Pending · 🟠 Invoiced · 🟢 Paid · வலது = மொத்தம்</div>
       <div class="dpanel">${campRows}</div>
+      <div class="dsec">📅 Month-wise (கடைசி 6 மாசம்)</div>
+      <div style="font-size:11px;color:var(--muted);padding:0 13px 4px">🔵 Pending · 🟠 Invoiced · 🟢 Paid · வலது = மொத்தம்</div>
+      <div class="dpanel">${months.slice().reverse().map(m=>`<div class="brow"><span class="nm">${esc(m.label)} ${esc(m.key.slice(0,4))}</span><span class="ct" style="font-size:11px">🔵${m.p} 🟠${m.i} 🟢${m.d}</span><span class="vl">${m.n}</span></div>`).join('')}</div>
       <div class="drow" style="margin-top:16px">
         <button class="btn" id="dashRep" style="margin-top:0">📑 Report பாரு</button>
         <button class="btn gold" id="dashOrd" style="margin-top:0">📋 Orders பாரு</button>
