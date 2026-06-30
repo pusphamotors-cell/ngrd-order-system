@@ -2934,7 +2934,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       </div>
     </div>`;
     const w=window.open('','_blank');
-    w.document.write('<html><head><title>வேலை Letter - '+esc(name)+'</title><meta charset="utf-8"><style>@media print{@page{margin:14mm}}body{margin:0}td,th{border:1px solid #c5cdd8}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},400);}</scr'+'ipt></body></html>');
+    const ctrl='<div class="noprint" style="position:sticky;top:0;background:#0b2a4a;padding:12px 16px;display:flex;gap:10px;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:99">'
+      +'<button onclick="window.print()" style="background:#1f6f8b;color:#fff;border:0;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨️ Print</button>'
+      +'<button onclick="window.print()" style="background:#25954b;color:#fff;border:0;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">⬇️ PDF ஆ Save</button>'
+      +'<span style="color:#bcd;font-size:12px;align-self:center">(dialog-ல "Save as PDF" தேர்வு பண்ணு)</span>'
+      +'</div>';
+    w.document.write('<html><head><title>வேலை Letter - '+esc(name)+'</title><meta charset="utf-8"><style>@media print{@page{margin:14mm}.noprint{display:none!important}}body{margin:0}td,th{border:1px solid #c5cdd8}</style></head><body>'+ctrl+page+'</body></html>');
     w.document.close();
   }
   function _staffLetterWA(staffKey){
