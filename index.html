@@ -2928,19 +2928,21 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);if(m)return m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')+'-'+m[3];
     return s;
   }
-  function _busyOrderDate(o){return o.order_date||o.po_date||o.bill_date||o.quotation_date||'';}
+  function _busyOrderDate(o){
+    const d=o.order_date||o.po_date||o.bill_date||o.quotation_date||'';
+    if(d)return d;
+    // no date on order → use today (Busy needs a date; blank date can break the row)
+    const n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+  }
   // build .xls (Excel XML – Busy reads it cleanly, column A,B,C exact)
   function _xlsFromRows(rows){
-    const cell=v=>{
+    // plain CSV — Busy reads column-by-column reliably; empty cells stay as consecutive commas (no shift)
+    const ce=v=>{
       if(v==null)v='';
-      if(typeof v==='number'&&isFinite(v))return '<Cell><Data ss:Type="Number">'+v+'</Data></Cell>';
-      v=String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-      return '<Cell><Data ss:Type="String">'+v+'</Data></Cell>';
+      v=String(v);
+      return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
     };
-    const body=rows.map(r=>'<Row>'+r.map(cell).join('')+'</Row>').join('');
-    return '<?xml version="1.0"?>\n'+
-      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
-      '<Worksheet ss:Name="SalesOrder"><Table>'+body+'</Table></Worksheet></Workbook>';
+    return '\ufeff'+rows.map(r=>r.map(ce).join(',')).join('\r\n');
   }
   function _busyPickOrders(scope){
     const firm=_busyFirm();
@@ -3015,8 +3017,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       note.innerHTML='⚠️ '+esc(firm)+' — இந்த camp-க்கு Busy Party பேர் இல்ல: <b>'+missing.map(esc).join(', ')+'</b><br>முதல்ல "⚙️ Camp → Busy Party" அழுத்தி பேர் போடு. அப்புறம் export பண்ணு.';
       return;
     }
-    const fname='Busy_'+_busyFirmKey()+'_SalesOrder_'+_stamp()+'.xls';
-    _dl(fname,_xlsFromRows(rows),'application/vnd.ms-excel');
+    const fname='Busy_'+_busyFirmKey()+'_SalesOrder_'+_stamp()+'.csv';
+    _dl(fname,_xlsFromRows(rows),'text/csv;charset=utf-8;');
     if(scope!=='unbilled'){
       const done=_busyExportedLoad();list.forEach(o=>{if(done.indexOf(o.id)<0)done.push(o.id);});_busyExportedSave(done);
     }
