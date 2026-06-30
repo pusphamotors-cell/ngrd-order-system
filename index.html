@@ -413,6 +413,10 @@
       </select>
     </div>
     <input id="searchBox" placeholder="🔍 Order No / Bill No / NAHA / Vehicle தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
+    <div id="savedQuickBar" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn" id="qbPendingBill" style="margin:0;flex:1;min-width:150px;background:#b5701a;font-size:12.5px">📌 Pending + Bill போடாதது</button>
+      <button class="btn" id="qbStaffLetter" style="margin:0;flex:1;min-width:150px;background:#1f6f8b;font-size:12.5px">📄 Staff வேலை Letter</button>
+    </div>
     <div id="orderList"></div>
   </div>
 
@@ -489,6 +493,7 @@
       <div class="grid2">
         <div class="fld"><label>Username</label><input id="nuUser" placeholder="உதா: darshan" autocapitalize="off"></div>
         <div class="fld"><label>Name</label><input id="nuName" placeholder="முழு பேர்"></div>
+        <div class="fld"><label>WhatsApp No <span style="color:var(--muted);font-size:11px">(94 சேர்த்து)</span></label><input id="nuPhone" placeholder="உதா: 94771234567" inputmode="numeric"></div>
         <div class="fld"><label>Password</label><input id="nuPass" placeholder="password"></div>
         <div class="fld"><label>Role</label><select id="nuRole"><option value="staff">Staff</option><option value="admin">Admin</option></select></div>
       </div>
@@ -2788,6 +2793,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   if($('campFilter'))$('campFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
   if($('compFilter'))$('compFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
   if($('statusFilter'))$('statusFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
+  // Saved tab quick buttons
+  if($('qbPendingBill'))$('qbPendingBill').addEventListener('click',()=>{
+    const sf=$('statusFilter');if(sf)sf.value='pending';
+    const sb=$('searchBox');if(sb)sb.value='';
+    _listFilter=null;renderList();
+    const lc=$('orderList');if(lc)lc.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+  if($('qbStaffLetter'))$('qbStaffLetter').addEventListener('click',()=>_savedStaffLetterPick());
 
   // ---- Staff task assignment ----
   function _ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -2837,16 +2850,26 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       if(!assigned.length){box.innerHTML='<div class="empty">இன்னும் order assign பண்ணல.<br>Order open → "👷 Assign" → staff + date தேர்வு பண்ணு</div>';return;}
       const byU={};assigned.forEach(o=>{const k=o.assignee_name||o.assignee;(byU[k]=byU[k]||[]).push(o);});
       box.innerHTML=Object.keys(byU).sort().map(u=>{const arr=byU[u].slice().sort((a,b)=>(a.task_date||'').localeCompare(b.task_date||''));const pend=arr.filter(o=>!o.task_done).length;
-        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · ${pend} pending</div><div class="dpanel">${arr.map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
+        const uk=arr[0]?arr[0].assignee:'';
+        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · ${pend} pending</div>
+        <div style="display:flex;gap:6px;padding:6px 10px;flex-wrap:wrap">
+          <button class="btn" data-letterpdf="${esc(uk)}" style="margin:0;flex:1;min-width:130px;background:#1f6f8b;font-size:12px">📄 வேலை Letter (PDF)</button>
+          <button class="btn" data-letterwa="${esc(uk)}" style="margin:0;flex:1;min-width:130px;background:#25954b;font-size:12px">💬 WhatsApp அனுப்பு</button>
+        </div>
+        <div class="dpanel">${arr.map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
     } else {
       const arr=orders.filter(o=>o.assignee===CURRENT.u);
       if(!arr.length){box.innerHTML='<div class="empty">இன்னைக்கு வேலை இல்ல 🎉<br>Admin assign பண்ணா இங்க வரும்</div>';return;}
+      const _btnbar=`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="btn" data-letterpdf="${esc(CURRENT.u)}" style="margin:0;flex:1;min-width:130px;background:#1f6f8b;font-size:12px">📄 என் வேலை list (PDF)</button>
+        <button class="btn" data-letterwa="${esc(CURRENT.u)}" style="margin:0;flex:1;min-width:130px;background:#25954b;font-size:12px">💬 WhatsApp-ல share</button>
+      </div>`;
       const today=_todayKey();const tmrw=_ymd(new Date(Date.now()+86400000));
       const g={overdue:[],today:[],tomorrow:[],later:[],nodate:[],done:[]};
       arr.forEach(o=>{if(o.task_done){g.done.push(o);return;}const d=o.task_date||'';if(!d)g.nodate.push(o);else if(d<today)g.overdue.push(o);else if(d===today)g.today.push(o);else if(d===tmrw)g.tomorrow.push(o);else g.later.push(o);});
       const sortd=a=>a.sort((x,y)=>(x.task_date||'').localeCompare(y.task_date||''));
       const sec=(t,a,cls)=>a.length?`<div class="sec" style="${cls||''}">${t} (${a.length})</div><div class="dpanel" style="margin-bottom:8px">${sortd(a).map(o=>taskRow(o,false)).join('')}</div>`:'';
-      box.innerHTML=
+      box.innerHTML=_btnbar+
         sec('🔴 தாமதம் (Overdue)',g.overdue,'color:var(--red)')+
         sec('⭐ இன்னைக்கு',g.today,'')+
         sec('📅 நாளைக்கு',g.tomorrow,'')+
@@ -2857,6 +2880,93 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     box.querySelectorAll('[data-done]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.done);if(!o)return;o.task_done=true;o.task_done_at=Date.now();try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
     box.querySelectorAll('[data-undone]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.undone);if(!o)return;o.task_done=false;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
     box.querySelectorAll('[data-unassign]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.unassign);if(!o)return;if(!confirm('Assign நீக்கவா?'))return;delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
+    box.querySelectorAll('[data-letterpdf]').forEach(b=>b.addEventListener('click',()=>_staffLetterPDF(b.dataset.letterpdf)));
+    box.querySelectorAll('[data-letterwa]').forEach(b=>b.addEventListener('click',()=>_staffLetterWA(b.dataset.letterwa)));
+  }
+  // ---- staff work letter (PDF + WhatsApp) ----
+  function _staffLetterOrders(staffKey){
+    // pending (not done) assigned orders for this staff, sorted by date
+    return orders.filter(o=>o.assignee===staffKey&&!o.task_done)
+      .sort((a,b)=>(a.task_date||a.delivery_date||'').localeCompare(b.task_date||b.delivery_date||''));
+  }
+  function _staffName(staffKey){
+    const arr=orders.filter(o=>o.assignee===staffKey);
+    return (arr[0]&&arr[0].assignee_name)||staffKey;
+  }
+  function _staffLetterPDF(staffKey){
+    const arr=_staffLetterOrders(staffKey);
+    if(!arr.length){alert('இந்த staff-க்கு pending வேலை இல்ல');return;}
+    const name=_staffName(staffKey);
+    const today=new Date().toLocaleDateString('en-GB');
+    const rows=arr.map((o,i)=>{
+      const dd=o.delivery_date||(o.task_date?_fmtDk(o.task_date):'—');
+      return `<tr>
+        <td style="text-align:center">${i+1}</td>
+        <td>${esc(o.order_no||'—')}</td>
+        <td>${esc(_campOf(o))}</td>
+        <td style="text-align:center">${(o.items||[]).length}</td>
+        <td style="text-align:center;font-weight:700">${esc(dd)}</td>
+      </tr>`;}).join('');
+    const page=`<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:720px;margin:0 auto;padding:30px 34px;color:#1a2b40">
+      <div style="border-bottom:3px solid #0b2a4a;padding-bottom:12px;margin-bottom:18px">
+        <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:.5px">N.G.R.D. MOTORS</div>
+        <div style="font-size:12px;color:#6a7787">வேலை பட்டியல் — Work Assignment</div>
+      </div>
+      <div style="font-size:13px;margin-bottom:6px">தேதி: <b>${today}</b></div>
+      <div style="font-size:15px;margin-bottom:14px">அன்புள்ள <b>${esc(name)}</b>,</div>
+      <div style="font-size:13.5px;line-height:1.6;margin-bottom:16px">
+        வணக்கம். கீழே உள்ள order-களை நீங்கள் கவனித்து, குறிப்பிட்ட <b>delivery தேதிக்குள்</b> ready பண்ணி தரவும். ஏதேனும் சந்தேகம் இருந்தால் தயவுசெய்து கேளுங்கள். உங்கள் ஒத்துழைப்புக்கு நன்றி. 🙏
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#0b2a4a;color:#fff">
+          <th style="padding:8px 6px;width:36px">#</th>
+          <th style="padding:8px 6px;text-align:left">Order No</th>
+          <th style="padding:8px 6px;text-align:left">Camp</th>
+          <th style="padding:8px 6px;width:56px">Items</th>
+          <th style="padding:8px 6px;width:110px">முடிக்க வேண்டிய தேதி</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:14px;font-size:12.5px;color:#6a7787">மொத்தம்: <b>${arr.length}</b> order முடிக்க வேண்டும்.</div>
+      <div style="margin-top:40px;font-size:13px">
+        நன்றி,<br><b>NGRD Motors / Puspha Motors</b><br>
+        <span style="color:#6a7787;font-size:11.5px">Panchikawatta, Colombo 10</span>
+      </div>
+    </div>`;
+    const w=window.open('','_blank');
+    w.document.write('<html><head><title>வேலை Letter - '+esc(name)+'</title><meta charset="utf-8"><style>@media print{@page{margin:14mm}}body{margin:0}td,th{border:1px solid #c5cdd8}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},400);}</scr'+'ipt></body></html>');
+    w.document.close();
+  }
+  function _staffLetterWA(staffKey){
+    const arr=_staffLetterOrders(staffKey);
+    if(!arr.length){alert('இந்த staff-க்கு pending வேலை இல்ல');return;}
+    const name=_staffName(staffKey);
+    const today=new Date().toLocaleDateString('en-GB');
+    let txt='*NGRD Motors — வேலை பட்டியல்*\n'+today+'\n\nஅன்புள்ள '+name+',\nவணக்கம். கீழே உள்ள order-களை delivery தேதிக்குள் ready பண்ணவும் 🙏\n\n';
+    arr.forEach((o,i)=>{
+      const dd=o.delivery_date||(o.task_date?_fmtDk(o.task_date):'—');
+      txt+=(i+1)+'. *'+(o.order_no||'—')+'*  ·  '+_campOf(o)+'  ·  '+((o.items||[]).length)+' items\n   📅 முடிக்க: *'+dd+'*\n';
+    });
+    txt+='\nமொத்தம்: '+arr.length+' order.\nநன்றி 🙏\n*NGRD Motors*';
+    // try to find staff phone from users map
+    let phone='';try{const u=(typeof users!=='undefined'&&users[staffKey])||null;if(u&&u.phone)phone=String(u.phone).replace(/[^0-9]/g,'');}catch(e){}
+    const url='https://wa.me/'+(phone?phone:'')+'?text='+encodeURIComponent(txt);
+    window.open(url,'_blank');
+  }
+  // ---- end staff work letter ----
+  function _savedStaffLetterPick(){
+    // gather staff who have pending assigned orders
+    const map={};orders.forEach(o=>{if(o.assignee&&!o.task_done){const k=o.assignee;(map[k]=map[k]||{name:o.assignee_name||k,n:0}).n++;}});
+    const keys=Object.keys(map);
+    if(!keys.length){alert('இப்போ staff-க்கு assign பண்ண pending order இல்ல.\nMமுதல்ல "👷 Assign" பண்ணுங்க.');return;}
+    const lines=keys.map((k,i)=>(i+1)+'. '+map[k].name+' ('+map[k].n+' order)').join('\n');
+    const ans=prompt('எந்த staff-க்கு வேலை letter?\n\n'+lines+'\n\nNumber type பண்ணு (1-'+keys.length+'):','1');
+    if(!ans)return;
+    const idx=parseInt(ans,10)-1;
+    if(isNaN(idx)||idx<0||idx>=keys.length){alert('சரியான number type பண்ணு');return;}
+    const sk=keys[idx];
+    const how=prompt('எப்படி அனுப்பணும்?\n\n1 = PDF (print/save)\n2 = WhatsApp\n\nNumber type பண்ணு:','1');
+    if(how==='2')_staffLetterWA(sk);else _staffLetterPDF(sk);
   }
   // ---- end task assignment ----
 
@@ -2936,11 +3046,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   $('nuAdd').addEventListener('click',async()=>{
     const u=($('nuUser').value||'').trim().toLowerCase(),n=($('nuName').value||'').trim(),p=($('nuPass').value||'').trim(),role=$('nuRole').value;
+    const ph=(($('nuPhone')||{}).value||'').replace(/[^0-9]/g,'');
     if(!u||!p){alert('Username + Password வேணும்');return;}
     const users=await fbUsersGet();
     if(users[u]){if(!confirm('இந்த username ஏற்கனவே இருக்கு. மாத்தவா?'))return;}
-    users[u]={pass:p,role,name:n||u,perms:readPerms($('nuPerms'),'nuPerm')};await fbUsersSet(users);
-    $('nuUser').value='';$('nuName').value='';$('nuPass').value='';$('nuRole').value='staff';$('nuPerms').innerHTML=permChecks('nuPerm',{purchase:true,supply:true});
+    users[u]={pass:p,role,name:n||u,phone:ph,perms:readPerms($('nuPerms'),'nuPerm')};await fbUsersSet(users);
+    $('nuUser').value='';$('nuName').value='';$('nuPass').value='';if($('nuPhone'))$('nuPhone').value='';$('nuRole').value='staff';$('nuPerms').innerHTML=permChecks('nuPerm',{purchase:true,supply:true});
     renderUsers();
   });
 
