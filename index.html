@@ -1588,15 +1588,20 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderList(){
     const lc=$('orderList');
     _fillCampFilter();
+    const _isStaffView=(CURRENT&&CURRENT.role!=='admin');
+    const _statBase=_isStaffView?orders.filter(o=>o.assignee===CURRENT.u):orders;
+    if(_statBase.length===0&&_isStaffView){lc.innerHTML='<div class="empty">உனக்கு assign பண்ண order இல்ல.<br>Admin assign பண்ணா இங்க தெரியும் 👷</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
     if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
     let tp=0,pend=0,ld=0;
-    orders.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
-    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
+    _statBase.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
+    $('gCount').textContent=_statBase.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
     const q=(($('searchBox')||{}).value||'').trim().toLowerCase();
     const campSel=(($('campFilter')||{}).value)||'all';
     const compSel=(($('compFilter')||{}).value)||'all';
     const statSel=(($('statusFilter')||{}).value)||'all';
     let list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
+    // staff sees ONLY orders assigned to them; admin sees all
+    if(CURRENT&&CURRENT.role!=='admin')list=list.filter(({o})=>o.assignee===CURRENT.u);
     if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')+' '+(o.bill_no||'')+' '+(o.model||'')+' '+(o.file_no||'')).toLowerCase().indexOf(q)>=0));
     if(campSel!=='all')list=list.filter(({o})=>_campOf(o)===campSel);
     if(compSel!=='all')list=list.filter(({o})=>_companyOf(o)===compSel);
@@ -3212,6 +3217,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   const _bos=$('busyOneSearch');if(_bos)_bos.addEventListener('input',_busyRenderOneList);
   const _boc=$('busyOneCamp');if(_boc)_boc.addEventListener('change',_busyRenderOneList);
   const _bop=$('busyOnePending');if(_bop)_bop.addEventListener('change',_busyRenderOneList);
+  // when an order is picked, auto-select its company (NGRD/Puspha)
+  const _boo=$('busyOneOrder');if(_boo)_boo.addEventListener('change',function(){
+    const oid=this.value;if(!oid)return;
+    const o=orders.find(x=>x.id===oid);if(!o)return;
+    const comp=_companyOf(o);
+    const fsel=$('busyFirm');
+    if(fsel&&(comp==='NGRD Motors'||comp==='Puspha Motors')&&fsel.value!==comp){
+      fsel.value=comp;
+      // refresh dependent UI (party map box if open)
+      const box=$('busyMapBox');if(box&&box.style.display!=='none')_busyRenderMap();
+      $('busyExportNote').innerHTML='ℹ️ கடை auto select ஆச்சு: <b>'+esc(comp)+'</b>';
+    }
+  });
 
   const _busyExp=$('busyExport');if(_busyExp)_busyExp.addEventListener('click',async()=>{
     const scope=($('busyScope')||{}).value||'new';
