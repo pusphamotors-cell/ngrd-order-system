@@ -526,6 +526,14 @@
       <div class="sec">🧾 Busy Export — Sales Order (type பண்ண வேண்டாம்)</div>
       <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Order-ஐ Busy-ல type பண்ணாம, இங்க Excel எடுத்து Busy-ல import பண்ணு. (Busy: Administration → Data Export Import → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b>)</div>
       <div style="padding:4px 13px">
+        <label style="font-size:12px;font-weight:700;color:var(--navy)">எந்த கடை?</label>
+        <select id="busyFirm" style="width:100%;margin-top:5px;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-size:13px">
+          <option value="NGRD Motors">NGRD Motors (series NGRD)</option>
+          <option value="Puspha Motors">Puspha Motors (series PUSHPA)</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">⚠️ ஒவ்வொரு கடைக்கும் தனி Excel. NGRD எடுத்து NGRD Busy company-ல import; Puspha எடுத்து Puspha Busy company-ல import.</div>
+      </div>
+      <div style="padding:4px 13px">
         <label style="font-size:12px;font-weight:700;color:var(--navy)">எந்த orders export பண்ணணும்?</label>
         <select id="busyScope" style="width:100%;margin-top:5px;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-size:13px">
           <option value="new">இன்னும் export பண்ணாதது மட்டும் (recommended)</option>
@@ -2904,11 +2912,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   // Busy import column order (Ngrd Order format):
   // A=VCH_SERIES  B=VCH/BILL_DATE  C=VCH/BILL_NO  D=SALE/PURC_TYPE  E=PARTY_NAME
   // F=ITEM_MC_NAME  G=ITEM_NAME  H=QUANTITY  I=UNIT  J=PRICE  K=AMOUNT
-  const BUSY_SERIES='NGRD', BUSY_SALETYPE='Sales', BUSY_MC='SHOP';
-  function _busyMapLoad(){try{return JSON.parse(localStorage.getItem('busyPartyMap')||'{}');}catch(e){return {};}}
-  function _busyMapSave(m){try{localStorage.setItem('busyPartyMap',JSON.stringify(m));}catch(e){}}
-  function _busyExportedLoad(){try{return JSON.parse(localStorage.getItem('busyExportedIds')||'[]');}catch(e){return [];}}
-  function _busyExportedSave(a){try{localStorage.setItem('busyExportedIds',JSON.stringify(a));}catch(e){}}
+  const BUSY_SALETYPE='Sales', BUSY_MC='SHOP';
+  const BUSY_SERIES={'NGRD Motors':'NGRD','Puspha Motors':'PUSHPA'};
+  function _busyFirm(){return ($('busyFirm')||{}).value||'NGRD Motors';}
+  function _busyFirmKey(){return _busyFirm()==='Puspha Motors'?'PUSPHA':'NGRD';}
+  // party map + exported list are kept PER FIRM (so NGRD & Puspha never mix)
+  function _busyMapLoad(){try{return JSON.parse(localStorage.getItem('busyPartyMap_'+_busyFirmKey())||'{}');}catch(e){return {};}}
+  function _busyMapSave(m){try{localStorage.setItem('busyPartyMap_'+_busyFirmKey(),JSON.stringify(m));}catch(e){}}
+  function _busyExportedLoad(){try{return JSON.parse(localStorage.getItem('busyExportedIds_'+_busyFirmKey())||'[]');}catch(e){return [];}}
+  function _busyExportedSave(a){try{localStorage.setItem('busyExportedIds_'+_busyFirmKey(),JSON.stringify(a));}catch(e){}}
   // Busy wants date as DD-MM-YYYY
   function _busyDate(s){
     if(!s)return '';s=String(s).trim();
@@ -2931,13 +2943,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       '<Worksheet ss:Name="SalesOrder"><Table>'+body+'</Table></Worksheet></Workbook>';
   }
   function _busyPickOrders(scope){
+    const firm=_busyFirm();
     const done=_busyExportedLoad();
-    let list=orders.slice();
+    let list=orders.filter(o=>_companyOf(o)===firm);   // <-- only this shop's orders
     if(scope==='new')list=list.filter(o=>done.indexOf(o.id)<0);
     else if(scope==='unbilled')list=list.filter(o=>!(o.supplied||o.bill_no));
     return list;
   }
   function _busyBuildRows(list,map){
+    const series=BUSY_SERIES[_busyFirm()]||'NGRD';
     const rows=[];const missing=new Set();let lineCount=0;
     list.forEach(o=>{
       const campName=_campOf(o);
@@ -2946,7 +2960,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const items=(o.items&&o.items.length)?o.items:[{description:'',qty:0,unit_price:0,total:0}];
       items.forEach(it=>{
         rows.push([
-          BUSY_SERIES,                       // A series
+          series,                            // A series (NGRD / PUSHPA)
           _busyDate(_busyOrderDate(o)),      // B date
           o.order_no||'',                    // C vch/bill no
           BUSY_SALETYPE,                     // D sale type
@@ -2966,40 +2980,47 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function _busyRenderMap(){
     const box=$('busyMapBox');if(!box)return;
     const map=_busyMapLoad();
+    const firm=_busyFirm();
     const camps=['Welisara (Western)','Madawachchiya (North Central)','Trincomalee (Eastern)','Boossa (Southern)','Pothuvil (South Eastern)','KKS (Northern)','Puttalam (North Western)','மற்றவை'];
-    box.innerHTML='<div class="sec" style="background:#fafbfd;border-radius:9px">⚙️ Camp → Busy Party பேர் (ஒரு முறை set பண்ணு)</div>'+
-      '<div style="font-size:11.5px;color:var(--muted);padding:6px 0">Busy-ல உள்ள <b>அதே</b> Party பேரை போடு (உதா: SRILANKA NAVY MAHANAGA, PANAMA, POTHUVIL). தப்பா இருந்தா import-ல party match ஆகாது.</div>'+
+    box.innerHTML='<div class="sec" style="background:#fafbfd;border-radius:9px">⚙️ '+esc(firm)+' — Camp → Busy Party பேர்</div>'+
+      '<div style="font-size:11.5px;color:var(--muted);padding:6px 0">இந்த பேர் <b>'+esc(firm)+'</b>-க்கு மட்டும். Busy-ல உள்ள <b>அதே</b> Party பேரை போடு (உதா: SRILANKA NAVY MAHANAGA, PANAMA, POTHUVIL). தப்பா இருந்தா import-ல party match ஆகாது.</div>'+
       camps.map(c=>'<div style="margin:7px 0"><label style="font-size:11.5px;font-weight:700;color:var(--navy)">'+esc(c)+'</label>'+
         '<input class="busyPartyInp" data-camp="'+esc(c)+'" value="'+esc(map[c]||'')+'" placeholder="Busy Party பேர்..." style="width:100%;margin-top:3px;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px"></div>').join('')+
-      '<button class="btn gold" id="busyMapSave" style="margin-top:8px">💾 Party பேர் save பண்ணு</button>';
+      '<button class="btn gold" id="busyMapSave" style="margin-top:8px">💾 '+esc(firm)+' Party பேர் save பண்ணு</button>';
     $('busyMapSave').addEventListener('click',()=>{
       const m=_busyMapLoad();
       document.querySelectorAll('.busyPartyInp').forEach(inp=>{const c=inp.getAttribute('data-camp');const v=inp.value.trim();if(v)m[c]=v;else delete m[c];});
       _busyMapSave(m);
-      $('busyExportNote').innerHTML='✅ Party பேர் save ஆச்சு.';
+      $('busyExportNote').innerHTML='✅ '+esc(firm)+' Party பேர் save ஆச்சு.';
     });
   }
   const _busyMapBtn=$('busyMapBtn');if(_busyMapBtn)_busyMapBtn.addEventListener('click',()=>{
     const box=$('busyMapBox');if(!box)return;
     if(box.style.display==='none'){box.style.display='block';_busyRenderMap();}else{box.style.display='none';}
   });
+  // when firm changes, refresh the map box if open
+  const _busyFirmSel=$('busyFirm');if(_busyFirmSel)_busyFirmSel.addEventListener('change',()=>{
+    const box=$('busyMapBox');if(box&&box.style.display!=='none')_busyRenderMap();
+    $('busyExportNote').innerHTML='';
+  });
   const _busyExp=$('busyExport');if(_busyExp)_busyExp.addEventListener('click',()=>{
     const scope=($('busyScope')||{}).value||'new';
+    const firm=_busyFirm();
     const note=$('busyExportNote');
     const list=_busyPickOrders(scope);
-    if(!list.length){note.innerHTML='⚠️ Export பண்ண order இல்ல ('+(scope==='new'?'எல்லாம் ஏற்கனவே export ஆயிருக்கு':'')+').';return;}
+    if(!list.length){note.innerHTML='⚠️ '+esc(firm)+'-க்கு export பண்ண order இல்ல ('+(scope==='new'?'எல்லாம் ஏற்கனவே export ஆயிருக்கு':'')+').';return;}
     const map=_busyMapLoad();
     const {rows,missing,lineCount}=_busyBuildRows(list,map);
     if(missing.length){
-      note.innerHTML='⚠️ இந்த camp-க்கு Busy Party பேர் இல்ல: <b>'+missing.map(esc).join(', ')+'</b><br>முதல்ல "⚙️ Camp → Busy Party" அழுத்தி பேர் போடு. அப்புறம் export பண்ணு.';
+      note.innerHTML='⚠️ '+esc(firm)+' — இந்த camp-க்கு Busy Party பேர் இல்ல: <b>'+missing.map(esc).join(', ')+'</b><br>முதல்ல "⚙️ Camp → Busy Party" அழுத்தி பேர் போடு. அப்புறம் export பண்ணு.';
       return;
     }
-    _dl('Busy_SalesOrder_'+_stamp()+'.xls',_xlsFromRows(rows),'application/vnd.ms-excel');
-    // mark as exported (only for 'new'/'all' so we don't re-send)
+    const fname='Busy_'+_busyFirmKey()+'_SalesOrder_'+_stamp()+'.xls';
+    _dl(fname,_xlsFromRows(rows),'application/vnd.ms-excel');
     if(scope!=='unbilled'){
       const done=_busyExportedLoad();list.forEach(o=>{if(done.indexOf(o.id)<0)done.push(o.id);});_busyExportedSave(done);
     }
-    note.innerHTML='✅ '+list.length+' order ('+lineCount+' line) export ஆச்சு.<br>Busy-ல: Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b> → இந்த .xls select பண்ணி Import.';
+    note.innerHTML='✅ '+esc(firm)+': '+list.length+' order ('+lineCount+' line) export ஆச்சு.<br>Busy-ல <b>'+esc(firm)+'</b> company திற → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b> → இந்த .xls (<b>'+esc(fname)+'</b>) select பண்ணி Import.';
   });
 
   const _bkE=$('bkExcel');if(_bkE)_bkE.addEventListener('click',()=>{
