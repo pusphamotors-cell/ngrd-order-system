@@ -2904,7 +2904,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const name=_staffName(staffKey);
     const today=new Date().toLocaleDateString('en-GB');
     const rows=arr.map((o,i)=>{
-      const dd=o.delivery_date||(o.task_date?_fmtDk(o.task_date):'—');
+      const dd=o.task_date?_fmtDk(o.task_date):(o.delivery_date||'—');
       return `<tr>
         <td style="text-align:center">${i+1}</td>
         <td>${esc(o.order_no||'—')}</td>
@@ -2920,7 +2920,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div style="font-size:13px;margin-bottom:6px">தேதி: <b>${today}</b></div>
       <div style="font-size:15px;margin-bottom:14px">அன்புள்ள <b>${esc(name)}</b>,</div>
       <div style="font-size:13.5px;line-height:1.6;margin-bottom:16px">
-        வணக்கம். கீழே உள்ள order-களை நீங்கள் கவனித்து, குறிப்பிட்ட <b>delivery தேதிக்குள்</b> ready பண்ணி தரவும். ஏதேனும் சந்தேகம் இருந்தால் தயவுசெய்து கேளுங்கள். உங்கள் ஒத்துழைப்புக்கு நன்றி. 🙏
+        வணக்கம். கீழே உள்ள order-களை நீங்கள் கவனித்து, குறிப்பிட்ட <b>வேலை நாளுக்குள்</b> ready பண்ணி தரவும். ஏதேனும் சந்தேகம் இருந்தால் தயவுசெய்து கேளுங்கள். உங்கள் ஒத்துழைப்புக்கு நன்றி. 🙏
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:#0b2a4a;color:#fff">
@@ -2928,7 +2928,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           <th style="padding:8px 6px;text-align:left">Order No</th>
           <th style="padding:8px 6px;text-align:left">Camp</th>
           <th style="padding:8px 6px;width:56px">Items</th>
-          <th style="padding:8px 6px;width:110px">முடிக்க வேண்டிய தேதி</th>
+          <th style="padding:8px 6px;width:110px">வேலை நாள்</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2952,10 +2952,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(!arr.length){alert('இந்த staff-க்கு pending வேலை இல்ல');return;}
     const name=_staffName(staffKey);
     const today=new Date().toLocaleDateString('en-GB');
-    let txt='*NGRD Motors — வேலை பட்டியல்*\n'+today+'\n\nஅன்புள்ள '+name+',\nவணக்கம். கீழே உள்ள order-களை delivery தேதிக்குள் ready பண்ணவும் 🙏\n\n';
+    let txt='*NGRD Motors — வேலை பட்டியல்*\n'+today+'\n\nஅன்புள்ள '+name+',\nவணக்கம். கீழே உள்ள order-களை குறிப்பிட்ட வேலை நாளுக்குள் ready பண்ணவும் 🙏\n\n';
     arr.forEach((o,i)=>{
-      const dd=o.delivery_date||(o.task_date?_fmtDk(o.task_date):'—');
-      txt+=(i+1)+'. *'+(o.order_no||'—')+'*  ·  '+_campOf(o)+'  ·  '+((o.items||[]).length)+' items\n   📅 முடிக்க: *'+dd+'*\n';
+      const dd=o.task_date?_fmtDk(o.task_date):(o.delivery_date||'—');
+      txt+=(i+1)+'. *'+(o.order_no||'—')+'*  ·  '+_campOf(o)+'  ·  '+((o.items||[]).length)+' items\n   📅 வேலை நாள்: *'+dd+'*\n';
     });
     txt+='\nமொத்தம்: '+arr.length+' order.\nநன்றி 🙏\n*NGRD Motors*';
     // try to find staff phone from users map
@@ -3213,13 +3213,47 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return _busyItemMap;
   }
   function _busyLinkKey(model,desc){return (_bnorm(model)+'|'+_bnorm(desc)).replace(/[.#$\[\]\/]/g,'_').slice(0,700);}
+  // find a busy item object by its name (to grab its alias)
+  function _busyItemByName(name){
+    if(!name||!_busyItems)return null;
+    const t=_bnorm(name);
+    return _busyItems.find(it=>_bnorm(it.n)===t)||null;
+  }
   async function _busyLinkSave(model,desc,busyName){
     if(!_busyItemMap)_busyItemMap={};
-    const k=_busyLinkKey(model,desc);_busyItemMap[k]=busyName;
+    const k=_busyLinkKey(model,desc);
+    // store name + alias together; alias survives a Busy name change
+    const itm=_busyItemByName(busyName);
+    const rec={n:busyName,a:(itm&&itm.a)?String(itm.a):''};
+    _busyItemMap[k]=rec;
     try{localStorage.setItem('__busyItemMap',JSON.stringify(_busyItemMap));}catch(e){}
-    try{if(_fbOk)await firebase.database().ref('busyItemMap/'+k).set(busyName);}catch(e){}
+    try{if(_fbOk)await firebase.database().ref('busyItemMap/'+k).set(rec);}catch(e){}
   }
-  function _busyLinkGet(model,desc){if(!_busyItemMap)return null;return _busyItemMap[_busyLinkKey(model,desc)]||null;}
+  // resolve a saved link to a CURRENT busy item name.
+  // layer 1: alias still present in busy list -> use its (possibly new) name
+  // layer 2: name still present -> use it
+  // else -> return null (caller will auto re-suggest)
+  function _busyLinkGet(model,desc){
+    if(!_busyItemMap)return null;
+    const raw=_busyItemMap[_busyLinkKey(model,desc)];
+    if(!raw)return null;
+    // backward compat: old links were a plain string (name only)
+    const rec=(typeof raw==='string')?{n:raw,a:''}:raw;
+    // layer 1 — alias match (name-change proof)
+    if(rec.a&&_busyItems&&_busyItems.length){
+      const al=_bnorm(rec.a);
+      const hit=_busyItems.find(it=>it.a&&_bnorm(it.a)===al);
+      if(hit)return hit.n; // current name for that alias
+    }
+    // layer 2 — name still exists in busy list?
+    if(rec.n){
+      if(!_busyItems||!_busyItems.length)return rec.n; // list not loaded; trust saved name
+      const stillThere=_busyItems.some(it=>_bnorm(it.n)===_bnorm(rec.n));
+      if(stillThere)return rec.n;
+    }
+    // name changed & no alias to recover -> force re-match
+    return null;
+  }
   // score how well a busy item matches the order item (desc) + vehicle (model)
   function _busyScore(busyItem,descTokens,modelTokens){
     const nTok=_btokens(busyItem.n), gTok=_btokens(busyItem.g);
