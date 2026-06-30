@@ -402,6 +402,16 @@
         <option value="Puspha Motors">Puspha Motors</option>
       </select>
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <select id="statusFilter" style="flex:1;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:13px;font-family:inherit;background:#fffdf6">
+        <option value="all">📋 எல்லா Status</option>
+        <option value="pending">🔵 Pending (bill இல்ல)</option>
+        <option value="invoiced">🟠 Invoiced (bill போட்டது)</option>
+        <option value="paid">🟢 Paid (பணம் வந்தது)</option>
+        <option value="egp">🏛️ eGP</option>
+        <option value="noitem">⚠️ Item இல்லாதது</option>
+      </select>
+    </div>
     <input id="searchBox" placeholder="🔍 Order No / Bill No / NAHA / Vehicle தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
     <div id="orderList"></div>
   </div>
@@ -543,7 +553,15 @@
           <option value="all">எல்லா orders-ம்</option>
           <option value="unbilled">Bill போடாதது மட்டும் (Pending)</option>
         </select>
-        <select id="busyOneOrder" style="display:none;width:100%;margin-top:6px;padding:9px;border:1.5px solid var(--gold);border-radius:10px;font-size:12px"></select>
+        <div id="busyOneWrap" style="display:none;margin-top:6px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input id="busyOneSearch" type="text" placeholder="🔍 order no தேடு (last 4 / full)..." style="flex:2;min-width:140px;padding:8px;border:1.5px solid var(--gold);border-radius:9px;font-size:12px">
+            <select id="busyOneCamp" style="flex:1;min-width:120px;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px"></select>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin-top:5px;cursor:pointer"><input type="checkbox" id="busyOnePending" style="width:auto"> Pending மட்டும் (bill போடாதது)</label>
+          <select id="busyOneOrder" size="6" style="width:100%;margin-top:5px;padding:6px;border:1.5px solid var(--gold);border-radius:10px;font-size:12px"></select>
+          <div id="busyOneCount" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+        </div>
       </div>
       <div style="padding:8px 13px 4px">
         <button class="btn gold" id="busyExport" style="margin-top:0">🧾 Busy Excel எடு (.xls)</button>
@@ -1577,10 +1595,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const q=(($('searchBox')||{}).value||'').trim().toLowerCase();
     const campSel=(($('campFilter')||{}).value)||'all';
     const compSel=(($('compFilter')||{}).value)||'all';
+    const statSel=(($('statusFilter')||{}).value)||'all';
     let list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
     if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')+' '+(o.bill_no||'')+' '+(o.model||'')+' '+(o.file_no||'')).toLowerCase().indexOf(q)>=0));
     if(campSel!=='all')list=list.filter(({o})=>_campOf(o)===campSel);
     if(compSel!=='all')list=list.filter(({o})=>_companyOf(o)===compSel);
+    if(statSel!=='all')list=list.filter(({o})=>{
+      if(statSel==='egp')return _isEgp(o);
+      if(statSel==='noitem')return !(o.items&&o.items.length);
+      return statusKey(o)===statSel;
+    });
     if(_listFilter)list=list.filter(({o})=>_matchFilter(o));
     const chip=_listFilter?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px">${esc(_filterLabel())} · ${list.length}</span><span id="fltClear" style="cursor:pointer;color:var(--red);font-size:12px;font-weight:700">✕ clear</span></div>`:'';
     const rk=x=>x.al?x.al.lvl:9;
@@ -1590,6 +1614,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}</div>
           <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
+          ${(o.model||o.naha_no)?`<div class="meta" style="color:var(--navy);font-weight:600">${o.model?'🚗 '+esc(o.model):''}${o.model&&o.naha_no?' · ':''}${o.naha_no?'NAHA '+esc(o.naha_no):''}</div>`:''}
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
@@ -2757,6 +2782,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   if($('campFilter'))$('campFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
   if($('compFilter'))$('compFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
+  if($('statusFilter'))$('statusFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
 
   // ---- Staff task assignment ----
   function _ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -3148,15 +3174,44 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('busyExportNote').innerHTML='';
     _busyFillOnePicker();
   });
-  function _busyFillOnePicker(){
-    const sc=($('busyScope')||{}).value;const pick=$('busyOneOrder');if(!pick)return;
-    if(sc!=='one'){pick.style.display='none';return;}
+  function _busyCampList(){
     const firm=_busyFirm();
-    const list=orders.filter(o=>_companyOf(o)===firm);
-    pick.style.display='block';
-    pick.innerHTML='<option value="">— order தேர்ந்தெடு —</option>'+list.slice(0,200).map(o=>'<option value="'+esc(o.id)+'">'+esc(o.order_no||'(no#)')+' · '+esc(_campOf(o))+' · '+((o.items||[]).length)+' item</option>').join('');
+    const camps=Array.from(new Set(orders.filter(o=>_companyOf(o)===firm).map(o=>_campOf(o)))).sort();
+    return camps;
+  }
+  function _busyFillOnePicker(){
+    const sc=($('busyScope')||{}).value;
+    const wrap=$('busyOneWrap');const pick=$('busyOneOrder');if(!wrap||!pick)return;
+    if(sc!=='one'){wrap.style.display='none';return;}
+    wrap.style.display='block';
+    // fill camp dropdown (once / refresh)
+    const campSel=$('busyOneCamp');
+    if(campSel){
+      const cur=campSel.value;
+      const camps=_busyCampList();
+      campSel.innerHTML='<option value="">எல்லா camp</option>'+camps.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+      if(cur)campSel.value=cur;
+    }
+    _busyRenderOneList();
+  }
+  function _busyRenderOneList(){
+    const pick=$('busyOneOrder');if(!pick)return;
+    const firm=_busyFirm();
+    const q=(($('busyOneSearch')||{}).value||'').trim().toLowerCase().replace(/\s+/g,'');
+    const camp=(($('busyOneCamp')||{}).value||'');
+    const pendOnly=(($('busyOnePending')||{}).checked);
+    let list=orders.filter(o=>_companyOf(o)===firm);
+    if(camp)list=list.filter(o=>_campOf(o)===camp);
+    if(pendOnly)list=list.filter(o=>!(o.supplied||o.bill_no));
+    if(q){list=list.filter(o=>{const on=(o.order_no||'').toLowerCase().replace(/\s+/g,'');const fn=(o.file_no||'').toLowerCase().replace(/\s+/g,'');return on.indexOf(q)>=0||fn.indexOf(q)>=0;});}
+    const shown=list.slice(0,300);
+    pick.innerHTML=shown.length?shown.map(o=>'<option value="'+esc(o.id)+'">'+esc(o.order_no||'(no#)')+' · '+esc(_campOf(o))+' · '+((o.items||[]).length)+' item'+((o.supplied||o.bill_no)?' ✓bill':'')+'</option>').join(''):'<option value="">— order இல்ல —</option>';
+    const cnt=$('busyOneCount');if(cnt)cnt.textContent=list.length+' order'+(list.length>300?' (முதல் 300 காட்டுது)':'')+(q||camp||pendOnly?' · filter active':'');
   }
   const _busyScopeSel=$('busyScope');if(_busyScopeSel)_busyScopeSel.addEventListener('change',()=>{_busyFillOnePicker();$('busyExportNote').innerHTML='';});
+  const _bos=$('busyOneSearch');if(_bos)_bos.addEventListener('input',_busyRenderOneList);
+  const _boc=$('busyOneCamp');if(_boc)_boc.addEventListener('change',_busyRenderOneList);
+  const _bop=$('busyOnePending');if(_bop)_bop.addEventListener('change',_busyRenderOneList);
 
   const _busyExp=$('busyExport');if(_busyExp)_busyExp.addEventListener('click',async()=>{
     const scope=($('busyScope')||{}).value||'new';
