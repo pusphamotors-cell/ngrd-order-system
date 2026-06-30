@@ -545,9 +545,12 @@
       <div style="padding:8px 13px 4px">
         <button class="btn gold" id="busyExport" style="margin-top:0">🧾 Busy Excel எடு (.xls)</button>
         <button class="btn" id="busyMapBtn" style="margin-top:9px;background:#0b2a4a">⚙️ Camp → Busy Party பேர் set பண்ணு</button>
+        <button class="btn" id="busyItemsBtn" style="margin-top:9px;background:#0b2a4a">📦 Busy item list — load / check</button>
       </div>
       <div id="busyExportNote" class="note" style="text-align:left;margin:4px 13px 13px"></div>
       <div id="busyMapBox" style="display:none;padding:0 13px 13px"></div>
+      <div id="busyItemsBox" style="display:none;padding:0 13px 13px"></div>
+      <div id="busyMatchBox" style="display:none;padding:0 13px 13px"></div>
 
       <div class="sec">💾 Backup — Data safety</div>
       <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Data already cloud-ல safe. இது extra copy — உன் PC-ல save பண்ணி வச்சுக்க. ஏதாவது நடந்தா restore பண்ணலாம்.</div>
@@ -2967,13 +2970,21 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   function _busyBuildRows(list,map){
     const series=BUSY_SERIES[_busyFirm()]||'NGRD';
-    const rows=[];const missing=new Set();let lineCount=0;
+    const rows=[];const missing=new Set();let lineCount=0;const unmatched=[];
     list.forEach(o=>{
       const campName=_campOf(o);
       const party=map[campName]||'';
       if(!party)missing.add(campName);
       const items=(o.items&&o.items.length)?o.items:[{description:'',qty:0,unit_price:0,total:0}];
       items.forEach(it=>{
+        const desc=it.description||'';
+        // use linked Busy item name if available; else keep original (and flag unmatched)
+        const linked=_busyLinkGet(o.model||'',desc);
+        const itemName=linked||desc;
+        if(!linked && (_busyItems&&_busyItems.length)){
+          // only flag as unmatched if we actually have a busy list to match against
+          unmatched.push({orderId:o.id,order_no:o.order_no||'',model:o.model||'',desc:desc});
+        }
         rows.push([
           series,                            // A series (NGRD / PUSHPA)
           _busyDate(_busyOrderDate(o)),      // B date
@@ -2981,7 +2992,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
           BUSY_SALETYPE,                     // D sale type
           party,                             // E party name
           BUSY_MC,                           // F item MC name
-          it.description||'',                // G item name
+          itemName,                          // G item name (Busy-matched if linked)
           Number(it.qty)||0,                 // H quantity
           'Nos',                             // I unit
           '',                                // J price (order stage: blank)
@@ -2990,7 +3001,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         lineCount++;
       });
     });
-    return {rows,missing:Array.from(missing),lineCount};
+    return {rows,missing:Array.from(missing),lineCount,unmatched};
   }
   function _busyRenderMap(){
     const box=$('busyMapBox');if(!box)return;
@@ -3009,6 +3020,102 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       $('busyExportNote').innerHTML='✅ '+esc(firm)+' Party பேர் save ஆச்சு.';
     });
   }
+  // ===== BUSY ITEM LIST (master) — load, store, search =====
+  let _busyItems=null;            // array of {n:name, a:alias, g:group, u:unit}
+  let _busyItemMap=null;          // saved links: orderItemKey -> busy item name
+  function _bnorm(s){return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();}
+  function _btokens(s){return _bnorm(s).split(' ').filter(w=>w.length>1);}
+  async function _busyItemsLoad(){
+    try{if(!_fbOk)throw 0;const s=await firebase.database().ref('busyItems').once('value');const v=s.val();
+      _busyItems=Array.isArray(v)?v:(v?Object.values(v):[]);
+      try{localStorage.setItem('__busyItems',JSON.stringify(_busyItems));}catch(e){}
+    }catch(e){try{_busyItems=JSON.parse(localStorage.getItem('__busyItems')||'[]');}catch(_){_busyItems=[];}}
+    return _busyItems;
+  }
+  async function _busyItemMapLoad(){
+    try{if(!_fbOk)throw 0;const s=await firebase.database().ref('busyItemMap').once('value');_busyItemMap=s.val()||{};
+      try{localStorage.setItem('__busyItemMap',JSON.stringify(_busyItemMap));}catch(e){}
+    }catch(e){try{_busyItemMap=JSON.parse(localStorage.getItem('__busyItemMap')||'{}');}catch(_){_busyItemMap={};}}
+    return _busyItemMap;
+  }
+  function _busyLinkKey(model,desc){return (_bnorm(model)+'|'+_bnorm(desc)).replace(/[.#$\[\]\/]/g,'_').slice(0,700);}
+  async function _busyLinkSave(model,desc,busyName){
+    if(!_busyItemMap)_busyItemMap={};
+    const k=_busyLinkKey(model,desc);_busyItemMap[k]=busyName;
+    try{localStorage.setItem('__busyItemMap',JSON.stringify(_busyItemMap));}catch(e){}
+    try{if(_fbOk)await firebase.database().ref('busyItemMap/'+k).set(busyName);}catch(e){}
+  }
+  function _busyLinkGet(model,desc){if(!_busyItemMap)return null;return _busyItemMap[_busyLinkKey(model,desc)]||null;}
+  // score how well a busy item matches the order item (desc) + vehicle (model)
+  function _busyScore(busyItem,descTokens,modelTokens){
+    const nTok=_btokens(busyItem.n), gTok=_btokens(busyItem.g);
+    let s=0;
+    // desc word overlap with busy item name
+    descTokens.forEach(d=>{if(nTok.indexOf(d)>=0)s+=3;});
+    // vehicle/model overlap with busy group OR busy item name (strong signal)
+    modelTokens.forEach(m=>{
+      if(gTok.indexOf(m)>=0)s+=4;
+      else if(nTok.indexOf(m)>=0)s+=2;
+    });
+    return s;
+  }
+  function _busySuggest(model,desc,limit){
+    if(!_busyItems||!_busyItems.length)return [];
+    const dTok=_btokens(desc), mTok=_btokens(model);
+    const scored=_busyItems.map(it=>({it,sc:_busyScore(it,dTok,mTok)})).filter(x=>x.sc>0);
+    scored.sort((a,b)=>b.sc-a.sc);
+    return scored.slice(0,limit||8).map(x=>x.it);
+  }
+
+  // ---- Busy item list: load/check box ----
+  const _busyItemsBtn=$('busyItemsBtn');if(_busyItemsBtn)_busyItemsBtn.addEventListener('click',async()=>{
+    const box=$('busyItemsBox');if(!box)return;
+    if(box.style.display!=='none'){box.style.display='none';return;}
+    box.style.display='block';
+    box.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">⏳ Busy item list பார்க்கிறேன்...</div>';
+    await _busyItemsLoad();
+    const n=(_busyItems||[]).length;
+    box.innerHTML='<div class="sec" style="background:#fafbfd;border-radius:9px">📦 Busy item list</div>'+
+      '<div style="font-size:12.5px;color:var(--navy);padding:6px 0"><b>'+n+'</b> Busy items load ஆகி இருக்கு.</div>'+
+      '<div style="font-size:11.5px;color:var(--muted);padding:2px 0 8px">Busy-ல item list-ஐ Excel export பண்ணி (Masters → Item → List → Alt+E), இங்க upload பண்ணு. (Name, Alias, Parent Group, Op.Stock, Unit columns)</div>'+
+      '<label class="btn gold" style="margin-top:4px;text-align:center;cursor:pointer">📤 Busy item Excel upload<input type="file" id="busyItemsFile" accept=".xlsx,.xls" hidden></label>'+
+      '<div id="busyItemsUpNote" class="note" style="text-align:left;margin-top:8px"></div>';
+    const f=$('busyItemsFile');if(f)f.addEventListener('change',_busyItemsUpload);
+  });
+  async function _busyItemsUpload(e){
+    const file=e.target.files&&e.target.files[0];if(!file)return;
+    const note=$('busyItemsUpNote');note.innerHTML='⏳ படிக்கிறேன்...';
+    try{
+      if(typeof XLSX==='undefined'){note.innerHTML='⚠️ Excel library load ஆகல. Internet on பண்ணி refresh பண்ணு.';return;}
+      const data=await file.arrayBuffer();
+      const wb=XLSX.read(data,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // find header row (has 'Name' and 'Parent Group')
+      let hdr=-1;
+      for(let i=0;i<Math.min(rows.length,15);i++){
+        const r=rows[i].map(x=>String(x).trim().toLowerCase());
+        if(r.indexOf('name')>=0&&r.some(c=>c.indexOf('parent')>=0||c.indexOf('group')>=0)){hdr=i;break;}
+      }
+      if(hdr<0){note.innerHTML='⚠️ Header row (Name, Parent Group...) கண்டுபிடிக்க முடியல. Busy item list Excel-ஐ அப்படியே upload பண்ணு.';return;}
+      const H=rows[hdr].map(x=>String(x).trim().toLowerCase());
+      const ci=n=>H.findIndex(c=>c===n||c.indexOf(n)>=0);
+      const iName=ci('name'),iAlias=ci('alias'),iGroup=ci('parent'),iUnit=ci('unit');
+      const items=[];
+      for(let i=hdr+1;i<rows.length;i++){
+        const r=rows[i];const name=String(r[iName]==null?'':r[iName]).trim();
+        if(!name)continue;
+        items.push({n:name,a:iAlias>=0?String(r[iAlias]||'').trim():'',g:iGroup>=0?String(r[iGroup]||'').trim():'',u:iUnit>=0?String(r[iUnit]||'NOS').trim():'NOS'});
+      }
+      if(!items.length){note.innerHTML='⚠️ Item ஒன்னும் படிக்கல. File சரியா இருக்கானு பாரு.';return;}
+      note.innerHTML='⏳ '+items.length+' item save பண்றேன் (cloud)...';
+      _busyItems=items;
+      try{localStorage.setItem('__busyItems',JSON.stringify(items));}catch(_){}
+      try{if(_fbOk)await firebase.database().ref('busyItems').set(items);}catch(_){}
+      note.innerHTML='✅ '+items.length+' Busy item save ஆச்சு! இனி export பண்ணும்போது item match ஆகும்.';
+    }catch(err){note.innerHTML='⚠️ படிக்க முடியல: '+esc(err.message);}
+  }
+
   const _busyMapBtn=$('busyMapBtn');if(_busyMapBtn)_busyMapBtn.addEventListener('click',()=>{
     const box=$('busyMapBox');if(!box)return;
     if(box.style.display==='none'){box.style.display='block';_busyRenderMap();}else{box.style.display='none';}
@@ -3018,16 +3125,26 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const box=$('busyMapBox');if(box&&box.style.display!=='none')_busyRenderMap();
     $('busyExportNote').innerHTML='';
   });
-  const _busyExp=$('busyExport');if(_busyExp)_busyExp.addEventListener('click',()=>{
+  const _busyExp=$('busyExport');if(_busyExp)_busyExp.addEventListener('click',async()=>{
     const scope=($('busyScope')||{}).value||'new';
     const firm=_busyFirm();
     const note=$('busyExportNote');
     const list=_busyPickOrders(scope);
     if(!list.length){note.innerHTML='⚠️ '+esc(firm)+'-க்கு export பண்ண order இல்ல ('+(scope==='new'?'எல்லாம் ஏற்கனவே export ஆயிருக்கு':'')+').';return;}
     const map=_busyMapLoad();
-    const {rows,missing,lineCount}=_busyBuildRows(list,map);
+    // make sure busy item list + links are loaded before building
+    note.innerHTML='⏳ item match பார்க்கிறேன்...';
+    if(_busyItems===null)await _busyItemsLoad();
+    if(_busyItemMap===null)await _busyItemMapLoad();
+    const {rows,missing,lineCount,unmatched}=_busyBuildRows(list,map);
     if(missing.length){
       note.innerHTML='⚠️ '+esc(firm)+' — இந்த camp-க்கு Busy Party பேர் இல்ல: <b>'+missing.map(esc).join(', ')+'</b><br>முதல்ல "⚙️ Camp → Busy Party" அழுத்தி பேர் போடு. அப்புறம் export பண்ணு.';
+      return;
+    }
+    // if we have a busy item list and some items aren't linked → ask to match first
+    if(_busyItems&&_busyItems.length&&unmatched&&unmatched.length){
+      note.innerHTML='⚠️ <b>'+unmatched.length+'</b> item-க்கு Busy பேரு link ஆகல. கீழ match பண்ணு (ஒரு முறை), அப்புறம் export. <br><small>இல்ல Busy-ல "Create New Master" வச்சு generic பேரோட ஏத்தலாம் — ஆனா duplicate item வரும்.</small>';
+      _busyRenderMatch(unmatched);
       return;
     }
     const fname='Busy_'+_busyFirmKey()+'_SalesOrder_'+_stamp()+'.xlsx';
@@ -3037,8 +3154,71 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     }
     const realName=(kind==='csv')?fname.replace(/\.xlsx?$/i,'')+'.csv':fname;
     const warn=(kind==='csv')?'<br>⚠️ Excel library load ஆகல (internet?) — .csv வந்திருக்கு. Busy .csv ஏத்தலைனா, internet on பண்ணி மறுபடி எடு.':'';
-    note.innerHTML='✅ '+esc(firm)+': '+list.length+' order ('+lineCount+' line) export ஆச்சு.<br>Busy-ல <b>'+esc(firm)+'</b> company திற → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b> → இந்த file (<b>'+esc(realName)+'</b>) select பண்ணி Import.'+warn;
+    const matchNote=(_busyItems&&_busyItems.length)?'<br>✅ எல்லா item-ம் Busy பேரோட match ஆகி இருக்கு.':'';
+    note.innerHTML='✅ '+esc(firm)+': '+list.length+' order ('+lineCount+' line) export ஆச்சு.'+matchNote+'<br>Busy-ல <b>'+esc(firm)+'</b> company திற → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b> → இந்த file (<b>'+esc(realName)+'</b>) select பண்ணி Import.'+warn;
+    $('busyMatchBox').style.display='none';
   });
+
+  // ---- Busy item Match screen (link order item -> busy item) ----
+  function _busyRenderMatch(unmatched){
+    const box=$('busyMatchBox');if(!box)return;
+    box.style.display='block';
+    // unique by model|desc so we don't ask the same thing twice
+    const seen={};const uniq=[];
+    unmatched.forEach(u=>{const k=_busyLinkKey(u.model,u.desc);if(!seen[k]){seen[k]=1;uniq.push(u);}});
+    let html='<div class="sec" style="background:#fafbfd;border-radius:9px">🔗 Busy item match ('+uniq.length+')</div>'+
+      '<div style="font-size:11.5px;color:var(--muted);padding:6px 0">ஒவ்வொரு order item-க்கும், Busy-ல சரியான item-ஐ தேர்ந்தெடு. ஒரு முறை தேர்ந்தா, அடுத்த முறை auto. (தப்பா match ஆகாம, நீ பார்த்து confirm பண்ணு.)</div>';
+    uniq.forEach((u,ix)=>{
+      const sugg=_busySuggest(u.model,u.desc,8);
+      const opts=sugg.map(s=>'<option value="'+esc(s.n)+'">'+esc(s.n)+(s.g?'  ['+esc(s.g)+']':'')+'</option>').join('');
+      html+='<div class="busyMatchRow" data-key="'+esc(_busyLinkKey(u.model,u.desc))+'" data-model="'+esc(u.model)+'" data-desc="'+esc(u.desc)+'" style="border:1px solid var(--line);border-radius:10px;padding:9px;margin:7px 0">'+
+        '<div style="font-size:12.5px;font-weight:700;color:var(--navy)">'+esc(u.desc||'(பேரு இல்ல)')+'</div>'+
+        '<div style="font-size:11px;color:var(--muted);margin:2px 0 6px">🚗 '+esc(u.model||'vehicle தெரியல')+'</div>'+
+        '<select class="busyMatchSel" style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px">'+
+          '<option value="">— Busy item தேர்ந்தெடு —</option>'+opts+
+          '<option value="__search__">🔍 வேற... (search)</option>'+
+        '</select>'+
+        '<div class="busyMatchSearch" style="display:none;margin-top:6px"><input type="text" class="busyMatchQ" placeholder="Busy item தேடு..." style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px"><div class="busyMatchResults" style="margin-top:4px"></div></div>'+
+      '</div>';
+    });
+    html+='<button class="btn gold" id="busyMatchSave" style="margin-top:8px">💾 Match save பண்ணு</button>';
+    box.innerHTML=html;
+    // wire search toggles
+    box.querySelectorAll('.busyMatchSel').forEach(sel=>{
+      sel.addEventListener('change',function(){
+        const row=this.closest('.busyMatchRow');const sb=row.querySelector('.busyMatchSearch');
+        if(this.value==='__search__'){sb.style.display='block';}else{sb.style.display='none';}
+      });
+    });
+    box.querySelectorAll('.busyMatchQ').forEach(inp=>{
+      inp.addEventListener('input',function(){
+        const q=_bnorm(this.value);const res=this.closest('.busyMatchSearch').querySelector('.busyMatchResults');
+        if(q.length<2){res.innerHTML='';return;}
+        const qt=q.split(' ').filter(Boolean);
+        const hits=(_busyItems||[]).filter(it=>{const nn=_bnorm(it.n)+' '+_bnorm(it.g);return qt.every(t=>nn.indexOf(t)>=0);}).slice(0,12);
+        res.innerHTML=hits.length?hits.map(h=>'<div class="busyPick" data-name="'+esc(h.n)+'" style="padding:6px 8px;font-size:12px;border:1px solid var(--line);border-radius:7px;margin:3px 0;cursor:pointer;background:#fff">'+esc(h.n)+(h.g?' <span style="color:var(--muted)">['+esc(h.g)+']</span>':'')+'</div>').join(''):'<div style="font-size:11px;color:var(--muted);padding:4px">item இல்ல</div>';
+        res.querySelectorAll('.busyPick').forEach(p=>p.addEventListener('click',function(){
+          const row=this.closest('.busyMatchRow');const sel=row.querySelector('.busyMatchSel');const nm=this.getAttribute('data-name');
+          // inject as selected option
+          let opt=Array.from(sel.options).find(o=>o.value===nm);
+          if(!opt){opt=document.createElement('option');opt.value=nm;opt.textContent=nm;sel.insertBefore(opt,sel.options[sel.options.length-1]);}
+          sel.value=nm;this.closest('.busyMatchSearch').style.display='none';
+        }));
+      });
+    });
+    const sv=$('busyMatchSave');if(sv)sv.addEventListener('click',async()=>{
+      sv.disabled=true;sv.textContent='⏳ save...';let n=0;
+      const rowsEl=box.querySelectorAll('.busyMatchRow');
+      for(const row of rowsEl){
+        const sel=row.querySelector('.busyMatchSel');const val=sel.value;
+        if(val&&val!=='__search__'){await _busyLinkSave(row.getAttribute('data-model'),row.getAttribute('data-desc'),val);n++;}
+      }
+      sv.disabled=false;sv.textContent='💾 Match save பண்ணு';
+      $('busyExportNote').innerHTML='✅ '+n+' item link ஆச்சு. இப்போ மறுபடி "🧾 Busy Excel எடு" அழுத்து.';
+      box.style.display='none';
+    });
+  }
+
 
   const _bkE=$('bkExcel');if(_bkE)_bkE.addEventListener('click',()=>{
     const cols=['Order No','NAHA','Civil No','Chassis','Engine','Model','Buyer','Order Date','Delivery','Items','Sell','Buy','Profit','Supplied','Bill No','Bill Date','Paid','Cheque No','Pay Date','Assignee'];
