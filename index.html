@@ -1749,6 +1749,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return{top:scored.map(x=>({it:x.it,score:Math.round(Math.min(99,x.s))})),via:'fuzzy'};
   }
   let _busyRows=[]; // {desc, group, chosen(name), via, score, top:[]}
+  let _busyExpOrderNo='',_busyExpRows=[],_busyExpOrder=null;
   async function renderBusy(){
     const wrap=$('repBusyWrap');
     wrap.innerHTML='<div class="empty">Busy master ஏற்றுகிறேன்…</div>';
@@ -1776,12 +1777,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="tablewrap" style="margin-top:6px"><table><thead><tr><th>PO description</th><th>Busy item</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
       <button class="btn" id="busySaveBtn" style="margin-top:8px;background:#0b2a4a">💾 Link-களை save பண்ணு (learn)</button>`:''}
     </div>
-    <details class="egpbulk"><summary>📤 Busy Excel Export (Sales / Purchase)</summary>
+    <details class="egpbulk" open><summary>📤 Busy Excel Export (Order → auto items)</summary>
       <div style="padding:10px 13px">
-        <div class="fld"><label>Order தேர்ந்தெடு (Order No — last 4 digit தேடலாம்)</label><input id="busyExpSearch" list="busyExpList" placeholder="உதा: 0125 / WNA/APOW/PO/2026/0125" autocomplete="off"><datalist id="busyExpList">${orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('')}</datalist></div>
-        <div id="busyExpInfo" style="font-size:12px;color:var(--muted);margin-bottom:6px"></div>
-        <div style="display:flex;gap:8px"><button class="btn gold" id="busyExpSales" style="margin:0">📤 Sales Excel</button><button class="btn" id="busyExpPurc" style="margin:0;background:#0b2a4a">📥 Purchase Excel</button></div>
-        <div class="note" style="text-align:left;margin-top:8px;font-size:10.5px">A-K format · Series ${esc(_busyCfg.series)} · MC ${esc(_busyCfg.mc)}. Item link ஆகாதது இருந்தா warn பண்ணும் — முதல்ல 🔗 Match-ல link பண்ணு.</div>
+        <div class="fld"><label>Order தேர்ந்தெடு (Order No — last 4 digit தேடலாம்)</label><input id="busyExpSearch" list="busyExpList" placeholder="உதा: 0125 / WNA/APOW/PO/2026/0125" autocomplete="off" value="${esc(_busyExpOrderNo||'')}"><datalist id="busyExpList">${orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('')}</datalist></div>
+        <div class="grid2"><div class="fld"><label>Vehicle group (option)</label><select id="busyExpG">${gopt}</select></div><div class="fld"><label>Engine/extra group (option)</label><select id="busyExpG2">${gopt}</select></div></div>
+        <button class="btn gold" id="busyExpLoad" style="margin:0">🔄 Order items load பண்ணு</button>
+        <div id="busyExpBody" style="margin-top:8px"></div>
       </div>
     </details>
     <details class="egpbulk"><summary>⚙️ Busy Export Settings (Series · MC · Party names)</summary>
@@ -1804,18 +1805,54 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.querySelectorAll('[data-bpick]').forEach(sel=>sel.addEventListener('change',()=>{const i=+sel.dataset.bpick;if(sel.value){_busyRows[i].chosen=sel.value;_busyRows[i].via='pick';_busyRows[i].score=0;renderBusy();}}));
     wrap.querySelectorAll('[data-bunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.bunlink;const m=_busyMatch(_busyRows[i].desc,_busyRows[i].groups||[]);_busyRows[i].chosen='';_busyRows[i].top=m.via==='fuzzy'?m.top:[{it:m.it,score:m.score}];renderBusy();}));
     const sv=$('busySaveBtn');if(sv)sv.onclick=async()=>{let n=0;_busyRows.forEach(r=>{if(r.chosen){_busyLearn[_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn பண்ணிட்டேன். அடுத்த தடவ இதே description வந்தா auto 100%.');};
-    // export
-    const _findExpOrder=()=>{const q=($('busyExpSearch').value||'').trim().toLowerCase();if(!q)return null;
-      let o=orders.find(x=>(x.order_no||'').toLowerCase()===q);
-      if(!o)o=orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q));
-      if(!o)o=orders.find(x=>(x.order_no||'').toLowerCase().includes(q));return o;};
-    const _expInfo=()=>{const o=_findExpOrder();const el=$('busyExpInfo');if(!el)return;
-      if(!o){el.textContent='';return null;}
-      const items=(o.items||[]).filter(it=>it.description);const linked=items.filter(it=>_busyItemLink(it.description)).length;
-      el.innerHTML=`✅ ${esc(o.order_no)} · ${esc(_campOf(o))} · ${items.length} item · <b style="color:${linked===items.length?'var(--green)':'var(--amber)'}">${linked}/${items.length} link</b>`;return o;};
-    const _es=$('busyExpSearch');if(_es)_es.addEventListener('input',_expInfo);
-    const bs=$('busyExpSales');if(bs)bs.onclick=()=>{const o=_expInfo();if(!o){alert('Order தேர்ந்தெடு');return;}_genBusyExcel([o.id],'sales');};
-    const bp=$('busyExpPurc');if(bp)bp.onclick=()=>{const o=_expInfo();if(!o){alert('Order தேர்ந்தெடு');return;}_genBusyExcel([o.id],'purchase');};
+    // ===== Order-based export: auto-load items, per-item match, export =====
+    function _expFindOrder(q){q=(q||'').trim().toLowerCase();if(!q)return null;
+      return orders.find(x=>(x.order_no||'').toLowerCase()===q)||orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q))||orders.find(x=>(x.order_no||'').toLowerCase().includes(q));}
+    function _expLoad(){
+      const o=_expFindOrder($('busyExpSearch').value);
+      if(!o){$('busyExpBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_busyExpOrder=null;return;}
+      _busyExpOrder=o;_busyExpOrderNo=o.order_no;
+      const gs=[$('busyExpG').value,$('busyExpG2').value].filter(Boolean);
+      _busyExpRows=(o.items||[]).filter(it=>it.description).map(it=>{
+        const lk=_busyItemLink(it.description);
+        if(lk)return{desc:it.description,qty:it.qty,unit:lk.unit,chosen:lk.name,via:lk.via,top:[]};
+        const m=_busyMatch(it.description,gs);
+        return{desc:it.description,qty:it.qty,unit:it.unit||'',chosen:'',via:'fuzzy',top:m.top||[]};
+      });
+      _expRender();
+    }
+    function _expRender(){
+      const o=_busyExpOrder;if(!o){return;}
+      const linked=_busyExpRows.filter(r=>r.chosen).length,tot=_busyExpRows.length;
+      const rows=_busyExpRows.map((r,i)=>{
+        let cell;
+        if(r.chosen)cell=`<span style="color:var(--green);font-weight:700">✓ ${esc(r.chosen)}</span> <span style="font-size:9px;color:var(--muted)">(${r.via})</span> <button class="copyprev" data-exunlink="${i}" style="margin:0 0 0 4px;padding:2px 6px;width:auto">✏️</button>`;
+        else if(r.top&&r.top.length)cell=`<select data-expick="${i}" style="width:100%"><option value="">— தேர்ந்தெடு —</option>${r.top.map(t=>`<option value="${esc(t.it.n)}">${t.score} · ${esc(t.it.n)} (${esc(t.it.u)})</option>`).join('')}</select>`;
+        else cell='<span style="color:var(--red);font-size:11px">match இல்ல — Busy-ல create</span>';
+        return `<tr><td style="font-size:11px">${esc(r.desc)}</td><td style="text-align:center">${esc(r.qty)}</td><td>${cell}</td></tr>`;
+      }).join('');
+      $('busyExpBody').innerHTML=`<div style="font-size:12px;margin:4px 0 6px">✅ ${esc(o.order_no)} · ${esc(_campOf(o))} · <b style="color:${linked===tot?'var(--green)':'var(--amber)'}">${linked}/${tot} link ${linked===tot?'✅ 100%':'⏳'}</b></div>
+        <div class="tablewrap"><table><thead><tr><th>PO item</th><th>Qty</th><th>Busy item</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <button class="btn" id="busyExpSaveLinks" style="margin:8px 0 0;background:#0b2a4a">💾 Link learn பண்ணு</button>
+        <div style="display:flex;gap:8px;margin-top:8px"><button class="btn gold" id="busyExpSales" style="margin:0">📤 Sales Excel</button><button class="btn" id="busyExpPurc" style="margin:0;background:#0b2a4a">📥 Purchase Excel</button></div>
+        <div class="note" style="text-align:left;margin-top:6px;font-size:10.5px">Series ${esc(_busyCfg.series)} · MC ${esc(_busyCfg.mc)} · Party ${esc((_busyCfg.party||{})[_campCode(o)]||_campOf(o))}</div>`;
+      $('busyExpBody').querySelectorAll('[data-expick]').forEach(sel=>sel.addEventListener('change',()=>{const i=+sel.dataset.expick;if(sel.value){const it=_busyKey.get(_bzkey(sel.value));_busyExpRows[i].chosen=sel.value;_busyExpRows[i].via='pick';_busyExpRows[i].unit=it?it.u:_busyExpRows[i].unit;_expRender();}}));
+      $('busyExpBody').querySelectorAll('[data-exunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.exunlink;const gs=[$('busyExpG').value,$('busyExpG2').value].filter(Boolean);const m=_busyMatch(_busyExpRows[i].desc,gs);_busyExpRows[i].chosen='';_busyExpRows[i].top=m.top||[];_expRender();}));
+      const sl=$('busyExpSaveLinks');if(sl)sl.onclick=async()=>{let n=0;_busyExpRows.forEach(r=>{if(r.chosen){_busyLearn[_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn ஆச்சு. அடுத்த order-ல இதே item auto வரும்.');};
+      const bs=$('busyExpSales');if(bs)bs.onclick=()=>_expExcel('sales');
+      const bp=$('busyExpPurc');if(bp)bp.onclick=()=>_expExcel('purchase');
+    }
+    function _expExcel(kind){
+      const o=_busyExpOrder;if(!o){alert('Order load பண்ணு');return;}
+      const miss=_busyExpRows.filter(r=>!r.chosen);
+      if(miss.length&&!confirm('⚠️ '+miss.length+' item link ஆகல. இப்பவே export பண்ணட்டா? (link ஆகாதது "?? name"-ஆ வரும்)'))return;
+      // push chosen names into a temp learn-like map for _genBusyExcel via item.description
+      _busyExpRows.forEach(r=>{if(r.chosen)_busyLearn[_bzkey(r.desc)]=r.chosen;});
+      _genBusyExcel([o.id],kind);
+    }
+    const _el=$('busyExpLoad');if(_el)_el.onclick=_expLoad;
+    const _es=$('busyExpSearch');if(_es)_es.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_expLoad();}});
+    if(_busyExpOrderNo&&_busyExpOrder)_expRender();
     // settings
     const cs=$('cfgSave');if(cs)cs.onclick=async()=>{
       _busyCfg.series=($('cfgSeries').value||'NGRD').trim();_busyCfg.mc=($('cfgMc').value||'SHOP').trim();
