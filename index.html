@@ -1749,6 +1749,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return{top:scored.map(x=>({it:x.it,score:Math.round(Math.min(99,x.s))})),via:'fuzzy'};
   }
   let _busyRows=[]; // {desc, group, chosen(name), via, score, top:[]}
+  function _busyGuessGroup(model){
+    if(!model||!_busyGroup.size)return '';
+    const q=new Set(_bztok(model));if(!q.size)return '';
+    let best='',bs=0;
+    _busyGroup.forEach((items,g)=>{if(!g)return;const gt=new Set(_bztok(g));if(!gt.size)return;let inter=0;q.forEach(t=>{if(gt.has(t))inter++;});if(!inter)return;const prec=inter/gt.size,rec=inter/q.size,f1=2*prec*rec/(prec+rec);if(f1>bs){bs=f1;best=g;}});
+    return bs>=0.34?best:'';
+  }
   let _busyExpOrderNo='',_busyExpRows=[],_busyExpOrder=null;
   async function renderBusy(){
     const wrap=$('repBusyWrap');
@@ -1813,6 +1820,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const o=_expFindOrder($('busyExpSearch').value);
       if(!o){$('busyExpBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_busyExpOrder=null;return;}
       _busyExpOrder=o;_busyExpOrderNo=o.order_no;
+      const guess=_busyGuessGroup(o.model);
+      if(guess&&$('busyExpG')&&!$('busyExpG').value)$('busyExpG').value=guess;
       const gs=[$('busyExpG').value,$('busyExpG2').value].filter(Boolean);
       _busyExpRows=(o.items||[]).filter(it=>it.description).map(it=>{
         const lk=_busyItemLink(it.description);
@@ -1833,6 +1842,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         return `<tr><td style="font-size:11px">${esc(r.desc)}</td><td style="text-align:center">${esc(r.qty)}</td><td>${cell}</td></tr>`;
       }).join('');
       $('busyExpBody').innerHTML=`<div style="font-size:12px;margin:4px 0 6px">✅ ${esc(o.order_no)} · ${esc(_campOf(o))} · <b style="color:${linked===tot?'var(--green)':'var(--amber)'}">${linked}/${tot} link ${linked===tot?'✅ 100%':'⏳'}</b></div>
+        <div style="font-size:11px;color:var(--navy);background:#f3f6fb;border-radius:8px;padding:6px 9px;margin-bottom:7px">🚗 <b>${esc(o.model||'—')}</b> · Vehicle# ${esc(o.naha_no||o.civil_no||'—')} · Chassis ${esc(o.chassis_no||'—')} · Engine ${esc(o.engine_no||'—')}${_busyGuessGroup(o.model)?` · <span style="color:var(--muted)">auto group: ${esc(_busyGuessGroup(o.model))}</span>`:''}</div>
         <div class="tablewrap"><table><thead><tr><th>PO item</th><th>Qty</th><th>Busy item</th></tr></thead><tbody>${rows}</tbody></table></div>
         <button class="btn" id="busyExpSaveLinks" style="margin:8px 0 0;background:#0b2a4a">💾 Link learn பண்ணு</button>
         <div style="display:flex;gap:8px;margin-top:8px"><button class="btn gold" id="busyExpSales" style="margin:0">📤 Sales Excel</button><button class="btn" id="busyExpPurc" style="margin:0;background:#0b2a4a">📥 Purchase Excel</button></div>
