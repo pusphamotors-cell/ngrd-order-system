@@ -438,6 +438,7 @@
       <button class="mbtn" id="rmSum" type="button">📈 Summary</button>
       <button class="mbtn" id="rmSales" type="button">📋 Sales Register</button>
       <button class="mbtn" id="rmTender" type="button">🎯 Tender</button>
+      <button class="mbtn" id="rmBusy" type="button">🔗 Busy</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -462,6 +463,7 @@
     <div id="repSumWrap" class="hide"></div>
     <div id="repSalesWrap" class="hide"></div>
     <div id="repTenderWrap" class="hide"></div>
+    <div id="repBusyWrap" class="hide"></div>
     <div class="brandcard">
       <div class="bcrest">NGRD</div>
       <h2>NGRD MOTORS</h2>
@@ -1628,6 +1630,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('rmSum').onclick=()=>{setRepMode('sum');renderSummary();};
     $('rmSales').onclick=()=>{setRepMode('sales');renderSales();};
     $('rmTender').onclick=()=>{setRepMode('tender');renderTender();};
+    $('rmBusy').onclick=()=>{setRepMode('busy');renderBusy();};
     renderReport();
   }
   var V3_DB='https://ngrd-motors-default-rtdb.firebaseio.com/ngrd';
@@ -1665,6 +1668,72 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(how==='file')return '<span style="background:var(--green-bg);color:var(--green);font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9px;white-space:nowrap">🟢 File#</span>';
     return '<span style="background:var(--amber-bg);color:var(--amber);font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:9px;white-space:nowrap">🟡 Vehicle</span>';
   }
+  // ===== Busy item master + matcher =====
+  let _busy=[],_busyKey=new Map(),_busyAlias=new Map(),_busyGroup=new Map(),_busyLoaded=false;
+  let _busyLearn={}; // descKey -> busy name (confirmed links, Firebase)
+  const _bznorm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  const _bzkey=s=>_bznorm(s).replace(/ /g,'');
+  const _bztok=s=>_bznorm(s).split(' ').filter(t=>t.length>=2);
+  async function _loadBusyItems(){
+    if(_busyLoaded)return;
+    try{
+      const r=await fetch('busy_items.json',{cache:'no-store'});const j=await r.json();
+      _busy=j.items||[];
+      _busy.forEach(it=>{it._k=_bzkey(it.n);it._t=new Set(_bztok(it.n));
+        if(!_busyKey.has(it._k))_busyKey.set(it._k,it);
+        if(it.a){const ak=_bzkey(it.a);if(ak.length>=3&&!_busyAlias.has(ak))_busyAlias.set(ak,it);}
+        const g=it.g||'';if(!_busyGroup.has(g))_busyGroup.set(g,[]);_busyGroup.get(g).push(it);});
+      _busyLoaded=true;
+    }catch(e){_busyLoaded=false;}
+    try{const r=await window.storage.get('busylearn');_busyLearn=(r&&r.value)?JSON.parse(r.value):{};}catch(e){_busyLearn={};}
+  }
+  async function _saveBusyLearn(){try{await window.storage.set('busylearn',JSON.stringify(_busyLearn));}catch(e){}}
+  function _busyScore(qtok,it){let inter=0;qtok.forEach(t=>{if(it._t.has(t))inter++;});if(!inter)return 0;const prec=inter/it._t.size,rec=inter/qtok.length;return 200*prec*rec/(prec+rec);}
+  function _busyMatch(desc,groupHint){
+    const dk=_bzkey(desc);
+    if(_busyLearn[dk]){const it=_busyKey.get(_bzkey(_busyLearn[dk]));if(it)return{it,score:100,via:'learned'};}
+    if(_busyKey.has(dk))return{it:_busyKey.get(dk),score:100,via:'exact'};
+    for(const t of _bztok(desc)){if(t.length>=4&&_busyAlias.has(t))return{it:_busyAlias.get(t),score:97,via:'alias'};}
+    const qtok=[...new Set(_bztok(desc))];let pool=_busy;if(groupHint&&_busyGroup.has(groupHint))pool=_busyGroup.get(groupHint);
+    const scored=pool.map(it=>({it,s:_busyScore(qtok,it)+(groupHint&&it.g===groupHint?6:0)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
+    return{top:scored.map(x=>({it:x.it,score:Math.round(Math.min(99,x.s))})),via:'fuzzy'};
+  }
+  let _busyRows=[]; // {desc, group, chosen(name), via, score, top:[]}
+  async function renderBusy(){
+    const wrap=$('repBusyWrap');
+    wrap.innerHTML='<div class="empty">Busy master ஏற்றுகிறேன்…</div>';
+    await _loadBusyItems();
+    if(!_busyLoaded){wrap.innerHTML='<div class="dpanel" style="padding:14px"><b style="color:var(--red)">Busy master load ஆகல.</b><br><span style="font-size:12px">busy_items.json file repo-ல deploy ஆயிருக்கா பாரு (index.html பக்கத்துல).</span></div>';return;}
+    const groups=[...(_busyGroup.keys())].filter(g=>g).sort();
+    const gopt='<option value="">— Vehicle group (auto/any) —</option>'+groups.map(g=>`<option>${esc(g)}</option>`).join('');
+    const rowsHtml=_busyRows.map((r,i)=>{
+      let cell;
+      if(r.chosen){cell=`<span style="color:var(--green);font-weight:700">✓ ${esc(r.chosen)}</span> <span style="font-size:10px;color:var(--muted)">(${r.via}${r.score?' '+r.score:''})</span>`;}
+      else if(r.top&&r.top.length){cell=`<select data-bpick="${i}" style="width:100%"><option value="">— தேர்ந்தெடு —</option>${r.top.map(t=>`<option value="${esc(t.it.n)}">${t.score} · ${esc(t.it.n)} (${esc(t.it.u)})</option>`).join('')}</select>`;}
+      else cell='<span style="color:var(--red);font-size:11px">match இல்ல — Busy-ல create பண்ணு</span>';
+      return `<tr><td style="font-size:11px">${esc(r.desc)}</td><td>${cell}</td><td>${r.chosen?`<button class="copyprev" data-bunlink="${i}" style="margin:0;padding:3px 7px;width:auto">✏️</button>`:''}</td></tr>`;
+    }).join('');
+    const linked=_busyRows.filter(r=>r.chosen).length,tot=_busyRows.length;
+    wrap.innerHTML=`<div class="dpanel" style="padding:13px">
+      <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:6px">🔗 Busy Item Match <span style="font-weight:400;color:var(--muted);font-size:11px">— master ${_busy.length} items · ${_busyGroup.size} groups · learned ${Object.keys(_busyLearn).length}</span></div>
+      <div class="fld"><label>Vehicle group (match accuracy கூட்டும்)</label><select id="busyGroup">${gopt}</select></div>
+      <div class="fld"><label>PO item descriptions — ஒரு வரிக்கு ஒண்ணு</label><textarea id="busyPaste" rows="5" placeholder="BRAKE SHOE ASSY&#10;CLUTCH PLATE&#10;OIL FILTER"></textarea></div>
+      <button class="btn gold" id="busyMatchBtn" style="margin:0">🔗 Match பண்ணு</button>
+      ${tot?`<div style="margin-top:10px;font-size:12px;font-weight:700;color:${linked===tot?'var(--green)':'var(--amber)'}">${linked}/${tot} link ஆச்சு ${linked===tot?'✅ 100%':'⏳'}</div>
+      <div class="tablewrap" style="margin-top:6px"><table><thead><tr><th>PO description</th><th>Busy item</th><th></th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+      <button class="btn" id="busySaveBtn" style="margin-top:8px;background:#0b2a4a">💾 Link-களை save பண்ணு (learn)</button>`:''}
+    </div>`;
+    $('busyMatchBtn').onclick=()=>{
+      const g=$('busyGroup').value;const lines=($('busyPaste').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      _busyRows=lines.map(desc=>{const m=_busyMatch(desc,g);
+        if(m.via!=='fuzzy')return{desc,group:g,chosen:m.it.n,via:m.via,score:m.score,top:[]};
+        return{desc,group:g,chosen:'',via:'fuzzy',score:0,top:m.top};});
+      renderBusy();
+    };
+    wrap.querySelectorAll('[data-bpick]').forEach(sel=>sel.addEventListener('change',()=>{const i=+sel.dataset.bpick;if(sel.value){_busyRows[i].chosen=sel.value;_busyRows[i].via='pick';_busyRows[i].score=0;renderBusy();}}));
+    wrap.querySelectorAll('[data-bunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.bunlink;const m=_busyMatch(_busyRows[i].desc,_busyRows[i].group);_busyRows[i].chosen='';_busyRows[i].top=m.via==='fuzzy'?m.top:[{it:m.it,score:m.score}];renderBusy();}));
+    const sv=$('busySaveBtn');if(sv)sv.onclick=async()=>{let n=0;_busyRows.forEach(r=>{if(r.chosen){_busyLearn[_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn பண்ணிட்டேன். அடுத்த தடவ இதே description வந்தா auto 100%.');};
+  }
   async function renderTender(force){
     const wrap=$('repTenderWrap');if(!wrap)return;
     wrap.innerHTML='<div class="step">🎯 Tender Win/Loss — V3 quotes ⟷ Orders</div><div class="empty">⏳ V3 (ngrd-motors) quotes load ஆகுது…</div>';
@@ -1697,10 +1766,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const rb=$('tRetry2');if(rb)rb.onclick=()=>renderTender(true);
   }
   function setRepMode(m){
-    ['Report','Pending','Daily','Cal','Out','Comm','Sum','Sales','Tender'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
-    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender'};
+    ['Report','Pending','Daily','Cal','Out','Comm','Sum','Sales','Tender','Busy'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
+    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy'};
     const b=$('rm'+(map[m]||'Report'));if(b)b.classList.add('on');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');
   }
   let _dailyBasis='bill';
   function renderDaily(){
