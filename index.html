@@ -1696,14 +1696,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   async function _saveBusyCfg(){try{await window.storage.set('busycfg',JSON.stringify(_busyCfg));}catch(e){}}
   function _campCode(o){return String(o.order_no||'').split('/')[0].toUpperCase().replace(/[^A-Z]/g,'');}
   // resolve one PO item description → busy item (learned/exact/alias only; no guessing)
-  function _busyItemLink(desc){
+  function _busyItemLink(desc,vehGroup){
     const dk=_bzkey(desc);
-    if(_busyLearn[dk]){const it=_busyKey.get(_bzkey(_busyLearn[dk]));if(it)return{name:_busyLearn[dk],unit:it?it.u:'NOS',via:'learned'};}
+    if(vehGroup){const gk=_bzkey(vehGroup)+'::'+dk;if(_busyLearn[gk]){const it=_busyKey.get(_bzkey(_busyLearn[gk]));if(it)return{name:_busyLearn[gk],unit:it.u,via:'learned'};}}
+    else if(_busyLearn[dk]){const it=_busyKey.get(_bzkey(_busyLearn[dk]));if(it)return{name:_busyLearn[dk],unit:it.u,via:'learned'};}
     if(_busyKey.has(dk)){const it=_busyKey.get(dk);return{name:it.n,unit:it.u,via:'exact'};}
     for(const t of _bztok(desc)){if(t.length>=4&&_busyAlias.has(t)){const it=_busyAlias.get(t);return{name:it.n,unit:it.u,via:'alias'};}}
     return null;
   }
-  function _genBusyExcel(orderIds,kind){
+  function _genBusyExcel(orderIds,kind,linkMap){
     if(!window.XLSX){alert('Excel library load ஆகல — internet பாரு, திரும்ப முயற்சி பண்ணு');return;}
     const isSale=kind!=='purchase';
     const aoa=[];const missing=[]; // NO header row — Busy maps by column letter (A-K), data from row 1
@@ -1715,7 +1716,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const stype=isSale?_busyCfg.saleType:_busyCfg.purcType;
       const series=(_companyOf(o)==='Puspha Motors')?(_busyCfg.seriesP||'PUSPHA'):(_busyCfg.seriesN||_busyCfg.series||'NGRD');
       items.forEach((it,ix)=>{
-        const lk=_busyItemLink(it.description);
+        const lk=(linkMap&&linkMap[_bzkey(it.description)])||_busyItemLink(it.description,_busyGuessGroup(o.model));
         if(!lk){missing.push((o.order_no||'')+' → '+it.description);}
         const price=isSale?(Number(it.unit_price)||0):(Number(it.cost)||0);
         const qty=Number(it.qty)||1;const amt=isSale?(Number(it.total)||price*qty):(price*qty);
@@ -1732,8 +1733,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function _busyScore(qtok,it){let inter=0;qtok.forEach(t=>{if(it._t.has(t))inter++;});if(!inter)return 0;const prec=inter/it._t.size,rec=inter/qtok.length;return 200*prec*rec/(prec+rec);}
   function _busyMatch(desc,groups){
     groups=(Array.isArray(groups)?groups:[groups]).filter(Boolean);
-    const dk=_bzkey(desc);
-    if(_busyLearn[dk]){const it=_busyKey.get(_bzkey(_busyLearn[dk]));if(it)return{it,score:100,via:'learned'};}
+    const dk=_bzkey(desc);const vg=groups[0]||'';
+    if(vg){const gk=_bzkey(vg)+'::'+dk;if(_busyLearn[gk]){const it=_busyKey.get(_bzkey(_busyLearn[gk]));if(it)return{it,score:100,via:'learned'};}}
+    else if(_busyLearn[dk]){const it=_busyKey.get(_bzkey(_busyLearn[dk]));if(it)return{it,score:100,via:'learned'};}
     if(_busyKey.has(dk))return{it:_busyKey.get(dk),score:100,via:'exact'};
     for(const t of _bztok(desc)){if(t.length>=4&&_busyAlias.has(t))return{it:_busyAlias.get(t),score:97,via:'alias'};}
     const qtok=[...new Set(_bztok(desc))];
@@ -1812,7 +1814,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     };
     wrap.querySelectorAll('[data-bpick]').forEach(sel=>sel.addEventListener('change',()=>{const i=+sel.dataset.bpick;if(sel.value){_busyRows[i].chosen=sel.value;_busyRows[i].via='pick';_busyRows[i].score=0;renderBusy();}}));
     wrap.querySelectorAll('[data-bunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.bunlink;const m=_busyMatch(_busyRows[i].desc,_busyRows[i].groups||[]);_busyRows[i].chosen='';_busyRows[i].top=m.via==='fuzzy'?m.top:[{it:m.it,score:m.score}];renderBusy();}));
-    const sv=$('busySaveBtn');if(sv)sv.onclick=async()=>{let n=0;_busyRows.forEach(r=>{if(r.chosen){_busyLearn[_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn பண்ணிட்டேன். அடுத்த தடவ இதே description வந்தா auto 100%.');};
+    const sv=$('busySaveBtn');if(sv)sv.onclick=async()=>{let n=0;const vg=$('busyGroup').value;_busyRows.forEach(r=>{if(r.chosen){_busyLearn[(vg?_bzkey(vg)+'::':'')+_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn பண்ணிட்டேன்'+(vg?' ('+esc(vg)+' group-க்கு)':'')+'. அடுத்த தடவ இதே description + group வந்தா auto 100%.');};
     // ===== Order-based export: auto-load items, per-item match, export =====
     function _expFindOrder(q){q=(q||'').trim().toLowerCase();if(!q)return null;
       return orders.find(x=>(x.order_no||'').toLowerCase()===q)||orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q))||orders.find(x=>(x.order_no||'').toLowerCase().includes(q));}
@@ -1825,10 +1827,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const guess=_busyGuessGroup(o.model);
       if(guess&&$('busyExpG')&&!$('busyExpG').value)$('busyExpG').value=guess;
       const gs=[$('busyExpG').value,$('busyExpG2').value].filter(Boolean);
+      const vg=gs[0]||'';
       _busyExpRows=(o.items||[]).filter(it=>it.description).map(it=>{
         const pk=_bzkey(it.description);
         if(prev[pk]){const kit=_busyKey.get(_bzkey(prev[pk]));return{desc:it.description,qty:it.qty,unit:kit?kit.u:(it.unit||'NOS'),chosen:prev[pk],via:'pick',top:[]};}
-        const lk=_busyItemLink(it.description);
+        const lk=_busyItemLink(it.description,vg);
         if(lk)return{desc:it.description,qty:it.qty,unit:lk.unit,chosen:lk.name,via:lk.via,top:[]};
         const m=_busyMatch(it.description,gs);
         if(m.top&&m.top[0]&&m.top[0].score>=88)return{desc:it.description,qty:it.qty,unit:m.top[0].it.u,chosen:m.top[0].it.n,via:'auto',top:m.top};
@@ -1854,7 +1857,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="note" style="text-align:left;margin-top:6px;font-size:10.5px">Company <b>${esc(_companyOf(o))}</b> → Series <b>${esc((_companyOf(o)==='Puspha Motors')?(_busyCfg.seriesP||'PUSPHA'):(_busyCfg.seriesN||'NGRD'))}</b> · MC ${esc(_busyCfg.mc)} · Party ${esc((_busyCfg.party||{})[_campCode(o)]||_campOf(o))}</div>`;
       $('busyExpBody').querySelectorAll('[data-expick]').forEach(sel=>sel.addEventListener('change',()=>{const i=+sel.dataset.expick;if(sel.value){const it=_busyKey.get(_bzkey(sel.value));_busyExpRows[i].chosen=sel.value;_busyExpRows[i].via='pick';_busyExpRows[i].unit=it?it.u:_busyExpRows[i].unit;_expRender();}}));
       $('busyExpBody').querySelectorAll('[data-exunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.exunlink;const gs=[$('busyExpG').value,$('busyExpG2').value].filter(Boolean);const m=_busyMatch(_busyExpRows[i].desc,gs);_busyExpRows[i].chosen='';_busyExpRows[i].top=m.top||[];_expRender();}));
-      const sl=$('busyExpSaveLinks');if(sl)sl.onclick=async()=>{let n=0;_busyExpRows.forEach(r=>{if(r.chosen){_busyLearn[_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn ஆச்சு. அடுத்த order-ல இதே item auto வரும்.');};
+      const sl=$('busyExpSaveLinks');if(sl)sl.onclick=async()=>{let n=0;const vg=$('busyExpG').value||_busyGuessGroup(o.model)||'';_busyExpRows.forEach(r=>{if(r.chosen){_busyLearn[(vg?_bzkey(vg)+'::':'')+_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn ஆச்சு'+(vg?' ('+esc(vg)+')':'')+'. அடுத்த இதே vehicle order-ல auto வரும்.');};
       const bs=$('busyExpSales');if(bs)bs.onclick=()=>_expExcel('sales');
       const bp=$('busyExpPurc');if(bp)bp.onclick=()=>_expExcel('purchase');
     }
@@ -1862,9 +1865,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const o=_busyExpOrder;if(!o){alert('Order load பண்ணு');return;}
       const miss=_busyExpRows.filter(r=>!r.chosen);
       if(miss.length&&!confirm('⚠️ '+miss.length+' item link ஆகல. இப்பவே export பண்ணட்டா? (link ஆகாதது "?? name"-ஆ வரும்)'))return;
-      // push chosen names into a temp learn-like map for _genBusyExcel via item.description
-      _busyExpRows.forEach(r=>{if(r.chosen)_busyLearn[_bzkey(r.desc)]=r.chosen;});
-      _genBusyExcel([o.id],kind);
+      const vg=$('busyExpG').value||_busyGuessGroup(o.model)||'';
+      const linkMap={};_busyExpRows.forEach(r=>{if(r.chosen){const it=_busyKey.get(_bzkey(r.chosen));linkMap[_bzkey(r.desc)]={name:r.chosen,unit:it?it.u:'NOS'};if(vg)_busyLearn[_bzkey(vg)+'::'+_bzkey(r.desc)]=r.chosen;}});
+      _saveBusyLearn();
+      _genBusyExcel([o.id],kind,linkMap);
     }
     const _el=$('busyExpLoad');if(_el)_el.onclick=_expLoad;
     const _es=$('busyExpSearch');if(_es)_es.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_expLoad();}});
