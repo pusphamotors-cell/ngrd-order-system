@@ -1819,14 +1819,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     function _expLoad(){
       const o=_expFindOrder($('busyExpSearch').value);
       if(!o){$('busyExpBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_busyExpOrder=null;return;}
+      const prev={}; // preserve already-chosen when reloading same order (group change etc)
+      if(_busyExpOrderNo===o.order_no)_busyExpRows.forEach(r=>{if(r.chosen)prev[_bzkey(r.desc)]=r.chosen;});
       _busyExpOrder=o;_busyExpOrderNo=o.order_no;
       const guess=_busyGuessGroup(o.model);
       if(guess&&$('busyExpG')&&!$('busyExpG').value)$('busyExpG').value=guess;
       const gs=[$('busyExpG').value,$('busyExpG2').value].filter(Boolean);
       _busyExpRows=(o.items||[]).filter(it=>it.description).map(it=>{
+        const pk=_bzkey(it.description);
+        if(prev[pk]){const kit=_busyKey.get(_bzkey(prev[pk]));return{desc:it.description,qty:it.qty,unit:kit?kit.u:(it.unit||'NOS'),chosen:prev[pk],via:'pick',top:[]};}
         const lk=_busyItemLink(it.description);
         if(lk)return{desc:it.description,qty:it.qty,unit:lk.unit,chosen:lk.name,via:lk.via,top:[]};
         const m=_busyMatch(it.description,gs);
+        if(m.top&&m.top[0]&&m.top[0].score>=88)return{desc:it.description,qty:it.qty,unit:m.top[0].it.u,chosen:m.top[0].it.n,via:'auto',top:m.top};
         return{desc:it.description,qty:it.qty,unit:it.unit||'',chosen:'',via:'fuzzy',top:m.top||[]};
       });
       _expRender();
