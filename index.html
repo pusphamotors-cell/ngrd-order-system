@@ -11,6 +11,11 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
+<style id="eyeCss">
+  html.eye-dim{filter:brightness(.93) sepia(.05)}
+  html.eye-dark{filter:brightness(.76) contrast(.96) sepia(.09)}
+</style>
+<script>try{var _e=localStorage.getItem('ngrd_eye');if(_e)document.documentElement.classList.add('eye-'+_e);}catch(_){}</script>
 <title>NGRD Order System</title>
 <style>
   :root{
@@ -333,6 +338,7 @@
     <div class="brand"><h1>NGRD ORDER SYSTEM</h1><p>PO → முழு order record + லாபம்</p></div>
     <div id="cloudBadge" style="margin-left:auto;font-size:11px;font-weight:700;color:#bff0c8;white-space:nowrap">☁️ Cloud</div>
     <div id="installBtn" title="Install app (taskbar)" style="display:none;margin-left:14px;font-size:11px;font-weight:800;color:#14274A;background:#C9A227;padding:4px 10px;border-radius:7px;cursor:pointer;white-space:nowrap">⬇️ Install</div>
+    <div id="eyeBtn" title="Eye comfort — Light / Dim / Dark (Alt+L)" style="margin-left:14px;font-size:15px;color:#ffffffcc;cursor:pointer;white-space:nowrap;line-height:1">☀️</div>
     <div id="fsBtn" title="Full screen (Alt+F)" style="margin-left:14px;font-size:16px;color:#ffffffcc;cursor:pointer;white-space:nowrap;line-height:1">⛶</div>
     <div id="logoutBtn" style="margin-left:14px;font-size:11px;font-weight:700;color:#ffffffcc;cursor:pointer;white-space:nowrap">Logout</div>
   </div>
@@ -356,6 +362,7 @@
     <span><kbd>Alt</kbd>+<kbd>B</kbd> Settle</span>
     <span><kbd>Alt</kbd>+<kbd>U</kbd> Users</span>
     <span><kbd>Alt</kbd>+<kbd>F</kbd> Full screen</span>
+    <span><kbd>Alt</kbd>+<kbd>L</kbd> Light/Dim/Dark</span>
     <span><kbd>/</kbd> தேடு</span>
     <span><kbd>Esc</kbd> மூடு</span>
     <span><kbd>?</kbd> Hide/Show</span>
@@ -631,6 +638,13 @@
   }
   {const fb=$('fsBtn');if(fb)fb.onclick=_toggleFs;
    document.addEventListener('fullscreenchange',()=>{const b=$('fsBtn');if(b)b.textContent=_isFs()?'⤢':'⛶';});
+   // eye-comfort: Light → Dim → Dark
+   const _eyeModes=['','dim','dark'],_eyeIcon={'':'☀️',dim:'🌗',dark:'🌙'};
+   function _eyeGet(){try{return localStorage.getItem('ngrd_eye')||'';}catch(e){return '';}}
+   function _eyeApply(m){document.documentElement.classList.remove('eye-dim','eye-dark');if(m)document.documentElement.classList.add('eye-'+m);const b=$('eyeBtn');if(b)b.textContent=_eyeIcon[m]||'☀️';try{if(m)localStorage.setItem('ngrd_eye',m);else localStorage.removeItem('ngrd_eye');}catch(e){}}
+   function _eyeCycle(){const cur=_eyeGet();const i=_eyeModes.indexOf(cur);const next=_eyeModes[(i+1)%_eyeModes.length];_eyeApply(next);}
+   _eyeApply(_eyeGet());
+   {const eb=$('eyeBtn');if(eb)eb.onclick=_eyeCycle;window._eyeCycle=_eyeCycle;}
    // register service worker (taskbar install + light offline)
    if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
    // install prompt → show ⬇️ Install button (Windows taskbar / Add to Home)
@@ -660,6 +674,7 @@
     if(e.altKey&&!e.ctrlKey&&!e.metaKey){
       const k=(e.key||'').toLowerCase();const map={d:'tabDash',n:'tabNew',s:'tabList',w:'tabTasks',r:'tabRep',b:'tabSettle',u:'tabUsers'};
       if(k==='f'){e.preventDefault();_toggleFs();return;}
+      if(k==='l'){e.preventDefault();if(window._eyeCycle)window._eyeCycle();return;}
       if(k==='c'){e.preventDefault();const rep=$('tabRep');if(rep)rep.click();setTimeout(()=>{const c=$('rmComm');if(c)c.click();},80);return;}
       if(map[k]){const el=$(map[k]);if(el){e.preventDefault();el.click();}return;}
     }
