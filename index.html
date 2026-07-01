@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NGRD Order">
+<meta name="theme-color" content="#14274A">
 <title>NGRD Order System</title>
 <style>
   :root{
@@ -307,8 +312,6 @@
 </style>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="busy_items.js"></script>
 </head>
 <body>
   <div class="gate" id="loginGate">
@@ -326,6 +329,7 @@
     <div class="crest">NGRD</div>
     <div class="brand"><h1>NGRD ORDER SYSTEM</h1><p>PO → முழு order record + லாபம்</p></div>
     <div id="cloudBadge" style="margin-left:auto;font-size:11px;font-weight:700;color:#bff0c8;white-space:nowrap">☁️ Cloud</div>
+    <div id="fsBtn" title="Full screen (Alt+F)" style="margin-left:14px;font-size:16px;color:#ffffffcc;cursor:pointer;white-space:nowrap;line-height:1">⛶</div>
     <div id="logoutBtn" style="margin-left:14px;font-size:11px;font-weight:700;color:#ffffffcc;cursor:pointer;white-space:nowrap">Logout</div>
   </div>
   <div class="tabs">
@@ -347,6 +351,7 @@
     <span><kbd>Alt</kbd>+<kbd>C</kbd> Commission</span>
     <span><kbd>Alt</kbd>+<kbd>B</kbd> Settle</span>
     <span><kbd>Alt</kbd>+<kbd>U</kbd> Users</span>
+    <span><kbd>Alt</kbd>+<kbd>F</kbd> Full screen</span>
     <span><kbd>/</kbd> தேடு</span>
     <span><kbd>Esc</kbd> மூடு</span>
     <span><kbd>?</kbd> Hide/Show</span>
@@ -402,21 +407,7 @@
         <option value="Puspha Motors">Puspha Motors</option>
       </select>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <select id="statusFilter" style="flex:1;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:13px;font-family:inherit;background:#fffdf6">
-        <option value="all">📋 எல்லா Status</option>
-        <option value="pending">🔵 Pending (bill இல்ல)</option>
-        <option value="invoiced">🟠 Invoiced (bill போட்டது)</option>
-        <option value="paid">🟢 Paid (பணம் வந்தது)</option>
-        <option value="egp">🏛️ eGP</option>
-        <option value="noitem">⚠️ Item இல்லாதது</option>
-      </select>
-    </div>
     <input id="searchBox" placeholder="🔍 Order No / Bill No / NAHA / Vehicle தேடு..." style="width:100%;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:14px;font-family:inherit;background:#fffdf6;margin-bottom:10px">
-    <div id="savedQuickBar" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn" id="qbPendingBill" style="margin:0;flex:1;min-width:150px;background:#b5701a;font-size:12.5px">📌 Pending + Bill போடாதது</button>
-      <button class="btn" id="qbStaffLetter" style="margin:0;flex:1;min-width:150px;background:#1f6f8b;font-size:12.5px">📄 Staff வேலை Letter</button>
-    </div>
     <div id="orderList"></div>
   </div>
 
@@ -493,7 +484,6 @@
       <div class="grid2">
         <div class="fld"><label>Username</label><input id="nuUser" placeholder="உதா: darshan" autocapitalize="off"></div>
         <div class="fld"><label>Name</label><input id="nuName" placeholder="முழு பேர்"></div>
-        <div class="fld"><label>WhatsApp No <span style="color:var(--muted);font-size:11px">(94 சேர்த்து)</span></label><input id="nuPhone" placeholder="உதா: 94771234567" inputmode="numeric"></div>
         <div class="fld"><label>Password</label><input id="nuPass" placeholder="password"></div>
         <div class="fld"><label>Role</label><select id="nuRole"><option value="staff">Staff</option><option value="admin">Admin</option></select></div>
       </div>
@@ -540,44 +530,6 @@
       <div id="dupResult" style="padding:0 13px 13px"></div>
     </div>
     <div class="card" style="margin-top:14px">
-      <div class="sec">🧾 Busy Export — Sales Order (type பண்ண வேண்டாம்)</div>
-      <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Order-ஐ Busy-ல type பண்ணாம, இங்க Excel எடுத்து Busy-ல import பண்ணு. (Busy: Administration → Data Export Import → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b>)</div>
-      <div style="padding:4px 13px">
-        <label style="font-size:12px;font-weight:700;color:var(--navy)">எந்த கடை?</label>
-        <select id="busyFirm" style="width:100%;margin-top:5px;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-size:13px">
-          <option value="NGRD Motors">NGRD Motors (series NGRD)</option>
-          <option value="Puspha Motors">Puspha Motors (series PUSHPA)</option>
-        </select>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">⚠️ ஒவ்வொரு கடைக்கும் தனி Excel. NGRD எடுத்து NGRD Busy company-ல import; Puspha எடுத்து Puspha Busy company-ல import.</div>
-      </div>
-      <div style="padding:4px 13px">
-        <label style="font-size:12px;font-weight:700;color:var(--navy)">எந்த orders export பண்ணணும்?</label>
-        <select id="busyScope" style="width:100%;margin-top:5px;padding:9px;border:1.5px solid var(--line);border-radius:10px;font-size:13px">
-          <option value="one">ஒரு order மட்டும் (sample test) ⭐</option>
-          <option value="new">இன்னும் export பண்ணாதது மட்டும்</option>
-          <option value="all">எல்லா orders-ம்</option>
-          <option value="unbilled">Bill போடாதது மட்டும் (Pending)</option>
-        </select>
-        <div id="busyOneWrap" style="display:none;margin-top:6px">
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <input id="busyOneSearch" type="text" placeholder="🔍 order no தேடு (last 4 / full)..." style="flex:2;min-width:140px;padding:8px;border:1.5px solid var(--gold);border-radius:9px;font-size:12px">
-            <select id="busyOneCamp" style="flex:1;min-width:120px;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px"></select>
-          </div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin-top:5px;cursor:pointer"><input type="checkbox" id="busyOnePending" style="width:auto"> Pending மட்டும் (bill போடாதது)</label>
-          <select id="busyOneOrder" size="6" style="width:100%;margin-top:5px;padding:6px;border:1.5px solid var(--gold);border-radius:10px;font-size:12px"></select>
-          <div id="busyOneCount" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
-        </div>
-      </div>
-      <div style="padding:8px 13px 4px">
-        <button class="btn gold" id="busyExport" style="margin-top:0">🧾 Busy Excel எடு (.xls)</button>
-        <button class="btn" id="busyMapBtn" style="margin-top:9px;background:#0b2a4a">⚙️ Camp → Busy Party பேர் set பண்ணு</button>
-        <button class="btn" id="busyItemsBtn" style="margin-top:9px;background:#0b2a4a">📦 Busy item list — load / check</button>
-      </div>
-      <div id="busyExportNote" class="note" style="text-align:left;margin:4px 13px 13px"></div>
-      <div id="busyMapBox" style="display:none;padding:0 13px 13px"></div>
-      <div id="busyItemsBox" style="display:none;padding:0 13px 13px"></div>
-      <div id="busyMatchBox" style="display:none;padding:0 13px 13px"></div>
-
       <div class="sec">💾 Backup — Data safety</div>
       <div style="padding:6px 13px;font-size:12px;color:var(--muted)">Data already cloud-ல safe. இது extra copy — உன் PC-ல save பண்ணி வச்சுக்க. ஏதாவது நடந்தா restore பண்ணலாம்.</div>
       <div style="padding:4px 13px 13px;display:flex;gap:10px;flex-wrap:wrap">
@@ -665,6 +617,24 @@
   $('tabRep').onclick=()=>{setTab('rep');initReport();};
   $('tabSettle').onclick=()=>{setTab('settle');renderSettlements();};
   $('tabUsers').onclick=()=>{setTab('users');renderUsers();};
+  // ===== Full screen + PWA install (app-like) =====
+  function _isFs(){return document.fullscreenElement||document.webkitFullscreenElement;}
+  function _toggleFs(){
+    try{
+      if(!_isFs()){const el=document.documentElement;(el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);}
+      else{(document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document);}
+    }catch(e){}
+  }
+  {const fb=$('fsBtn');if(fb)fb.onclick=_toggleFs;
+   document.addEventListener('fullscreenchange',()=>{const b=$('fsBtn');if(b)b.textContent=_isFs()?'⤢':'⛶';});
+   // inline manifest (single-file friendly) for Add-to-Home-Screen standalone
+   try{
+     const mf={name:'NGRD Order System',short_name:'NGRD Order',start_url:'.',scope:'.',display:'standalone',orientation:'any',background_color:'#14274A',theme_color:'#14274A',
+       icons:[{src:'data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="96" fill="#14274A"/><circle cx="256" cy="256" r="150" fill="#C9A227"/><text x="256" y="298" font-family="Arial" font-size="130" font-weight="bold" text-anchor="middle" fill="#14274A">NGRD</text></svg>'),sizes:'512x512',type:'image/svg+xml',purpose:'any'}]};
+     const bl=new Blob([JSON.stringify(mf)],{type:'application/manifest+json'});
+     const lk=document.createElement('link');lk.rel='manifest';lk.href=URL.createObjectURL(bl);document.head.appendChild(lk);
+   }catch(e){}
+  }
   {const _skx=$('sckbarHide');if(_skx)_skx.onclick=()=>{const sk=$('sckbar');if(sk)sk.style.display='none';};}
   // ===== Keyboard shortcuts (Busy-style) =====
   document.addEventListener('keydown',e=>{
@@ -685,6 +655,7 @@
     // Alt + letter — navigate (works even while typing, Alt is a safe modifier)
     if(e.altKey&&!e.ctrlKey&&!e.metaKey){
       const k=(e.key||'').toLowerCase();const map={d:'tabDash',n:'tabNew',s:'tabList',w:'tabTasks',r:'tabRep',b:'tabSettle',u:'tabUsers'};
+      if(k==='f'){e.preventDefault();_toggleFs();return;}
       if(k==='c'){e.preventDefault();const rep=$('tabRep');if(rep)rep.click();setTimeout(()=>{const c=$('rmComm');if(c)c.click();},80);return;}
       if(map[k]){const el=$(map[k]);if(el){e.preventDefault();el.click();}return;}
     }
@@ -1044,8 +1015,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
   async function loadOrders(){try{const res=await window.storage.list('order:');const keys=(res&&res.keys)||[];const arr=[];
     for(const k of keys){try{const r=await window.storage.get(k);if(r&&r.value)arr.push(JSON.parse(r.value));}catch(e){}}
-    arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}
-    try{if(typeof _busyFillOnePicker==='function')_busyFillOnePicker();}catch(e){}}
+    arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}}
 
   function detailHtml(o){
     const st=!can('value');const showPay=can('payment');
@@ -1593,28 +1563,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function renderList(){
     const lc=$('orderList');
     _fillCampFilter();
-    const _isStaffView=(CURRENT&&CURRENT.role!=='admin');
-    const _statBase=_isStaffView?orders.filter(o=>o.assignee===CURRENT.u):orders;
-    if(_statBase.length===0&&_isStaffView){lc.innerHTML='<div class="empty">உனக்கு assign பண்ண order இல்ல.<br>Admin assign பண்ணா இங்க தெரியும் 👷</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
     if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
     let tp=0,pend=0,ld=0;
-    _statBase.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
-    $('gCount').textContent=_statBase.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
+    orders.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
+    $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
     const q=(($('searchBox')||{}).value||'').trim().toLowerCase();
     const campSel=(($('campFilter')||{}).value)||'all';
     const compSel=(($('compFilter')||{}).value)||'all';
-    const statSel=(($('statusFilter')||{}).value)||'all';
     let list=orders.map((o,idx)=>({o,idx,al:deliveryAlert(o)}));
-    // staff sees ONLY orders assigned to them; admin sees all
-    if(CURRENT&&CURRENT.role!=='admin')list=list.filter(({o})=>o.assignee===CURRENT.u);
     if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')+' '+(o.bill_no||'')+' '+(o.model||'')+' '+(o.file_no||'')).toLowerCase().indexOf(q)>=0));
     if(campSel!=='all')list=list.filter(({o})=>_campOf(o)===campSel);
     if(compSel!=='all')list=list.filter(({o})=>_companyOf(o)===compSel);
-    if(statSel!=='all')list=list.filter(({o})=>{
-      if(statSel==='egp')return _isEgp(o);
-      if(statSel==='noitem')return !(o.items&&o.items.length);
-      return statusKey(o)===statSel;
-    });
     if(_listFilter)list=list.filter(({o})=>_matchFilter(o));
     const chip=_listFilter?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px">${esc(_filterLabel())} · ${list.length}</span><span id="fltClear" style="cursor:pointer;color:var(--red);font-size:12px;font-weight:700">✕ clear</span></div>`:'';
     const rk=x=>x.al?x.al.lvl:9;
@@ -1624,7 +1583,6 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}</div>
           <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
-          ${(o.model||o.naha_no)?`<div class="meta" style="color:var(--navy);font-weight:600">${o.model?'🚗 '+esc(o.model):''}${o.model&&o.naha_no?' · ':''}${o.naha_no?'NAHA '+esc(o.naha_no):''}</div>`:''}
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
@@ -2694,18 +2652,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;else if(a&&a.lvl===1)soon++;
       const sup=(o.supplier||'').toLowerCase();const c=sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';
       comp[c]=comp[c]||{n:0,v:0,p:0};comp[c].n++;comp[c].v+=Number(o.sell)||0;if(pv!==null)comp[c].p+=pv;
-      const b=_campOf(o);camp[b]=camp[b]||{n:0,v:0,p:0,i:0,d:0};camp[b].n++;camp[b].v+=Number(o.sell)||0;
-      if(o.paid)camp[b].d++;else if(o.supplied||o.bill_no)camp[b].i++;else camp[b].p++;
+      const b=_campOf(o);camp[b]=camp[b]||{n:0,v:0};camp[b].n++;camp[b].v+=Number(o.sell)||0;
     });
     const tot=orders.length;
     const sb=(n,col)=>n>0?`<div style="flex:${n};background:${col}">${n}</div>`:'';
     const compRows=Object.keys(comp).map(k=>`<div class="brow" data-fltt="company" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${comp[k].n} orders · Rs ${fmt(comp[k].v)}</span><span class="vl">Rs ${fmt(comp[k].p)}</span></div>`).join('');
-    const campRows=Object.keys(camp).sort((a,b)=>camp[b].n-camp[a].n).map(k=>`<div class="brow" data-fltt="camp" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct" style="font-size:11px">🔵${camp[k].p} 🟠${camp[k].i} 🟢${camp[k].d}</span><span class="vl">${camp[k].n}</span></div>`).join('');
+    const campRows=Object.keys(camp).sort((a,b)=>camp[b].v-camp[a].v).map(k=>`<div class="brow" data-fltt="camp" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${camp[k].n} orders</span><span class="vl">Rs ${fmt(camp[k].v)}</span></div>`).join('');
     // chart data: last 6 months sales (bill date else order date)
     const months=[];const now=new Date();
-    for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:d.toLocaleDateString('en-GB',{month:'short'}),value:0,n:0,p:0,i:0,d:0});}
+    for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),label:d.toLocaleDateString('en-GB',{month:'short'}),value:0});}
     const mIdx={};months.forEach((m,i)=>mIdx[m.key]=i);
-    orders.forEach(o=>{const bd=parseDate(o.bill_date||o.order_date);if(!bd)return;const key=bd.getFullYear()+'-'+String(bd.getMonth()+1).padStart(2,'0');if(mIdx[key]!=null){const mm=months[mIdx[key]];mm.value+=Number(o.sell)||0;mm.n++;if(o.paid)mm.d++;else if(o.supplied||o.bill_no)mm.i++;else mm.p++;}});
+    orders.forEach(o=>{const bd=parseDate(o.bill_date||o.order_date);if(!bd)return;const key=bd.getFullYear()+'-'+String(bd.getMonth()+1).padStart(2,'0');if(mIdx[key]!=null)months[mIdx[key]].value+=Number(o.sell)||0;});
     const topCamps=Object.keys(camp).map(k=>({label:k,value:camp[k].v,n:camp[k].n})).sort((a,b)=>b.value-a.value).slice(0,5);
     const chartsHtml=`
       <div class="dsec">📊 Sales — கடைசி 6 மாசம்</div>
@@ -2736,11 +2693,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dsec">🏢 Company-wise</div>
       <div class="dpanel">${compRows}</div>
       <div class="dsec">🏕️ Camp-wise (Naval Command)</div>
-      <div style="font-size:11px;color:var(--muted);padding:0 13px 4px">🔵 Pending · 🟠 Invoiced · 🟢 Paid · வலது = மொத்தம்</div>
       <div class="dpanel">${campRows}</div>
-      <div class="dsec">📅 Month-wise (கடைசி 6 மாசம்)</div>
-      <div style="font-size:11px;color:var(--muted);padding:0 13px 4px">🔵 Pending · 🟠 Invoiced · 🟢 Paid · வலது = மொத்தம்</div>
-      <div class="dpanel">${months.slice().reverse().map(m=>`<div class="brow"><span class="nm">${esc(m.label)} ${esc(m.key.slice(0,4))}</span><span class="ct" style="font-size:11px">🔵${m.p} 🟠${m.i} 🟢${m.d}</span><span class="vl">${m.n}</span></div>`).join('')}</div>
       <div class="drow" style="margin-top:16px">
         <button class="btn" id="dashRep" style="margin-top:0">📑 Report பாரு</button>
         <button class="btn gold" id="dashOrd" style="margin-top:0">📋 Orders பாரு</button>
@@ -2797,15 +2750,6 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   if($('campFilter'))$('campFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
   if($('compFilter'))$('compFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
-  if($('statusFilter'))$('statusFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
-  // Saved tab quick buttons
-  if($('qbPendingBill'))$('qbPendingBill').addEventListener('click',()=>{
-    const sf=$('statusFilter');if(sf)sf.value='pending';
-    const sb=$('searchBox');if(sb)sb.value='';
-    _listFilter=null;renderList();
-    const lc=$('orderList');if(lc)lc.scrollIntoView({behavior:'smooth',block:'start'});
-  });
-  if($('qbStaffLetter'))$('qbStaffLetter').addEventListener('click',()=>_savedStaffLetterPick());
 
   // ---- Staff task assignment ----
   function _ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -2855,26 +2799,16 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       if(!assigned.length){box.innerHTML='<div class="empty">இன்னும் order assign பண்ணல.<br>Order open → "👷 Assign" → staff + date தேர்வு பண்ணு</div>';return;}
       const byU={};assigned.forEach(o=>{const k=o.assignee_name||o.assignee;(byU[k]=byU[k]||[]).push(o);});
       box.innerHTML=Object.keys(byU).sort().map(u=>{const arr=byU[u].slice().sort((a,b)=>(a.task_date||'').localeCompare(b.task_date||''));const pend=arr.filter(o=>!o.task_done).length;
-        const uk=arr[0]?arr[0].assignee:'';
-        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · ${pend} pending</div>
-        <div style="display:flex;gap:6px;padding:6px 10px;flex-wrap:wrap">
-          <button class="btn" data-letterpdf="${esc(uk)}" style="margin:0;flex:1;min-width:130px;background:#1f6f8b;font-size:12px">📄 வேலை Letter (PDF)</button>
-          <button class="btn" data-letterwa="${esc(uk)}" style="margin:0;flex:1;min-width:130px;background:#25954b;font-size:12px">💬 WhatsApp அனுப்பு</button>
-        </div>
-        <div class="dpanel">${arr.map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
+        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · ${pend} pending</div><div class="dpanel">${arr.map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
     } else {
       const arr=orders.filter(o=>o.assignee===CURRENT.u);
       if(!arr.length){box.innerHTML='<div class="empty">இன்னைக்கு வேலை இல்ல 🎉<br>Admin assign பண்ணா இங்க வரும்</div>';return;}
-      const _btnbar=`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-        <button class="btn" data-letterpdf="${esc(CURRENT.u)}" style="margin:0;flex:1;min-width:130px;background:#1f6f8b;font-size:12px">📄 என் வேலை list (PDF)</button>
-        <button class="btn" data-letterwa="${esc(CURRENT.u)}" style="margin:0;flex:1;min-width:130px;background:#25954b;font-size:12px">💬 WhatsApp-ல share</button>
-      </div>`;
       const today=_todayKey();const tmrw=_ymd(new Date(Date.now()+86400000));
       const g={overdue:[],today:[],tomorrow:[],later:[],nodate:[],done:[]};
       arr.forEach(o=>{if(o.task_done){g.done.push(o);return;}const d=o.task_date||'';if(!d)g.nodate.push(o);else if(d<today)g.overdue.push(o);else if(d===today)g.today.push(o);else if(d===tmrw)g.tomorrow.push(o);else g.later.push(o);});
       const sortd=a=>a.sort((x,y)=>(x.task_date||'').localeCompare(y.task_date||''));
       const sec=(t,a,cls)=>a.length?`<div class="sec" style="${cls||''}">${t} (${a.length})</div><div class="dpanel" style="margin-bottom:8px">${sortd(a).map(o=>taskRow(o,false)).join('')}</div>`:'';
-      box.innerHTML=_btnbar+
+      box.innerHTML=
         sec('🔴 தாமதம் (Overdue)',g.overdue,'color:var(--red)')+
         sec('⭐ இன்னைக்கு',g.today,'')+
         sec('📅 நாளைக்கு',g.tomorrow,'')+
@@ -2885,98 +2819,6 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     box.querySelectorAll('[data-done]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.done);if(!o)return;o.task_done=true;o.task_done_at=Date.now();try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
     box.querySelectorAll('[data-undone]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.undone);if(!o)return;o.task_done=false;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
     box.querySelectorAll('[data-unassign]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.unassign);if(!o)return;if(!confirm('Assign நீக்கவா?'))return;delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
-    box.querySelectorAll('[data-letterpdf]').forEach(b=>b.addEventListener('click',()=>_staffLetterPDF(b.dataset.letterpdf)));
-    box.querySelectorAll('[data-letterwa]').forEach(b=>b.addEventListener('click',()=>_staffLetterWA(b.dataset.letterwa)));
-  }
-  // ---- staff work letter (PDF + WhatsApp) ----
-  function _staffLetterOrders(staffKey){
-    // pending (not done) assigned orders for this staff, sorted by date
-    return orders.filter(o=>o.assignee===staffKey&&!o.task_done)
-      .sort((a,b)=>(a.task_date||a.delivery_date||'').localeCompare(b.task_date||b.delivery_date||''));
-  }
-  function _staffName(staffKey){
-    const arr=orders.filter(o=>o.assignee===staffKey);
-    return (arr[0]&&arr[0].assignee_name)||staffKey;
-  }
-  function _staffLetterPDF(staffKey){
-    const arr=_staffLetterOrders(staffKey);
-    if(!arr.length){alert('இந்த staff-க்கு pending வேலை இல்ல');return;}
-    const name=_staffName(staffKey);
-    const today=new Date().toLocaleDateString('en-GB');
-    const rows=arr.map((o,i)=>{
-      const dd=o.task_date?_fmtDk(o.task_date):(o.delivery_date||'—');
-      return `<tr>
-        <td style="text-align:center">${i+1}</td>
-        <td>${esc(o.order_no||'—')}</td>
-        <td>${esc(_campOf(o))}</td>
-        <td style="text-align:center">${(o.items||[]).length}</td>
-        <td style="text-align:center;font-weight:700">${esc(dd)}</td>
-      </tr>`;}).join('');
-    const page=`<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:720px;margin:0 auto;padding:30px 34px;color:#1a2b40">
-      <div style="border-bottom:3px solid #0b2a4a;padding-bottom:12px;margin-bottom:18px">
-        <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:.5px">N.G.R.D. MOTORS</div>
-        <div style="font-size:12px;color:#6a7787">வேலை பட்டியல் — Work Assignment</div>
-      </div>
-      <div style="font-size:13px;margin-bottom:6px">தேதி: <b>${today}</b></div>
-      <div style="font-size:15px;margin-bottom:14px">அன்புள்ள <b>${esc(name)}</b>,</div>
-      <div style="font-size:13.5px;line-height:1.6;margin-bottom:16px">
-        வணக்கம். கீழே உள்ள order-களை நீங்கள் கவனித்து, குறிப்பிட்ட <b>வேலை நாளுக்குள்</b> ready பண்ணி தரவும். ஏதேனும் சந்தேகம் இருந்தால் தயவுசெய்து கேளுங்கள். உங்கள் ஒத்துழைப்புக்கு நன்றி. 🙏
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="background:#0b2a4a;color:#fff">
-          <th style="padding:8px 6px;width:36px">#</th>
-          <th style="padding:8px 6px;text-align:left">Order No</th>
-          <th style="padding:8px 6px;text-align:left">Camp</th>
-          <th style="padding:8px 6px;width:56px">Items</th>
-          <th style="padding:8px 6px;width:110px">வேலை நாள்</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div style="margin-top:14px;font-size:12.5px;color:#6a7787">மொத்தம்: <b>${arr.length}</b> order முடிக்க வேண்டும்.</div>
-      <div style="margin-top:40px;font-size:13px">
-        நன்றி,<br><b>NGRD Motors / Puspha Motors</b><br>
-        <span style="color:#6a7787;font-size:11.5px">Panchikawatta, Colombo 10</span>
-      </div>
-    </div>`;
-    const w=window.open('','_blank');
-    const ctrl='<div class="noprint" style="position:sticky;top:0;background:#0b2a4a;padding:12px 16px;display:flex;gap:10px;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:99">'
-      +'<button onclick="window.print()" style="background:#1f6f8b;color:#fff;border:0;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">🖨️ Print</button>'
-      +'<button onclick="window.print()" style="background:#25954b;color:#fff;border:0;padding:11px 22px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">⬇️ PDF ஆ Save</button>'
-      +'<span style="color:#bcd;font-size:12px;align-self:center">(dialog-ல "Save as PDF" தேர்வு பண்ணு)</span>'
-      +'</div>';
-    w.document.write('<html><head><title>வேலை Letter - '+esc(name)+'</title><meta charset="utf-8"><style>@media print{@page{margin:14mm}.noprint{display:none!important}}body{margin:0}td,th{border:1px solid #c5cdd8}</style></head><body>'+ctrl+page+'</body></html>');
-    w.document.close();
-  }
-  function _staffLetterWA(staffKey){
-    const arr=_staffLetterOrders(staffKey);
-    if(!arr.length){alert('இந்த staff-க்கு pending வேலை இல்ல');return;}
-    const name=_staffName(staffKey);
-    const today=new Date().toLocaleDateString('en-GB');
-    let txt='*NGRD Motors — வேலை பட்டியல்*\n'+today+'\n\nஅன்புள்ள '+name+',\nவணக்கம். கீழே உள்ள order-களை குறிப்பிட்ட வேலை நாளுக்குள் ready பண்ணவும் 🙏\n\n';
-    arr.forEach((o,i)=>{
-      const dd=o.task_date?_fmtDk(o.task_date):(o.delivery_date||'—');
-      txt+=(i+1)+'. *'+(o.order_no||'—')+'*  ·  '+_campOf(o)+'  ·  '+((o.items||[]).length)+' items\n   📅 வேலை நாள்: *'+dd+'*\n';
-    });
-    txt+='\nமொத்தம்: '+arr.length+' order.\nநன்றி 🙏\n*NGRD Motors*';
-    // try to find staff phone from users map
-    let phone='';try{const u=(typeof users!=='undefined'&&users[staffKey])||null;if(u&&u.phone)phone=String(u.phone).replace(/[^0-9]/g,'');}catch(e){}
-    const url='https://wa.me/'+(phone?phone:'')+'?text='+encodeURIComponent(txt);
-    window.open(url,'_blank');
-  }
-  // ---- end staff work letter ----
-  function _savedStaffLetterPick(){
-    // gather staff who have pending assigned orders
-    const map={};orders.forEach(o=>{if(o.assignee&&!o.task_done){const k=o.assignee;(map[k]=map[k]||{name:o.assignee_name||k,n:0}).n++;}});
-    const keys=Object.keys(map);
-    if(!keys.length){alert('இப்போ staff-க்கு assign பண்ண pending order இல்ல.\nMமுதல்ல "👷 Assign" பண்ணுங்க.');return;}
-    const lines=keys.map((k,i)=>(i+1)+'. '+map[k].name+' ('+map[k].n+' order)').join('\n');
-    const ans=prompt('எந்த staff-க்கு வேலை letter?\n\n'+lines+'\n\nNumber type பண்ணு (1-'+keys.length+'):','1');
-    if(!ans)return;
-    const idx=parseInt(ans,10)-1;
-    if(isNaN(idx)||idx<0||idx>=keys.length){alert('சரியான number type பண்ணு');return;}
-    const sk=keys[idx];
-    const how=prompt('எப்படி அனுப்பணும்?\n\n1 = PDF (print/save)\n2 = WhatsApp\n\nNumber type பண்ணு:','1');
-    if(how==='2')_staffLetterWA(sk);else _staffLetterPDF(sk);
   }
   // ---- end task assignment ----
 
@@ -3056,431 +2898,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   $('nuAdd').addEventListener('click',async()=>{
     const u=($('nuUser').value||'').trim().toLowerCase(),n=($('nuName').value||'').trim(),p=($('nuPass').value||'').trim(),role=$('nuRole').value;
-    const ph=(($('nuPhone')||{}).value||'').replace(/[^0-9]/g,'');
     if(!u||!p){alert('Username + Password வேணும்');return;}
     const users=await fbUsersGet();
     if(users[u]){if(!confirm('இந்த username ஏற்கனவே இருக்கு. மாத்தவா?'))return;}
-    users[u]={pass:p,role,name:n||u,phone:ph,perms:readPerms($('nuPerms'),'nuPerm')};await fbUsersSet(users);
-    $('nuUser').value='';$('nuName').value='';$('nuPass').value='';if($('nuPhone'))$('nuPhone').value='';$('nuRole').value='staff';$('nuPerms').innerHTML=permChecks('nuPerm',{purchase:true,supply:true});
+    users[u]={pass:p,role,name:n||u,perms:readPerms($('nuPerms'),'nuPerm')};await fbUsersSet(users);
+    $('nuUser').value='';$('nuName').value='';$('nuPass').value='';$('nuRole').value='staff';$('nuPerms').innerHTML=permChecks('nuPerm',{purchase:true,supply:true});
     renderUsers();
   });
 
   // ---- Backup / Restore ----
   function _dl(filename,text,mime){const b=new Blob([text],{type:mime||'text/plain'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500);}
   function _stamp(){const n=new Date();return n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');}
-  // ================= BUSY EXPORT (Sales Order import format) =================
-  // Busy import column order (Ngrd Order format):
-  // A=VCH_SERIES  B=VCH/BILL_DATE  C=VCH/BILL_NO  D=SALE/PURC_TYPE  E=PARTY_NAME
-  // F=ITEM_MC_NAME  G=ITEM_NAME  H=QUANTITY  I=UNIT  J=PRICE  K=AMOUNT
-  const BUSY_SALETYPE='Sales', BUSY_MC='SHOP';
-  const BUSY_SERIES={'NGRD Motors':'NGRD','Puspha Motors':'PUSHPA'};
-  function _busyFirm(){return ($('busyFirm')||{}).value||'NGRD Motors';}
-  function _busyFirmKey(){return _busyFirm()==='Puspha Motors'?'PUSPHA':'NGRD';}
-  // party map + exported list are kept PER FIRM (so NGRD & Puspha never mix)
-  function _busyMapLoad(){try{return JSON.parse(localStorage.getItem('busyPartyMap_'+_busyFirmKey())||'{}');}catch(e){return {};}}
-  function _busyMapSave(m){try{localStorage.setItem('busyPartyMap_'+_busyFirmKey(),JSON.stringify(m));}catch(e){}}
-  function _busyExportedLoad(){try{return JSON.parse(localStorage.getItem('busyExportedIds_'+_busyFirmKey())||'[]');}catch(e){return [];}}
-  function _busyExportedSave(a){try{localStorage.setItem('busyExportedIds_'+_busyFirmKey(),JSON.stringify(a));}catch(e){}}
-  // Busy wants date as DD-MM-YYYY
-  function _busyDate(s){
-    if(!s)return '';s=String(s).trim();
-    let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return m[3].padStart(2,'0')+'-'+m[2].padStart(2,'0')+'-'+m[1];
-    m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);if(m)return m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')+'-'+m[3];
-    return s;
-  }
-  function _busyOrderDate(o){
-    // real order date (PO date). order_date = po_date saved at order creation.
-    return o.order_date||o.po_date||o.quotation_date||o.bill_date||'';
-  }
-  // CSV builder (kept as fallback)
-  function _csvFromRows(rows){
-    const ce=v=>{
-      if(v==null)v='';
-      v=String(v);
-      return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;
-    };
-    return '\ufeff'+rows.map(r=>r.map(ce).join(',')).join('\r\n');
-  }
-  // real .xlsx via SheetJS (Busy import accepts .xls/.xlsx only)
-  function _busyDownloadWorkbook(rows,fname){
-    if(typeof XLSX==='undefined'||!XLSX.utils){
-      // library not loaded → fallback to CSV so user still gets a file
-      _dl(fname.replace(/\.xlsx?$/i,'')+'.csv',_csvFromRows(rows),'text/csv;charset=utf-8;');
-      return 'csv';
-    }
-    const ws=XLSX.utils.aoa_to_sheet(rows);   // array-of-arrays → worksheet (empty strings stay in place, no shift)
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,ws,'SalesOrder');
-    XLSX.writeFile(wb,fname);                  // triggers browser download
-    return 'xlsx';
-  }
-  function _busyPickOrders(scope){
-    const firm=_busyFirm();
-    const done=_busyExportedLoad();
-    let list=orders.filter(o=>_companyOf(o)===firm);   // <-- only this shop's orders
-    if(scope==='one'){const oid=($('busyOneOrder')||{}).value||'';list=list.filter(o=>o.id===oid);}
-    else if(scope==='new')list=list.filter(o=>done.indexOf(o.id)<0);
-    else if(scope==='unbilled')list=list.filter(o=>!(o.supplied||o.bill_no));
-    return list;
-  }
-  function _busyBuildRows(list,map){
-    const series=BUSY_SERIES[_busyFirm()]||'NGRD';
-    const rows=[];const missing=new Set();let lineCount=0;const unmatched=[];
-    list.forEach(o=>{
-      const campName=_campOf(o);
-      const party=map[campName]||'';
-      if(!party)missing.add(campName);
-      const items=(o.items&&o.items.length)?o.items:[{description:'',qty:0,unit_price:0,total:0}];
-      items.forEach(it=>{
-        const desc=it.description||'';
-        // use linked Busy item name if available; else keep original (and flag unmatched)
-        const linked=_busyLinkGet(o.model||'',desc);
-        const itemName=linked||desc;
-        if(!linked && (_busyItems&&_busyItems.length)){
-          // only flag as unmatched if we actually have a busy list to match against
-          unmatched.push({orderId:o.id,order_no:o.order_no||'',model:o.model||'',desc:desc});
-        }
-        const qty=Number(it.qty)||0;
-        const price=Number(it.unit_price)||0;
-        const amount=(price>0)?+(qty*price).toFixed(2):'';
-        rows.push([
-          series,                            // A series (NGRD / PUSHPA)
-          _busyDate(_busyOrderDate(o)),      // B date
-          o.order_no||'',                    // C vch/bill no
-          BUSY_SALETYPE,                     // D sale type
-          party,                             // E party name
-          BUSY_MC,                           // F item MC name
-          itemName,                          // G item name (Busy-matched if linked)
-          qty,                               // H quantity
-          'Nos',                             // I unit
-          (price>0?price:''),                // J price (order's unit_price)
-          amount                             // K amount (qty x price)
-        ]);
-        lineCount++;
-      });
-    });
-    return {rows,missing:Array.from(missing),lineCount,unmatched};
-  }
-  function _busyRenderMap(){
-    const box=$('busyMapBox');if(!box)return;
-    const map=_busyMapLoad();
-    const firm=_busyFirm();
-    const camps=['Welisara (Western)','Madawachchiya (North Central)','Trincomalee (Eastern)','Boossa (Southern)','Pothuvil (South Eastern)','KKS (Northern)','Puttalam (North Western)','மற்றவை'];
-    box.innerHTML='<div class="sec" style="background:#fafbfd;border-radius:9px">⚙️ '+esc(firm)+' — Camp → Busy Party பேர்</div>'+
-      '<div style="font-size:11.5px;color:var(--muted);padding:6px 0">இந்த பேர் <b>'+esc(firm)+'</b>-க்கு மட்டும். Busy-ல உள்ள <b>அதே</b> Party பேரை போடு (உதா: SRILANKA NAVY MAHANAGA, PANAMA, POTHUVIL). தப்பா இருந்தா import-ல party match ஆகாது.</div>'+
-      camps.map(c=>'<div style="margin:7px 0"><label style="font-size:11.5px;font-weight:700;color:var(--navy)">'+esc(c)+'</label>'+
-        '<input class="busyPartyInp" data-camp="'+esc(c)+'" value="'+esc(map[c]||'')+'" placeholder="Busy Party பேர்..." style="width:100%;margin-top:3px;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px"></div>').join('')+
-      '<button class="btn gold" id="busyMapSave" style="margin-top:8px">💾 '+esc(firm)+' Party பேர் save பண்ணு</button>';
-    $('busyMapSave').addEventListener('click',()=>{
-      const m=_busyMapLoad();
-      document.querySelectorAll('.busyPartyInp').forEach(inp=>{const c=inp.getAttribute('data-camp');const v=inp.value.trim();if(v)m[c]=v;else delete m[c];});
-      _busyMapSave(m);
-      $('busyExportNote').innerHTML='✅ '+esc(firm)+' Party பேர் save ஆச்சு.';
-    });
-  }
-  // ===== BUSY ITEM LIST (master) — load, store, search =====
-  let _busyItems=null;            // array of {n:name, a:alias, g:group, u:unit}
-  let _busyItemMap=null;          // saved links: orderItemKey -> busy item name
-  function _bnorm(s){return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();}
-  function _btokens(s){return _bnorm(s).split(' ').filter(w=>w.length>1);}
-  function _busyParseBlob(){
-    // parse embedded window.__BUSY_ITEMS_BLOB into array
-    try{
-      const blob=window.__BUSY_ITEMS_BLOB;if(!blob)return [];
-      return blob.split('§').map(line=>{const p=line.split('¦');return {n:p[0]||'',a:p[1]||'',g:p[2]||'',u:p[3]||'NOS'};}).filter(x=>x.n);
-    }catch(e){return [];}
-  }
-  async function _busyItemsLoad(){
-    try{if(!_fbOk)throw 0;const s=await firebase.database().ref('busyItems').once('value');const v=s.val();
-      _busyItems=Array.isArray(v)?v:(v?Object.values(v):[]);
-      try{localStorage.setItem('__busyItems',JSON.stringify(_busyItems));}catch(e){}
-    }catch(e){try{_busyItems=JSON.parse(localStorage.getItem('__busyItems')||'[]');}catch(_){_busyItems=[];}}
-    // A) if still empty, seed from embedded blob (and push to Firebase once)
-    if((!_busyItems||!_busyItems.length)){
-      const seed=_busyParseBlob();
-      if(seed.length){
-        _busyItems=seed;
-        try{localStorage.setItem('__busyItems',JSON.stringify(seed));}catch(e){}
-        try{if(_fbOk)await firebase.database().ref('busyItems').set(seed);}catch(e){}
-      }
-    }
-    return _busyItems;
-  }
-  async function _busyItemMapLoad(){
-    try{if(!_fbOk)throw 0;const s=await firebase.database().ref('busyItemMap').once('value');_busyItemMap=s.val()||{};
-      try{localStorage.setItem('__busyItemMap',JSON.stringify(_busyItemMap));}catch(e){}
-    }catch(e){try{_busyItemMap=JSON.parse(localStorage.getItem('__busyItemMap')||'{}');}catch(_){_busyItemMap={};}}
-    return _busyItemMap;
-  }
-  function _busyLinkKey(model,desc){return (_bnorm(model)+'|'+_bnorm(desc)).replace(/[.#$\[\]\/]/g,'_').slice(0,700);}
-  // find a busy item object by its name (to grab its alias)
-  function _busyItemByName(name){
-    if(!name||!_busyItems)return null;
-    const t=_bnorm(name);
-    return _busyItems.find(it=>_bnorm(it.n)===t)||null;
-  }
-  async function _busyLinkSave(model,desc,busyName){
-    if(!_busyItemMap)_busyItemMap={};
-    const k=_busyLinkKey(model,desc);
-    // store name + alias together; alias survives a Busy name change
-    const itm=_busyItemByName(busyName);
-    const rec={n:busyName,a:(itm&&itm.a)?String(itm.a):''};
-    _busyItemMap[k]=rec;
-    try{localStorage.setItem('__busyItemMap',JSON.stringify(_busyItemMap));}catch(e){}
-    try{if(_fbOk)await firebase.database().ref('busyItemMap/'+k).set(rec);}catch(e){}
-  }
-  // resolve a saved link to a CURRENT busy item name.
-  // layer 1: alias still present in busy list -> use its (possibly new) name
-  // layer 2: name still present -> use it
-  // else -> return null (caller will auto re-suggest)
-  function _busyLinkGet(model,desc){
-    if(!_busyItemMap)return null;
-    const raw=_busyItemMap[_busyLinkKey(model,desc)];
-    if(!raw)return null;
-    // backward compat: old links were a plain string (name only)
-    const rec=(typeof raw==='string')?{n:raw,a:''}:raw;
-    // layer 1 — alias match (name-change proof)
-    if(rec.a&&_busyItems&&_busyItems.length){
-      const al=_bnorm(rec.a);
-      const hit=_busyItems.find(it=>it.a&&_bnorm(it.a)===al);
-      if(hit)return hit.n; // current name for that alias
-    }
-    // layer 2 — name still exists in busy list?
-    if(rec.n){
-      if(!_busyItems||!_busyItems.length)return rec.n; // list not loaded; trust saved name
-      const stillThere=_busyItems.some(it=>_bnorm(it.n)===_bnorm(rec.n));
-      if(stillThere)return rec.n;
-    }
-    // name changed & no alias to recover -> force re-match
-    return null;
-  }
-  // score how well a busy item matches the order item (desc) + vehicle (model)
-  function _busyScore(busyItem,descTokens,modelTokens){
-    const nTok=_btokens(busyItem.n), gTok=_btokens(busyItem.g);
-    let s=0;
-    // desc word overlap with busy item name
-    descTokens.forEach(d=>{if(nTok.indexOf(d)>=0)s+=3;});
-    // vehicle/model overlap with busy group OR busy item name (strong signal)
-    modelTokens.forEach(m=>{
-      if(gTok.indexOf(m)>=0)s+=4;
-      else if(nTok.indexOf(m)>=0)s+=2;
-    });
-    return s;
-  }
-  function _busySuggest(model,desc,limit){
-    if(!_busyItems||!_busyItems.length)return [];
-    const dTok=_btokens(desc), mTok=_btokens(model);
-    const scored=_busyItems.map(it=>({it,sc:_busyScore(it,dTok,mTok)})).filter(x=>x.sc>0);
-    scored.sort((a,b)=>b.sc-a.sc);
-    return scored.slice(0,limit||8).map(x=>x.it);
-  }
-
-  // ---- Busy item list: load/check box ----
-  const _busyItemsBtn=$('busyItemsBtn');if(_busyItemsBtn)_busyItemsBtn.addEventListener('click',async()=>{
-    const box=$('busyItemsBox');if(!box)return;
-    if(box.style.display!=='none'){box.style.display='none';return;}
-    box.style.display='block';
-    box.innerHTML='<div style="font-size:12px;color:var(--muted);padding:6px 0">⏳ Busy item list பார்க்கிறேன்...</div>';
-    await _busyItemsLoad();
-    const n=(_busyItems||[]).length;
-    box.innerHTML='<div class="sec" style="background:#fafbfd;border-radius:9px">📦 Busy item list</div>'+
-      '<div style="font-size:12.5px;color:var(--navy);padding:6px 0"><b>'+n+'</b> Busy items load ஆகி இருக்கு.</div>'+
-      '<div style="font-size:11.5px;color:var(--muted);padding:2px 0 8px">Busy-ல item list-ஐ Excel export பண்ணி (Masters → Item → List → Alt+E), இங்க upload பண்ணு. (Name, Alias, Parent Group, Op.Stock, Unit columns)</div>'+
-      '<label class="btn gold" style="margin-top:4px;text-align:center;cursor:pointer">📤 Busy item Excel upload<input type="file" id="busyItemsFile" accept=".xlsx,.xls" hidden></label>'+
-      '<div id="busyItemsUpNote" class="note" style="text-align:left;margin-top:8px"></div>';
-    const f=$('busyItemsFile');if(f)f.addEventListener('change',_busyItemsUpload);
-  });
-  async function _busyItemsUpload(e){
-    const file=e.target.files&&e.target.files[0];if(!file)return;
-    const note=$('busyItemsUpNote');note.innerHTML='⏳ படிக்கிறேன்...';
-    try{
-      if(typeof XLSX==='undefined'){note.innerHTML='⚠️ Excel library load ஆகல. Internet on பண்ணி refresh பண்ணு.';return;}
-      const data=await file.arrayBuffer();
-      const wb=XLSX.read(data,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      // find header row (has 'Name' and 'Parent Group')
-      let hdr=-1;
-      for(let i=0;i<Math.min(rows.length,15);i++){
-        const r=rows[i].map(x=>String(x).trim().toLowerCase());
-        if(r.indexOf('name')>=0&&r.some(c=>c.indexOf('parent')>=0||c.indexOf('group')>=0)){hdr=i;break;}
-      }
-      if(hdr<0){note.innerHTML='⚠️ Header row (Name, Parent Group...) கண்டுபிடிக்க முடியல. Busy item list Excel-ஐ அப்படியே upload பண்ணு.';return;}
-      const H=rows[hdr].map(x=>String(x).trim().toLowerCase());
-      const ci=n=>H.findIndex(c=>c===n||c.indexOf(n)>=0);
-      const iName=ci('name'),iAlias=ci('alias'),iGroup=ci('parent'),iUnit=ci('unit');
-      const items=[];
-      for(let i=hdr+1;i<rows.length;i++){
-        const r=rows[i];const name=String(r[iName]==null?'':r[iName]).trim();
-        if(!name)continue;
-        items.push({n:name,a:iAlias>=0?String(r[iAlias]||'').trim():'',g:iGroup>=0?String(r[iGroup]||'').trim():'',u:iUnit>=0?String(r[iUnit]||'NOS').trim():'NOS'});
-      }
-      if(!items.length){note.innerHTML='⚠️ Item ஒன்னும் படிக்கல. File சரியா இருக்கானு பாரு.';return;}
-      note.innerHTML='⏳ '+items.length+' item save பண்றேன் (cloud)...';
-      _busyItems=items;
-      try{localStorage.setItem('__busyItems',JSON.stringify(items));}catch(_){}
-      try{if(_fbOk)await firebase.database().ref('busyItems').set(items);}catch(_){}
-      note.innerHTML='✅ '+items.length+' Busy item save ஆச்சு! இனி export பண்ணும்போது item match ஆகும்.';
-    }catch(err){note.innerHTML='⚠️ படிக்க முடியல: '+esc(err.message);}
-  }
-
-  const _busyMapBtn=$('busyMapBtn');if(_busyMapBtn)_busyMapBtn.addEventListener('click',()=>{
-    const box=$('busyMapBox');if(!box)return;
-    if(box.style.display==='none'){box.style.display='block';_busyRenderMap();}else{box.style.display='none';}
-  });
-  // when firm changes, refresh the map box if open
-  const _busyFirmSel=$('busyFirm');if(_busyFirmSel)_busyFirmSel.addEventListener('change',()=>{
-    const box=$('busyMapBox');if(box&&box.style.display!=='none')_busyRenderMap();
-    $('busyExportNote').innerHTML='';
-    _busyFillOnePicker();
-  });
-  function _busyCampList(){
-    const firm=_busyFirm();
-    const camps=Array.from(new Set(orders.filter(o=>_companyOf(o)===firm).map(o=>_campOf(o)))).sort();
-    return camps;
-  }
-  function _busyFillOnePicker(){
-    const sc=($('busyScope')||{}).value;
-    const wrap=$('busyOneWrap');const pick=$('busyOneOrder');if(!wrap||!pick)return;
-    if(sc!=='one'){wrap.style.display='none';return;}
-    wrap.style.display='block';
-    // fill camp dropdown (once / refresh)
-    const campSel=$('busyOneCamp');
-    if(campSel){
-      const cur=campSel.value;
-      const camps=_busyCampList();
-      campSel.innerHTML='<option value="">எல்லா camp</option>'+camps.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
-      if(cur)campSel.value=cur;
-    }
-    _busyRenderOneList();
-  }
-  function _busyRenderOneList(){
-    const pick=$('busyOneOrder');if(!pick)return;
-    const firm=_busyFirm();
-    const q=(($('busyOneSearch')||{}).value||'').trim().toLowerCase().replace(/\s+/g,'');
-    const camp=(($('busyOneCamp')||{}).value||'');
-    const pendOnly=(($('busyOnePending')||{}).checked);
-    let list=orders.filter(o=>_companyOf(o)===firm);
-    if(camp)list=list.filter(o=>_campOf(o)===camp);
-    if(pendOnly)list=list.filter(o=>!(o.supplied||o.bill_no));
-    if(q){list=list.filter(o=>{const on=(o.order_no||'').toLowerCase().replace(/\s+/g,'');const fn=(o.file_no||'').toLowerCase().replace(/\s+/g,'');return on.indexOf(q)>=0||fn.indexOf(q)>=0;});}
-    const shown=list.slice(0,300);
-    pick.innerHTML=shown.length?shown.map(o=>'<option value="'+esc(o.id)+'">'+esc(o.order_no||'(no#)')+' · '+esc(_campOf(o))+' · '+((o.items||[]).length)+' item'+((o.supplied||o.bill_no)?' ✓bill':'')+'</option>').join(''):'<option value="">— order இல்ல —</option>';
-    const cnt=$('busyOneCount');if(cnt)cnt.textContent=list.length+' order'+(list.length>300?' (முதல் 300 காட்டுது)':'')+(q||camp||pendOnly?' · filter active':'');
-  }
-  const _busyScopeSel=$('busyScope');if(_busyScopeSel)_busyScopeSel.addEventListener('change',()=>{_busyFillOnePicker();$('busyExportNote').innerHTML='';});
-  const _bos=$('busyOneSearch');if(_bos)_bos.addEventListener('input',_busyRenderOneList);
-  const _boc=$('busyOneCamp');if(_boc)_boc.addEventListener('change',_busyRenderOneList);
-  const _bop=$('busyOnePending');if(_bop)_bop.addEventListener('change',_busyRenderOneList);
-  // when an order is picked, auto-select its company (NGRD/Puspha)
-  const _boo=$('busyOneOrder');if(_boo)_boo.addEventListener('change',function(){
-    const oid=this.value;if(!oid)return;
-    const o=orders.find(x=>x.id===oid);if(!o)return;
-    const comp=_companyOf(o);
-    const fsel=$('busyFirm');
-    if(fsel&&(comp==='NGRD Motors'||comp==='Puspha Motors')&&fsel.value!==comp){
-      fsel.value=comp;
-      // refresh dependent UI (party map box if open)
-      const box=$('busyMapBox');if(box&&box.style.display!=='none')_busyRenderMap();
-      $('busyExportNote').innerHTML='ℹ️ கடை auto select ஆச்சு: <b>'+esc(comp)+'</b>';
-    }
-  });
-
-  const _busyExp=$('busyExport');if(_busyExp)_busyExp.addEventListener('click',async()=>{
-    const scope=($('busyScope')||{}).value||'new';
-    const firm=_busyFirm();
-    const note=$('busyExportNote');
-    const list=_busyPickOrders(scope);
-    if(!list.length){note.innerHTML='⚠️ '+esc(firm)+'-க்கு export பண்ண order இல்ல ('+(scope==='new'?'எல்லாம் ஏற்கனவே export ஆயிருக்கு':'')+').';return;}
-    const map=_busyMapLoad();
-    // make sure busy item list + links are loaded before building
-    note.innerHTML='⏳ item match பார்க்கிறேன்...';
-    if(_busyItems===null)await _busyItemsLoad();
-    if(_busyItemMap===null)await _busyItemMapLoad();
-    const {rows,missing,lineCount,unmatched}=_busyBuildRows(list,map);
-    if(missing.length){
-      note.innerHTML='⚠️ '+esc(firm)+' — இந்த camp-க்கு Busy Party பேர் இல்ல: <b>'+missing.map(esc).join(', ')+'</b><br>முதல்ல "⚙️ Camp → Busy Party" அழுத்தி பேர் போடு. அப்புறம் export பண்ணு.';
-      return;
-    }
-    // if we have a busy item list and some items aren't linked → ask to match first
-    if(_busyItems&&_busyItems.length&&unmatched&&unmatched.length){
-      note.innerHTML='⚠️ <b>'+unmatched.length+'</b> item-க்கு Busy பேரு link ஆகல. கீழ match பண்ணு (ஒரு முறை), அப்புறம் export. <br><small>இல்ல Busy-ல "Create New Master" வச்சு generic பேரோட ஏத்தலாம் — ஆனா duplicate item வரும்.</small>';
-      _busyRenderMatch(unmatched);
-      return;
-    }
-    const fname='Busy_'+_busyFirmKey()+'_SalesOrder_'+_stamp()+'.xlsx';
-    const kind=_busyDownloadWorkbook(rows,fname);
-    if(scope!=='unbilled'){
-      const done=_busyExportedLoad();list.forEach(o=>{if(done.indexOf(o.id)<0)done.push(o.id);});_busyExportedSave(done);
-    }
-    const realName=(kind==='csv')?fname.replace(/\.xlsx?$/i,'')+'.csv':fname;
-    const warn=(kind==='csv')?'<br>⚠️ Excel library load ஆகல (internet?) — .csv வந்திருக்கு. Busy .csv ஏத்தலைனா, internet on பண்ணி மறுபடி எடு.':'';
-    const matchNote=(_busyItems&&_busyItems.length)?'<br>✅ எல்லா item-ம் Busy பேரோட match ஆகி இருக்கு.':'';
-    note.innerHTML='✅ '+esc(firm)+': '+list.length+' order ('+lineCount+' line) export ஆச்சு.'+matchNote+'<br>Busy-ல <b>'+esc(firm)+'</b> company திற → Import Vouchers from Excel → Sales Order → format <b>Ngrd Order</b> → இந்த file (<b>'+esc(realName)+'</b>) select பண்ணி Import.'+warn;
-    $('busyMatchBox').style.display='none';
-  });
-
-  // ---- Busy item Match screen (link order item -> busy item) ----
-  function _busyRenderMatch(unmatched){
-    const box=$('busyMatchBox');if(!box)return;
-    box.style.display='block';
-    // unique by model|desc so we don't ask the same thing twice
-    const seen={};const uniq=[];
-    unmatched.forEach(u=>{const k=_busyLinkKey(u.model,u.desc);if(!seen[k]){seen[k]=1;uniq.push(u);}});
-    let html='<div class="sec" style="background:#fafbfd;border-radius:9px">🔗 Busy item match ('+uniq.length+')</div>'+
-      '<div style="font-size:11.5px;color:var(--muted);padding:6px 0">ஒவ்வொரு order item-க்கும், Busy-ல சரியான item-ஐ தேர்ந்தெடு. ஒரு முறை தேர்ந்தா, அடுத்த முறை auto. (தப்பா match ஆகாம, நீ பார்த்து confirm பண்ணு.)</div>';
-    uniq.forEach((u,ix)=>{
-      const sugg=_busySuggest(u.model,u.desc,8);
-      const opts=sugg.map(s=>'<option value="'+esc(s.n)+'">'+esc(s.n)+(s.g?'  ['+esc(s.g)+']':'')+'</option>').join('');
-      html+='<div class="busyMatchRow" data-key="'+esc(_busyLinkKey(u.model,u.desc))+'" data-model="'+esc(u.model)+'" data-desc="'+esc(u.desc)+'" style="border:1px solid var(--line);border-radius:10px;padding:9px;margin:7px 0">'+
-        '<div style="font-size:12.5px;font-weight:700;color:var(--navy)">'+esc(u.desc||'(பேரு இல்ல)')+'</div>'+
-        '<div style="font-size:11px;color:var(--muted);margin:2px 0 6px">🚗 '+esc(u.model||'vehicle தெரியல')+'</div>'+
-        '<select class="busyMatchSel" style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px">'+
-          '<option value="">— Busy item தேர்ந்தெடு —</option>'+opts+
-          '<option value="__search__">🔍 வேற... (search)</option>'+
-        '</select>'+
-        '<div class="busyMatchSearch" style="display:none;margin-top:6px"><input type="text" class="busyMatchQ" placeholder="Busy item தேடு..." style="width:100%;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:12px"><div class="busyMatchResults" style="margin-top:4px"></div></div>'+
-      '</div>';
-    });
-    html+='<button class="btn gold" id="busyMatchSave" style="margin-top:8px">💾 Match save பண்ணு</button>';
-    box.innerHTML=html;
-    // wire search toggles
-    box.querySelectorAll('.busyMatchSel').forEach(sel=>{
-      sel.addEventListener('change',function(){
-        const row=this.closest('.busyMatchRow');const sb=row.querySelector('.busyMatchSearch');
-        if(this.value==='__search__'){sb.style.display='block';}else{sb.style.display='none';}
-      });
-    });
-    box.querySelectorAll('.busyMatchQ').forEach(inp=>{
-      inp.addEventListener('input',function(){
-        const q=_bnorm(this.value);const res=this.closest('.busyMatchSearch').querySelector('.busyMatchResults');
-        if(q.length<2){res.innerHTML='';return;}
-        const qt=q.split(' ').filter(Boolean);
-        const hits=(_busyItems||[]).filter(it=>{const nn=_bnorm(it.n)+' '+_bnorm(it.g);return qt.every(t=>nn.indexOf(t)>=0);}).slice(0,12);
-        res.innerHTML=hits.length?hits.map(h=>'<div class="busyPick" data-name="'+esc(h.n)+'" style="padding:6px 8px;font-size:12px;border:1px solid var(--line);border-radius:7px;margin:3px 0;cursor:pointer;background:#fff">'+esc(h.n)+(h.g?' <span style="color:var(--muted)">['+esc(h.g)+']</span>':'')+'</div>').join(''):'<div style="font-size:11px;color:var(--muted);padding:4px">item இல்ல</div>';
-        res.querySelectorAll('.busyPick').forEach(p=>p.addEventListener('click',function(){
-          const row=this.closest('.busyMatchRow');const sel=row.querySelector('.busyMatchSel');const nm=this.getAttribute('data-name');
-          // inject as selected option
-          let opt=Array.from(sel.options).find(o=>o.value===nm);
-          if(!opt){opt=document.createElement('option');opt.value=nm;opt.textContent=nm;sel.insertBefore(opt,sel.options[sel.options.length-1]);}
-          sel.value=nm;this.closest('.busyMatchSearch').style.display='none';
-        }));
-      });
-    });
-    const sv=$('busyMatchSave');if(sv)sv.addEventListener('click',async()=>{
-      sv.disabled=true;sv.textContent='⏳ save...';let n=0;
-      const rowsEl=box.querySelectorAll('.busyMatchRow');
-      for(const row of rowsEl){
-        const sel=row.querySelector('.busyMatchSel');const val=sel.value;
-        if(val&&val!=='__search__'){await _busyLinkSave(row.getAttribute('data-model'),row.getAttribute('data-desc'),val);n++;}
-      }
-      sv.disabled=false;sv.textContent='💾 Match save பண்ணு';
-      $('busyExportNote').innerHTML='✅ '+n+' item link ஆச்சு. இப்போ மறுபடி "🧾 Busy Excel எடு" அழுத்து.';
-      box.style.display='none';
-    });
-  }
-
-
   const _bkE=$('bkExcel');if(_bkE)_bkE.addEventListener('click',()=>{
     const cols=['Order No','NAHA','Civil No','Chassis','Engine','Model','Buyer','Order Date','Delivery','Items','Sell','Buy','Profit','Supplied','Bill No','Bill Date','Paid','Cheque No','Pay Date','Assignee'];
     const rows=orders.map(o=>[o.order_no,o.naha_no,o.civil_no,o.chassis_no,o.engine_no,o.model,_campOf(o),o.order_date,o.delivery_date,(o.items||[]).length,o.sell,(hasCost(o)?o.buy:''),(profitVal(o)==null?'':profitVal(o)),o.supplied?'Yes':'No',o.bill_no,o.bill_date,o.paid?'Yes':'No',o.cheque_no,o.pay_date,o.assignee_name||o.assignee||'']);
