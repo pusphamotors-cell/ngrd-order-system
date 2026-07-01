@@ -1706,12 +1706,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function _genBusyExcel(orderIds,kind){
     if(!window.XLSX){alert('Excel library load ஆகல — internet பாரு, திரும்ப முயற்சி பண்ணு');return;}
     const isSale=kind!=='purchase';
-    const head=['VCH_SERIES','VCH/BILL_DATE','VCH/BILL_NO','SALE/PURC_TYPE','PARTY_NAME','ITEM_MC_NAME','ITEM_NAME','QUANTITY','UNIT','PRICE','AMOUNT'];
-    const aoa=[head];const missing=[];
+    const aoa=[];const missing=[]; // NO header row — Busy maps by column letter (A-K), data from row 1
     orderIds.forEach(id=>{
       const o=orders.find(x=>x.id===id);if(!o)return;
       const items=(o.items||[]).filter(it=>it.description);
-      const dt=(()=>{const d=o.po_date||o.order_date||o.bill_date||'';const p=parseDate(d);return p?p.toLocaleDateString('en-GB').replace(/\//g,'-'):d;})();
+      const dt=(()=>{const d=o.order_date||o.bill_date||o.delivery_date||o.po_date||'';const p=parseDate(d)||new Date();return p.toLocaleDateString('en-GB').replace(/\//g,'-');})();
       const party=isSale?((_busyCfg.party||{})[_campCode(o)]||_campOf(o)):(items[0]&&items[0].supplier||'');
       const stype=isSale?_busyCfg.saleType:_busyCfg.purcType;
       const series=(_companyOf(o)==='Puspha Motors')?(_busyCfg.seriesP||'PUSPHA'):(_busyCfg.seriesN||_busyCfg.series||'NGRD');
