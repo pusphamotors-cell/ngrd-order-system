@@ -1689,13 +1689,22 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   }
   async function _saveBusyLearn(){try{await window.storage.set('busylearn',JSON.stringify(_busyLearn));}catch(e){}}
   function _busyScore(qtok,it){let inter=0;qtok.forEach(t=>{if(it._t.has(t))inter++;});if(!inter)return 0;const prec=inter/it._t.size,rec=inter/qtok.length;return 200*prec*rec/(prec+rec);}
-  function _busyMatch(desc,groupHint){
+  function _busyMatch(desc,groups){
+    groups=(Array.isArray(groups)?groups:[groups]).filter(Boolean);
     const dk=_bzkey(desc);
     if(_busyLearn[dk]){const it=_busyKey.get(_bzkey(_busyLearn[dk]));if(it)return{it,score:100,via:'learned'};}
     if(_busyKey.has(dk))return{it:_busyKey.get(dk),score:100,via:'exact'};
     for(const t of _bztok(desc)){if(t.length>=4&&_busyAlias.has(t))return{it:_busyAlias.get(t),score:97,via:'alias'};}
-    const qtok=[...new Set(_bztok(desc))];let pool=_busy;if(groupHint&&_busyGroup.has(groupHint))pool=_busyGroup.get(groupHint);
-    const scored=pool.map(it=>({it,s:_busyScore(qtok,it)+(groupHint&&it.g===groupHint?6:0)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
+    const qtok=[...new Set(_bztok(desc))];
+    const gset=new Set(groups);
+    let pool=[];if(groups.length){groups.forEach(g=>{if(_busyGroup.has(g))pool=pool.concat(_busyGroup.get(g));});}else pool=_busy;
+    let scored=pool.map(it=>({it,s:_busyScore(qtok,it)+(gset.has(it.g)?6:0)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
+    // fallback: weak/empty in-group → also scan whole master so engine/shared parts aren't missed
+    if(groups.length&&(!scored.length||scored[0].s<55)){
+      const seen=new Set(scored.map(x=>x.it._k));
+      const all=_busy.map(it=>({it,s:_busyScore(qtok,it)})).filter(x=>x.s>0&&!seen.has(x.it._k)).sort((a,b)=>b.s-a.s).slice(0,5);
+      scored=scored.concat(all).sort((a,b)=>b.s-a.s).slice(0,6);
+    }
     return{top:scored.map(x=>({it:x.it,score:Math.round(Math.min(99,x.s))})),via:'fuzzy'};
   }
   let _busyRows=[]; // {desc, group, chosen(name), via, score, top:[]}
@@ -1717,6 +1726,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.innerHTML=`<div class="dpanel" style="padding:13px">
       <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:6px">🔗 Busy Item Match <span style="font-weight:400;color:var(--muted);font-size:11px">— master ${_busy.length} items · ${_busyGroup.size} groups · learned ${Object.keys(_busyLearn).length}</span></div>
       <div class="fld"><label>Vehicle group (match accuracy கூட்டும்)</label><select id="busyGroup">${gopt}</select></div>
+      <div class="fld"><label>Engine / extra group (option — உதा: 4D56)</label><select id="busyGroup2">${gopt}</select></div>
+      <div class="note" style="text-align:left;margin:0 0 8px;font-size:10.5px">💡 L200 K34 மாதிரி — Vehicle = L200 K34, Engine = 4D56 ரெண்டும் தேர்ந்தெடு. ரெண்டு group-ஐயும் சேர்த்து தேடும். (Score குறைவா இருந்தா முழு master-லயும் தானா தேடும்.)</div>
       <div class="fld"><label>PO item descriptions — ஒரு வரிக்கு ஒண்ணு</label><textarea id="busyPaste" rows="5" placeholder="BRAKE SHOE ASSY&#10;CLUTCH PLATE&#10;OIL FILTER"></textarea></div>
       <button class="btn gold" id="busyMatchBtn" style="margin:0">🔗 Match பண்ணு</button>
       ${tot?`<div style="margin-top:10px;font-size:12px;font-weight:700;color:${linked===tot?'var(--green)':'var(--amber)'}">${linked}/${tot} link ஆச்சு ${linked===tot?'✅ 100%':'⏳'}</div>
@@ -1724,14 +1735,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <button class="btn" id="busySaveBtn" style="margin-top:8px;background:#0b2a4a">💾 Link-களை save பண்ணு (learn)</button>`:''}
     </div>`;
     $('busyMatchBtn').onclick=()=>{
-      const g=$('busyGroup').value;const lines=($('busyPaste').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-      _busyRows=lines.map(desc=>{const m=_busyMatch(desc,g);
-        if(m.via!=='fuzzy')return{desc,group:g,chosen:m.it.n,via:m.via,score:m.score,top:[]};
-        return{desc,group:g,chosen:'',via:'fuzzy',score:0,top:m.top};});
+      const gs=[$('busyGroup').value,$('busyGroup2').value].filter(Boolean);
+      const lines=($('busyPaste').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      _busyRows=lines.map(desc=>{const m=_busyMatch(desc,gs);
+        if(m.via!=='fuzzy')return{desc,groups:gs,chosen:m.it.n,via:m.via,score:m.score,top:[]};
+        return{desc,groups:gs,chosen:'',via:'fuzzy',score:0,top:m.top};});
       renderBusy();
     };
     wrap.querySelectorAll('[data-bpick]').forEach(sel=>sel.addEventListener('change',()=>{const i=+sel.dataset.bpick;if(sel.value){_busyRows[i].chosen=sel.value;_busyRows[i].via='pick';_busyRows[i].score=0;renderBusy();}}));
-    wrap.querySelectorAll('[data-bunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.bunlink;const m=_busyMatch(_busyRows[i].desc,_busyRows[i].group);_busyRows[i].chosen='';_busyRows[i].top=m.via==='fuzzy'?m.top:[{it:m.it,score:m.score}];renderBusy();}));
+    wrap.querySelectorAll('[data-bunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.bunlink;const m=_busyMatch(_busyRows[i].desc,_busyRows[i].groups||[]);_busyRows[i].chosen='';_busyRows[i].top=m.via==='fuzzy'?m.top:[{it:m.it,score:m.score}];renderBusy();}));
     const sv=$('busySaveBtn');if(sv)sv.onclick=async()=>{let n=0;_busyRows.forEach(r=>{if(r.chosen){_busyLearn[_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn பண்ணிட்டேன். அடுத்த தடவ இதே description வந்தா auto 100%.');};
   }
   async function renderTender(force){
