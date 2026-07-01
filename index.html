@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="NGRD Order">
 <meta name="theme-color" content="#14274A">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
 <title>NGRD Order System</title>
 <style>
   :root{
@@ -329,6 +332,7 @@
     <div class="crest">NGRD</div>
     <div class="brand"><h1>NGRD ORDER SYSTEM</h1><p>PO → முழு order record + லாபம்</p></div>
     <div id="cloudBadge" style="margin-left:auto;font-size:11px;font-weight:700;color:#bff0c8;white-space:nowrap">☁️ Cloud</div>
+    <div id="installBtn" title="Install app (taskbar)" style="display:none;margin-left:14px;font-size:11px;font-weight:800;color:#14274A;background:#C9A227;padding:4px 10px;border-radius:7px;cursor:pointer;white-space:nowrap">⬇️ Install</div>
     <div id="fsBtn" title="Full screen (Alt+F)" style="margin-left:14px;font-size:16px;color:#ffffffcc;cursor:pointer;white-space:nowrap;line-height:1">⛶</div>
     <div id="logoutBtn" style="margin-left:14px;font-size:11px;font-weight:700;color:#ffffffcc;cursor:pointer;white-space:nowrap">Logout</div>
   </div>
@@ -627,13 +631,13 @@
   }
   {const fb=$('fsBtn');if(fb)fb.onclick=_toggleFs;
    document.addEventListener('fullscreenchange',()=>{const b=$('fsBtn');if(b)b.textContent=_isFs()?'⤢':'⛶';});
-   // inline manifest (single-file friendly) for Add-to-Home-Screen standalone
-   try{
-     const mf={name:'NGRD Order System',short_name:'NGRD Order',start_url:'.',scope:'.',display:'standalone',orientation:'any',background_color:'#14274A',theme_color:'#14274A',
-       icons:[{src:'data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="96" fill="#14274A"/><circle cx="256" cy="256" r="150" fill="#C9A227"/><text x="256" y="298" font-family="Arial" font-size="130" font-weight="bold" text-anchor="middle" fill="#14274A">NGRD</text></svg>'),sizes:'512x512',type:'image/svg+xml',purpose:'any'}]};
-     const bl=new Blob([JSON.stringify(mf)],{type:'application/manifest+json'});
-     const lk=document.createElement('link');lk.rel='manifest';lk.href=URL.createObjectURL(bl);document.head.appendChild(lk);
-   }catch(e){}
+   // register service worker (taskbar install + light offline)
+   if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
+   // install prompt → show ⬇️ Install button (Windows taskbar / Add to Home)
+   let _deferredPrompt=null;
+   window.addEventListener('beforeinstallprompt',ev=>{ev.preventDefault();_deferredPrompt=ev;const ib=$('installBtn');if(ib)ib.style.display='';});
+   window.addEventListener('appinstalled',()=>{const ib=$('installBtn');if(ib)ib.style.display='none';_deferredPrompt=null;});
+   {const ib=$('installBtn');if(ib)ib.onclick=async()=>{if(!_deferredPrompt){alert('Browser menu → "Install / Add to Home Screen" தேர்ந்தெடு');return;}_deferredPrompt.prompt();try{await _deferredPrompt.userChoice;}catch(e){}_deferredPrompt=null;ib.style.display='none';};}
   }
   {const _skx=$('sckbarHide');if(_skx)_skx.onclick=()=>{const sk=$('sckbar');if(sk)sk.style.display='none';};}
   // ===== Keyboard shortcuts (Busy-style) =====
