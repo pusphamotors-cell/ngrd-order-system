@@ -431,9 +431,7 @@
       </select>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:8px">
-      <select id="vehFilter" style="flex:1;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:13px;font-family:inherit;background:#fffdf6">
-        <option value="all">🚗 எல்லா Vehicle</option>
-      </select>
+      <input id="vehFilter" list="vehDL" placeholder="🚗 Vehicle — type (S...)" autocomplete="off" style="flex:1;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:13px;font-family:inherit;background:#fffdf6"><datalist id="vehDL"></datalist>
       <select id="statFilter" style="flex:1;border:1.5px solid var(--gold);border-radius:11px;padding:11px 13px;font-size:13px;font-family:inherit;background:#fffdf6">
         <option value="all">📋 எல்லா Status</option>
         <option value="pending">🔵 Pending</option>
@@ -1636,8 +1634,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(q)list=list.filter(({o})=>(((o.order_no||'')+' '+(o.naha_no||'')+' '+(o.buyer||'')+' '+(o.bill_no||'')+' '+(o.model||'')+' '+(o.file_no||'')).toLowerCase().indexOf(q)>=0));
     if(campSel!=='all')list=list.filter(({o})=>_campOf(o)===campSel);
     if(compSel!=='all')list=list.filter(({o})=>_companyOf(o)===compSel);
-    const vehSel=(($('vehFilter')||{}).value)||'all';
-    if(vehSel!=='all')list=list.filter(({o})=>(o.model||'')===vehSel);
+    const vehSel=(($('vehFilter')||{}).value||'').trim().toLowerCase();
+    if(vehSel)list=list.filter(({o})=>(o.model||'').toLowerCase().includes(vehSel));
     const statSel=(($('statFilter')||{}).value)||'all';
     if(statSel!=='all')list=list.filter(({o})=>{const s=o.paid?'paid':(o.supplied||o.bill_no)?'invoiced':'pending';return s===statSel;});
     if(_listFilter)list=list.filter(({o})=>_matchFilter(o));
@@ -1652,7 +1650,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
       return `<div class="orow"><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
-          <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
+          <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}${o.model?' · 🚗 '+esc(o.model):''}${o.naha_no?' · '+esc(o.naha_no):''}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
         <div class="pf"><div class="amt ${(profitVal(o)||0)<0?'neg':''}">${profitTxt(o)}</div></div>
@@ -3295,15 +3293,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     sel.value=cur&&[...sel.options].some(o=>o.value===cur)?cur:'all';
   }
   function _fillVehFilter(){
-    const sel=$('vehFilter');if(!sel)return;const cur=sel.value;
+    const dl=$('vehDL');if(!dl)return;
     const present={};orders.forEach(o=>{const m=(o.model||'').trim();if(m)present[m]=(present[m]||0)+1;});
-    const models=Object.keys(present).sort();
-    sel.innerHTML='<option value="all">🚗 எல்லா Vehicle</option>'+models.map(m=>`<option value="${esc(m)}">${esc(m)} (${present[m]})</option>`).join('');
-    sel.value=cur&&[...sel.options].some(o=>o.value===cur)?cur:'all';
+    dl.innerHTML=Object.keys(present).sort().map(m=>`<option value="${esc(m)}">${present[m]} order</option>`).join('');
   }
   if($('campFilter'))$('campFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
   if($('compFilter'))$('compFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
-  if($('vehFilter'))$('vehFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
+  if($('vehFilter'))$('vehFilter').addEventListener('input',()=>{_listFilter=null;renderList();});
   if($('statFilter'))$('statFilter').addEventListener('change',()=>{_listFilter=null;renderList();});
 
   // ---- Staff task assignment ----
