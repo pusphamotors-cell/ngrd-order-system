@@ -1777,9 +1777,27 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   // ===== Supplier-wise consolidated purchase (many orders → one supplier voucher) =====
   function _purchaseGroups(){
     const g={};
-    orders.forEach(o=>{if(o.paid||o.bill_no)return; // not yet supplied/billed → still to buy
-      (o.items||[]).forEach(it=>{if(!it.description)return;const sup=((it.supplier||'').trim())||'— supplier போடல —';(g[sup]=g[sup]||[]).push({o,it});});});
+    orders.forEach(o=>{if(o.paid||o.bill_no)return;
+      (o.items||[]).forEach((it,ix)=>{if(!it.description)return;const sup=((it.supplier||'').trim())||'— supplier போடல —';(g[sup]=g[sup]||[]).push({o,it,ix});});});
     return g;
+  }
+  function _renderPurchase(){
+    const pw=$('busyPurWrap');if(!pw)return;
+    const pg=_purchaseGroups();const pk=Object.keys(pg).sort((a,b)=>a==='— supplier போடல —'?-1:b==='— supplier போடல —'?1:a.localeCompare(b));
+    const sups=Object.values(_supCache||{}).sort();
+    const dl='<datalist id="purSupList">'+sups.map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>';
+    if(!pk.length){pw.innerHTML=dl+'<div class="empty">Pending order-ல item இல்ல.</div>';return;}
+    pw.innerHTML=dl+pk.map(sup=>{const rows=pg[sup];const tot=rows.reduce((a,r)=>a+(Number(r.it.cost)||0)*(Number(r.it.qty)||1),0);const sell=rows.reduce((a,r)=>a+(Number(r.it.total)||0),0);const noSup=sup==='— supplier போடல —';const nolink=rows.filter(r=>!_busyItemLink(r.it.description,_busyGuessGroup(r.o.model))).length;
+      return `<div class="dpanel" style="margin-bottom:8px;padding:8px 10px">
+        <div style="font-weight:800;color:${noSup?'var(--amber)':'var(--navy)'}">📦 ${esc(sup)} <span style="font-weight:500;color:var(--muted);font-size:11px">— ${rows.length} item · வாங்கல் Rs ${fmt(tot)}${!noSup&&sell?' · விற்பனை Rs '+fmt(sell)+' · <b style="color:'+((sell-tot)>=0?'var(--green)':'var(--red)')+'">லாபம் Rs '+fmt(sell-tot)+'</b>':''}${nolink?' · <span style="color:var(--amber)">'+nolink+' link இல்ல</span>':''}</span></div>
+        <div class="tablewrap" style="margin-top:5px"><table><thead><tr><th>Item</th><th class="num">Qty</th><th>Supplier</th><th class="num">Cost</th><th>Order</th></tr></thead><tbody>
+        ${rows.map(r=>`<tr><td style="font-size:11px">${esc(r.it.description)}</td><td class="num">${esc(r.it.qty)}</td><td><input data-psup="${esc(r.o.id)}|${r.ix}" list="purSupList" value="${esc(r.it.supplier||'')}" placeholder="supplier" style="width:118px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td class="num"><input data-pcost="${esc(r.o.id)}|${r.ix}" type="number" inputmode="decimal" value="${r.it.cost||''}" placeholder="0" style="width:66px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="font-size:10px;color:var(--muted)">${esc(r.o.order_no)}</td></tr>`).join('')}
+        </tbody></table></div>
+        ${noSup?'<div class="note" style="text-align:left;font-size:10.5px;margin-top:4px">⬆️ Supplier + Cost போட்டா, அந்த supplier group-க்கு நகரும் · profit தெரியும்</div>':`<button class="btn" data-purexp="${esc(sup)}" style="margin:6px 0 0;background:#0b2a4a">📥 Busy Purchase Excel</button>`}
+      </div>`;}).join('');
+    pw.querySelectorAll('[data-pcost]').forEach(inp=>inp.addEventListener('change',async()=>{const a=inp.dataset.pcost.split('|');const o=orders.find(x=>x.id===a[0]);if(!o)return;const it=(o.items||[])[+a[1]];if(!it)return;it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_renderPurchase();}));
+    pw.querySelectorAll('[data-psup]').forEach(inp=>inp.addEventListener('change',async()=>{const a=inp.dataset.psup.split('|');const o=orders.find(x=>x.id===a[0]);if(!o)return;const it=(o.items||[])[+a[1]];if(!it)return;it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_renderPurchase();}));
+    pw.querySelectorAll('[data-purexp]').forEach(b=>b.addEventListener('click',()=>{const sup=b.dataset.purexp;const g=_purchaseGroups();if(g[sup])_genPurchaseSupplier(sup,g[sup]);}));
   }
   function _genPurchaseSupplier(sup,rows){
     if(!window.XLSX){alert('Excel library load ஆகல — internet பாரு');return;}
@@ -1940,17 +1958,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       await _saveBusyCfg();showInfoModal('Saved','✅ Busy export settings save ஆச்சு.');renderBusy();
     };
     // supplier-wise purchase list
-    const pw=$('busyPurWrap');
-    if(pw){const pg=_purchaseGroups();const pk=Object.keys(pg).sort();
-      if(!pk.length)pw.innerHTML='<div class="empty">Pending order-ல supplier போட்ட item இல்ல.<br>Order item-ல supplier + cost போட்டா இங்க வரும்.</div>';
-      else pw.innerHTML=pk.map((sup,si)=>{const rows=pg[sup];const tot=rows.reduce((a,r)=>a+(Number(r.it.cost)||0)*(Number(r.it.qty)||1),0);const nolink=rows.filter(r=>!_busyItemLink(r.it.description,_busyGuessGroup(r.o.model))).length;
-        return `<div class="dpanel" style="margin-bottom:8px;padding:8px 10px">
-          <div style="font-weight:800;color:var(--navy)">📦 ${esc(sup)} <span style="font-weight:500;color:var(--muted);font-size:11px">— ${rows.length} item · Rs ${fmt(tot)}${nolink?' · <span style="color:var(--amber)">'+nolink+' link இல்ல</span>':''}</span></div>
-          <div class="tablewrap" style="margin-top:5px"><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Cost</th><th>Order</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="font-size:11px">${esc(r.it.description)}</td><td class="num">${esc(r.it.qty)}</td><td class="num">${fmt(r.it.cost)}</td><td style="font-size:10px;color:var(--muted)">${esc(r.o.order_no)}</td></tr>`).join('')}</tbody></table></div>
-          <button class="btn" data-purexp="${si}" style="margin:6px 0 0;background:#0b2a4a">📥 Busy Purchase Excel</button>
-        </div>`;}).join('');
-      pw.querySelectorAll('[data-purexp]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.purexp;_genPurchaseSupplier(pk[i],pg[pk[i]]);}));
-    }
+    _renderPurchase();
   }
   async function renderTender(force){
     const wrap=$('repTenderWrap');if(!wrap)return;
