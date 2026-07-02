@@ -1717,6 +1717,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   let _busyCfg={series:'NGRD',seriesN:'NGRD',seriesP:'PUSPHA',mc:'SHOP',saleType:'Sales',purcType:'Purchase',party:{WNA:'SRILANKA NAVY WELISARA, RAGAMA'}};
   async function _loadBusyCfg(){try{const r=await window.storage.get('busycfg');if(r&&r.value){const c=JSON.parse(r.value);_busyCfg=Object.assign(_busyCfg,c);_busyCfg.party=Object.assign({},_busyCfg.party,c.party||{});}}catch(e){}}
   async function _saveBusyCfg(){try{await window.storage.set('busycfg',JSON.stringify(_busyCfg));}catch(e){}}
+  // Busy supplier master (optional) — busy_suppliers.json {items:[{n:name,a:alias}]}
+  let _busySup=[],_busySupLoaded=false;
+  async function _loadBusySuppliers(){if(_busySupLoaded)return;
+    try{const r=await fetch('busy_suppliers.json',{cache:'no-store'});if(r.ok){const j=await r.json();_busySup=j.items||j||[];}}catch(e){_busySup=[];}
+    _busySupLoaded=true;}
+  function _supOptions(){ // combine Busy master + used suppliers, alias as label
+    const seen={},out=[];
+    _busySup.forEach(s=>{const n=(s.n||s.name||'').trim();if(!n)return;const k=n.toLowerCase();if(seen[k])return;seen[k]=1;out.push(`<option value="${esc(n)}">${esc(s.a||s.alias||'')}</option>`);});
+    Object.values(_supCache||{}).forEach(n=>{const k=String(n).toLowerCase();if(seen[k])return;seen[k]=1;out.push(`<option value="${esc(n)}"></option>`);});
+    return out.join('');
+  }
   function _campCode(o){return String(o.order_no||'').split('/')[0].toUpperCase().replace(/[^A-Z]/g,'');}
   // resolve one PO item description → busy item (learned/exact/alias only; no guessing)
   function _busyItemLink(desc,vehGroup){
@@ -1840,7 +1851,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   // ===== Purchasing tab (order-wise: supplier + cost + part/brand/country + invoice → Busy) =====
   let _purOrder=null;
   async function renderPurchasing(){
-    await _loadBusyItems();await _loadBusyCfg();
+    await _loadBusyItems();await _loadBusyCfg();await _loadBusySuppliers();
     let dlEl=document.getElementById('purOrdList');
     if(!dlEl){dlEl=document.createElement('datalist');dlEl.id='purOrdList';document.body.appendChild(dlEl);}
     dlEl.innerHTML=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('');
@@ -1862,14 +1873,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const sups=Object.values(_supCache||{}).sort();
     const done=o.busy_purchase&&o.busy_purchase.done;
     $('purBody').innerHTML=`
-      <datalist id="purSupDL">${sups.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+      <datalist id="purSupDL">${_supOptions()}</datalist>
       <div style="font-size:11px;color:var(--navy);background:#f3f6fb;border-radius:8px;padding:6px 9px;margin-bottom:8px">🚗 <b>${esc(o.model||'—')}</b> · ${esc(_campOf(o))} · ${items.length} item${nolink?' · <span style="color:var(--amber)">'+nolink+' Busy link இல்ல (🔗 Match-ல link)</span>':''}</div>
       <div class="dpanel" style="padding:9px 11px;margin-bottom:8px">
         <div class="grid2"><div class="fld"><label>Supplier (இந்த order-க்கு)</label><input id="purSup" list="purSupDL" value="${esc(sup0)}" placeholder="supplier"></div><div class="fld"><label>Invoice No</label><input id="purInv" value="${esc(inv0)}" placeholder="supplier bill no"></div></div>
         <div class="grid2"><div class="fld"><label>Invoice Date</label><input id="purInvD" type="date" value="${esc(invd0)}"></div><div class="fld" style="display:flex;align-items:flex-end"><button class="btn" id="purApply" style="margin:0;background:#0b2a4a">⬇️ எல்லா item-க்கும் apply</button></div></div>
       </div>
       <div class="tablewrap"><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Sell</th><th class="num">Cost</th><th>Part No</th><th>Brand</th><th>Country</th></tr></thead><tbody>
-      ${items.map((it,ix)=>`<tr><td style="font-size:11px">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td class="num" style="color:var(--muted)">${fmt(it.total)}</td><td class="num"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:64px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:88px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:76px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td><input data-puctry="${ix}" value="${esc(it.country||'')}" placeholder="country" style="width:74px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
+      ${items.map((it,ix)=>`<tr><td style="font-size:11.5px;color:var(--navy);font-weight:600">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td class="num" style="color:var(--muted)">${fmt(it.total)}</td><td class="num"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:64px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:88px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:76px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td><input data-puctry="${ix}" value="${esc(it.country||'')}" placeholder="country" style="width:74px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
       </tbody></table></div>
       <div class="dpanel" style="padding:8px 11px;margin-top:8px;font-size:12px;font-weight:700">விற்பனை Rs ${fmt(sell)} · வாங்கல் Rs ${fmt(cost)} · <span style="color:${(sell-cost)>=0?'var(--green)':'var(--red)'}">லாபம் Rs ${fmt(sell-cost)}</span></div>
       <button class="btn gold" id="purExcel" style="margin-top:8px">📥 Busy Purchase Excel</button>
