@@ -1808,8 +1808,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   function _renderPurchase(){
     const pw=$('busyPurWrap');if(!pw)return;
     const pg=_purchaseGroups();const pk=Object.keys(pg).sort((a,b)=>a==='— supplier போடல —'?-1:b==='— supplier போடல —'?1:a.localeCompare(b));
-    const sups=Object.values(_supCache||{}).sort();
-    const dl='<datalist id="purSupList">'+sups.map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>';
+    const dl='<datalist id="purSupList">'+_supOptions()+'</datalist>';
     if(!pk.length){pw.innerHTML=dl+'<div class="empty">Pending order-ல item இல்ல.</div>';return;}
     pw.innerHTML=dl+pk.map(sup=>{const rows=pg[sup];const tot=rows.reduce((a,r)=>a+(Number(r.it.cost)||0)*(Number(r.it.qty)||1),0);const sell=rows.reduce((a,r)=>a+(Number(r.it.total)||0),0);const noSup=sup==='— supplier போடல —';const nolink=rows.filter(r=>!_busyItemLink(r.it.description,_busyGuessGroup(r.o.model))).length;
       return `<div class="dpanel" style="margin-bottom:8px;padding:8px 10px">
@@ -1927,6 +1926,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     wrap.innerHTML='<div class="empty">Busy master ஏற்றுகிறேன்…</div>';
     await _loadBusyItems();
     await _loadBusyCfg();
+    await _loadBusySuppliers();
     if(!_busyLoaded){wrap.innerHTML='<div class="dpanel" style="padding:14px"><b style="color:var(--red)">Busy master load ஆகல.</b><br><span style="font-size:12px">busy_items.json file repo-ல deploy ஆயிருக்கா பாரு (index.html பக்கத்துல).</span></div>';return;}
     const groups=[...(_busyGroup.keys())].filter(g=>g).sort();
     const gopt='<option value="">— Vehicle group (auto/any) —</option>'+groups.map(g=>`<option>${esc(g)}</option>`).join('');
