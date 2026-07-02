@@ -696,6 +696,16 @@
     $('drop').classList.add('hide');$('chip').classList.add('hide');$('pasteBox').classList.remove('hide');$('pastePreview').classList.remove('hide');
     $('errbox').innerHTML='';renderPasteThumbs();updateGo();e.target.value='';});
   const toB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('File படிக்க முடியல'));r.readAsDataURL(f);});
+  // resize+compress images before upload (fix 413 payload-too-large from big camera photos)
+  function _compressImg(file,maxDim,q){maxDim=maxDim||1600;q=q||0.72;
+    return new Promise((res,rej)=>{
+      if(file.type==='application/pdf'){const r=new FileReader();r.onload=()=>res({b64:r.result.split(',')[1],pdf:true});r.onerror=()=>rej(new Error('read fail'));r.readAsDataURL(file);return;}
+      const img=new Image(),url=URL.createObjectURL(file);
+      img.onload=()=>{let w=img.width,h=img.height;const s=Math.min(1,maxDim/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);
+        const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
+        try{res({b64:c.toDataURL('image/jpeg',q).split(',')[1],pdf:false});}catch(e){rej(e);}};
+      img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('image fail'));};img.src=url;});
+  }
   function renderPasteThumbs(){
     if(!pastedImgs.length){$('pastePreview').innerHTML='';return;}
     $('pastePreview').innerHTML='<div style="font-size:11px;color:var(--muted);margin-top:8px;font-weight:700">'+pastedImgs.length+' page சேர்ந்தாச்சு — இன்னும் paste பண்ணலாம் (Ctrl+V)</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">'+pastedImgs.map((f,i)=>{
@@ -735,13 +745,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('errbox').innerHTML='';$('go').disabled=true;$('go').innerHTML='<span class="spin"></span>PO படிக்கிறேன்...';
     try{
       let content;
-      if(mode==='file'){const f=chosen;const b64=await toB64(f);const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
-        const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
-        content=[block,{type:'text',text:PROMPT}];}
+      if(mode==='file'){const c=await _compressImg(chosen);
+        content=[c.pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:c.b64}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.b64}},{type:'text',text:PROMPT}];}
       else if(pastedImgs.length){
         content=[];
-        for(const f of pastedImgs){const b64=await toB64(f);const isPdf=f.type==='application/pdf';
-          content.push(isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}});}
+        for(const f of pastedImgs){const c=await _compressImg(f);
+          content.push(c.pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:c.b64}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.b64}});}
         content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
       } else {content=[{type:'text',text:'Sri Lanka Navy PO text:\n\n'+pasteText+'\n\n'+PROMPT}];}
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
