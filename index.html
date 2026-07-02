@@ -1618,7 +1618,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(!list.length){lc.innerHTML=chip+'<div class="empty">'+(q?'🔍 "'+esc(q)+'" — match ஆகல':'இந்த filter-க்கு order இல்ல')+'</div>';const fc=$('fltClear');if(fc)fc.onclick=()=>{_listFilter=null;renderList();};return;}
     lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
       return `<div class="orow"><div class="ohead" data-i="${idx}">
-        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}</div>
+        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
           <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
@@ -3053,10 +3053,19 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(clr)clr.addEventListener('click',async()=>{delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}box.innerHTML=detailHtml(o);wireDetail(box,o);});
   }
+  function _stageOf(o){if(o.bill_no||o.supplied)return 'supplied';return o.stage||(o.task_done?'ready':'new');}
+  const _STG={new:['🔵','New','#1f5bb5'],sourcing:['🟡','Sourcing','#c98a00'],ready:['🟢','Ready','#1a7f4b'],supplied:['✅','Supplied','#5a3fb0']};
+  async function _setStage(id,st){const o=orders.find(x=>x.id===id);if(!o)return;o.stage=st;o.stage_at=Date.now();o.stage_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';o.task_done=(st==='ready');try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}
   function taskRow(o,isAdmin){
-    const right=o.task_done
-      ? '<span class="badge b-paid">✓ Done</span>'+(isAdmin?' <span data-undone="'+esc(o.id)+'" style="cursor:pointer;color:var(--muted);font-size:11px;margin-left:5px">undo</span>':'')
-      : '<button class="btn gold" data-done="'+esc(o.id)+'" style="margin:0;padding:7px 12px;width:auto;font-size:12px">✓ Ready ஆச்சு</button>'+(isAdmin?' <span data-unassign="'+esc(o.id)+'" style="cursor:pointer;color:var(--red);font-size:15px;margin-left:6px">✗</span>':'');
+    const cur=_stageOf(o);let right;
+    if(cur==='supplied'){right='<span class="badge b-inv">✅ Supplied (bill '+esc(o.bill_no||'✓')+')</span>';}
+    else{
+      right='<div style="display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid var(--line)">'+
+        [['new'],['sourcing'],['ready']].map(([s])=>{const m=_STG[s];const on=cur===s;
+          return `<button data-stage="${esc(o.id)}" data-st="${s}" style="margin:0;padding:6px 9px;font-size:11px;border:0;border-right:1px solid var(--line);cursor:pointer;background:${on?m[2]:'#fff'};color:${on?'#fff':'#8a94a6'};font-weight:${on?'800':'500'}">${m[0]} ${m[1]}</button>`;}).join('')+
+        '</div>'+(isAdmin?' <span data-unassign="'+esc(o.id)+'" style="cursor:pointer;color:var(--red);font-size:15px;margin-left:6px">✗</span>':'');
+    }
+    const alv=statusOf(o).c;
     return `<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(_campOf(o))} · ${(o.items||[]).length} items</span>${o.task_date?'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">📅 '+_fmtDk(o.task_date)+(o.delivery_date?' · Delivery '+esc(o.delivery_date):'')+'</div>':''}</div><div style="display:flex;align-items:center;gap:3px;white-space:nowrap">${right}</div></div>`;
   }
   function renderTasks(){
@@ -3066,8 +3075,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     if(isAdmin){
       if(!assigned.length){box.innerHTML='<div class="empty">இன்னும் order assign பண்ணல.<br>Order open → "👷 Assign" → staff + date தேர்வு பண்ணு</div>';return;}
       const byU={};assigned.forEach(o=>{const k=o.assignee_name||o.assignee;(byU[k]=byU[k]||[]).push(o);});
-      box.innerHTML=Object.keys(byU).sort().map(u=>{const arr=byU[u].slice().sort((a,b)=>(a.task_date||'').localeCompare(b.task_date||''));const pend=arr.filter(o=>!o.task_done).length;
-        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · ${pend} pending</div><div class="dpanel">${arr.map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
+      const today=_todayKey();
+      box.innerHTML=Object.keys(byU).sort().map(u=>{const arr=byU[u].slice().sort((a,b)=>(a.task_date||'').localeCompare(b.task_date||''));
+        const cnt={new:0,sourcing:0,ready:0,supplied:0};let late=0;
+        arr.forEach(o=>{const s=_stageOf(o);cnt[s]++;const dl=o.task_date||o.delivery_date||'';if(s!=='supplied'&&s!=='ready'&&dl&&dl<today)late++;});
+        const active=arr.filter(o=>_stageOf(o)!=='supplied');
+        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · 🔵${cnt.new} 🟡${cnt.sourcing} 🟢${cnt.ready} ✅${cnt.supplied}${late?' · <span style="color:var(--red)">🔴'+late+' late</span>':''}</div><div class="dpanel">${(active.length?active:arr).map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
     } else {
       const arr=orders.filter(o=>o.assignee===CURRENT.u);
       if(!arr.length){box.innerHTML='<div class="empty">இன்னைக்கு வேலை இல்ல 🎉<br>Admin assign பண்ணா இங்க வரும்</div>';return;}
@@ -3084,8 +3097,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         sec('📌 Date இல்ல',g.nodate,'')+
         (g.done.length?`<div class="sec" style="color:var(--green)">✓ முடிஞ்சது (${g.done.length})</div><div class="dpanel">${g.done.map(o=>taskRow(o,false)).join('')}</div>`:'');
     }
-    box.querySelectorAll('[data-done]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.done);if(!o)return;o.task_done=true;o.task_done_at=Date.now();try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
-    box.querySelectorAll('[data-undone]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.undone);if(!o)return;o.task_done=false;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
+    box.querySelectorAll('[data-stage]').forEach(b=>b.addEventListener('click',()=>_setStage(b.dataset.stage,b.dataset.st)));
+    box.querySelectorAll('[data-done]').forEach(b=>b.addEventListener('click',()=>_setStage(b.dataset.done,'ready')));
+    box.querySelectorAll('[data-undone]').forEach(b=>b.addEventListener('click',()=>_setStage(b.dataset.undone,'new')));
     box.querySelectorAll('[data-unassign]').forEach(b=>b.addEventListener('click',async()=>{const o=orders.find(x=>x.id===b.dataset.unassign);if(!o)return;if(!confirm('Assign நீக்கவா?'))return;delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}));
   }
   // ---- end task assignment ----
