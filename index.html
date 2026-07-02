@@ -2923,6 +2923,15 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const b=_campOf(o);camp[b]=camp[b]||{n:0,v:0};camp[b].n++;camp[b].v+=Number(o.sell)||0;
     });
     const tot=orders.length;
+    // ⚠️ Attention: supply-due (deadline near/late, not billed) + bill-due (ready/supplied but no bill)
+    const supplyList=orders.filter(o=>!o.paid&&!o.bill_no&&!o.supplied).map(o=>({o,a:deliveryAlert(o)})).filter(x=>x.a&&x.a.lvl<=1).sort((a,b)=>(a.o.delivery_date||'').localeCompare(b.o.delivery_date||''));
+    const billList=orders.filter(o=>!o.bill_no&&!o.paid&&(o.stage==='ready'||o.supplied)).sort((a,b)=>(a.delivery_date||'').localeCompare(b.delivery_date||''));
+    const _attnRow=(o,sub,col)=>`<div class="brow" data-attn="${esc(o.id)}" style="cursor:pointer"><span class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(_campOf(o))} · ${(o.items||[]).length} items</span><div style="font-size:10.5px;color:${col||'var(--muted)'}">${sub}</div></span><span class="vl">Rs ${fmt(o.sell)}</span></div>`;
+    const attnHtml=(supplyList.length||billList.length)?`
+      <div class="dsec">⚠️ கவனம் தேவை (Action)</div>
+      ${supplyList.length?`<div class="dpanel" style="border-left:4px solid #c2452f;margin-bottom:8px"><div class="brow" style="font-weight:800;color:#c2452f">🚚 Supply பண்ணணும் — ${supplyList.length} <span style="font-weight:500;color:var(--muted);font-size:11px">(deadline நெருங்குது/late · bill இல்ல)</span></div>${supplyList.slice(0,6).map(x=>_attnRow(x.o,x.a.t,x.a.lvl===0?'var(--red)':'var(--amber)')).join('')}${supplyList.length>6?`<div class="brow" style="color:var(--muted);font-size:11px">…இன்னும் ${supplyList.length-6} order</div>`:''}</div>`:''}
+      ${billList.length?`<div class="dpanel" style="border-left:4px solid #9a6b00"><div class="brow" style="font-weight:800;color:#9a6b00">🧾 Bill போடணும் — ${billList.length} <span style="font-weight:500;color:var(--muted);font-size:11px">(ready/supply ஆச்சு · bill இல்ல)</span></div>${billList.slice(0,6).map(o=>_attnRow(o,'🟢 Ready/Supplied · bill போட்டு Busy-க்கு அனுப்பணும்','#9a6b00')).join('')}${billList.length>6?`<div class="brow" style="color:var(--muted);font-size:11px">…இன்னும் ${billList.length-6} order</div>`:''}</div>`:''}
+    `:'';
     const sb=(n,col)=>n>0?`<div style="flex:${n};background:${col}">${n}</div>`:'';
     const compRows=Object.keys(comp).map(k=>`<div class="brow" data-fltt="company" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${comp[k].n} orders · Rs ${fmt(comp[k].v)}</span><span class="vl">Rs ${fmt(comp[k].p)}</span></div>`).join('');
     const campRows=Object.keys(camp).sort((a,b)=>camp[b].v-camp[a].v).map(k=>`<div class="brow" data-fltt="camp" data-fltv="${esc(k)}"><span class="nm">${esc(k)}</span><span class="ct">${camp[k].n} orders</span><span class="vl">Rs ${fmt(camp[k].v)}</span></div>`).join('');
@@ -2950,9 +2959,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         <div class="dstat w" data-fltt="paypend"><div class="k">Payment வரல</div><div class="v">${pend}</div><div class="s">Rs ${fmt(pendAmt)} வர வேணும்${payLate?' · 🔴 '+payLate+' late':''}</div></div>
         <div class="dstat g" data-fltt="paid"><div class="k">Paid ஆச்சு</div><div class="v">${st.d}</div><div class="s">order</div></div>
       </div>
+      ${attnHtml}
       <div class="dsec">📈 Status</div>
       <div class="statusbar">${sb(st.p,'#2563b5')}${sb(st.i,'#9a6b00')}${sb(st.d,'#1f8a4c')}</div>
-      <div class="dpanel">
+        <div class="dpanel">
         <div class="brow" data-fltt="status" data-fltv="pending"><span class="nm">🔵 Pending</span><span class="vl">${st.p}</span></div>
         <div class="brow" data-fltt="status" data-fltv="invoiced"><span class="nm">🟠 Invoiced</span><span class="vl">${st.i}</span></div>
         <div class="brow" data-fltt="status" data-fltv="paid"><span class="nm">🟢 Paid</span><span class="vl">${st.d}</span></div>
@@ -2978,6 +2988,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       </div>`;
     $('dashRep').onclick=()=>{setTab('rep');initReport();};
     $('dashOrd').onclick=()=>{_listFilter=null;setTab('list');renderList();};
+    dw.querySelectorAll('[data-attn]').forEach(el=>el.addEventListener('click',()=>_openOrderEdit(el.dataset.attn)));
     dw.querySelectorAll('[data-fltt]').forEach(el=>{el.style.cursor='pointer';el.title='Click → orders பாரு';
       el.addEventListener('click',()=>{const t=el.dataset.fltt,v=el.dataset.fltv;
         if(t==='all')gotoList(null);
