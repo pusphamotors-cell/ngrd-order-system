@@ -1724,8 +1724,35 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   async function _loadBusySuppliers(){if(_busySupLoaded)return;
     try{const r=await fetch('busy_suppliers.json',{cache:'no-store'});if(r.ok){const j=await r.json();_busySup=j.items||j||[];}}catch(e){_busySup=[];}
     _busySupLoaded=true;}
-  function _supOptions(){ // combine Busy master + used suppliers, alias as label
-    const seen={},out=[];
+  // ===== Busy-style supplier autocomplete (name/alias search + add new) =====
+  function _supList(){const seen={},out=[];
+    _busySup.forEach(s=>{const n=(s.n||s.name||'').trim();if(!n)return;const k=n.toLowerCase();if(seen[k])return;seen[k]=1;out.push({n,a:(s.a||s.alias||'')});});
+    Object.values(_supCache||{}).forEach(n=>{const k=String(n).toLowerCase();if(seen[k])return;seen[k]=1;out.push({n:String(n),a:''});});return out;}
+  let _supACBox=null,_supACInp=null,_supACPick=null,_supACData=[];
+  function _supACEnsure(){if(_supACBox)return;_supACBox=document.createElement('div');_supACBox.id='supACBox';
+    _supACBox.style.cssText='position:fixed;z-index:99999;background:#fff;border:1px solid #c9a227;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:240px;overflow:auto;display:none;font-size:12px;min-width:190px';
+    document.body.appendChild(_supACBox);
+    document.addEventListener('click',e=>{if(e.target!==_supACInp&&_supACBox&&!_supACBox.contains(e.target))_supACHide();});
+    window.addEventListener('scroll',()=>_supACHide(),true);}
+  function _supACHide(){if(_supACBox)_supACBox.style.display='none';}
+  function _supACChoose(name,isNew){const inp=_supACInp,pick=_supACPick;if(!inp)return;inp.value=name;if(isNew&&name){const k=_supKey(name);if(k)_supCache[k]=name;}_supACHide();if(pick)pick(name);}
+  function _supACRender(){const inp=_supACInp;if(!inp)return;const q=(inp.value||'').trim().toLowerCase();const all=_supList();
+    let m=q?all.filter(s=>s.n.toLowerCase().includes(q)||(s.a&&s.a.toLowerCase().includes(q))):all.slice();
+    m.sort((a,b)=>{const ap=(a.n.toLowerCase().startsWith(q)||(a.a&&a.a.toLowerCase().startsWith(q)))?0:1;const bp=(b.n.toLowerCase().startsWith(q)||(b.a&&b.a.toLowerCase().startsWith(q)))?0:1;return ap-bp||a.n.localeCompare(b.n);});
+    m=m.slice(0,10);_supACData=m;
+    const exact=all.some(s=>s.n.toLowerCase()===q);
+    let html=m.map((s,i)=>`<div data-aci="${i}" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #f2f2f2"><b>${esc(s.n)}</b>${s.a?` <span style="color:#e08a00;font-weight:700">· ${esc(s.a)}</span>`:''}</div>`).join('');
+    if(q&&!exact)html+=`<div data-acnew="1" style="padding:7px 10px;cursor:pointer;color:#0b6b2f;font-weight:800;background:#eef9f0">➕ "${esc(inp.value.trim())}" புது supplier சேர்</div>`;
+    if(!html){_supACHide();return;}
+    _supACBox.innerHTML=html;const r=inp.getBoundingClientRect();
+    _supACBox.style.left=r.left+'px';_supACBox.style.top=(r.bottom+2)+'px';_supACBox.style.minWidth=Math.max(190,r.width)+'px';_supACBox.style.display='block';
+    _supACBox.querySelectorAll('[data-aci]').forEach(el=>el.addEventListener('mousedown',e=>{e.preventDefault();_supACChoose(_supACData[+el.dataset.aci].n);}));
+    const nw=_supACBox.querySelector('[data-acnew]');if(nw)nw.addEventListener('mousedown',e=>{e.preventDefault();_supACChoose(inp.value.trim(),true);});}
+  function _supAC(inp,onPick){if(!inp)return;_supACEnsure();inp.setAttribute('autocomplete','off');
+    inp.addEventListener('focus',()=>{_supACInp=inp;_supACPick=onPick;_supACRender();});
+    inp.addEventListener('input',()=>{_supACInp=inp;_supACPick=onPick;_supACRender();});
+    inp.addEventListener('keydown',e=>{if(e.key==='Escape')_supACHide();});}
+  function _supOptions(){ // combine Busy master + used suppliers, alias as label    const seen={},out=[];
     _busySup.forEach(s=>{const n=(s.n||s.name||'').trim();if(!n)return;const k=n.toLowerCase();if(seen[k])return;seen[k]=1;out.push(`<option value="${esc(n)}">${esc(s.a||s.alias||'')}</option>`);});
     Object.values(_supCache||{}).forEach(n=>{const k=String(n).toLowerCase();if(seen[k])return;seen[k]=1;out.push(`<option value="${esc(n)}"></option>`);});
     return out.join('');
@@ -1877,11 +1904,11 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <datalist id="purSupDL">${_supOptions()}</datalist>
       <div style="font-size:11px;color:var(--navy);background:#f3f6fb;border-radius:8px;padding:6px 9px;margin-bottom:8px">🚗 <b>${esc(o.model||'—')}</b> · ${esc(_campOf(o))} · ${items.length} item${nolink?' · <span style="color:var(--amber)">'+nolink+' Busy link இல்ல (🔗 Match-ல link)</span>':''}</div>
       <div class="dpanel" style="padding:9px 11px;margin-bottom:8px">
-        <div class="grid2"><div class="fld"><label>Supplier (இந்த order-க்கு)</label><input id="purSup" list="purSupDL" value="${esc(sup0)}" placeholder="supplier"></div><div class="fld"><label>Invoice No</label><input id="purInv" value="${esc(inv0)}" placeholder="supplier bill no"></div></div>
+        <div class="grid2"><div class="fld"><label>Supplier (இந்த order-க்கு)</label><input id="purSup" value="${esc(sup0)}" placeholder="supplier (பேர்/alias type)"></div><div class="fld"><label>Invoice No</label><input id="purInv" value="${esc(inv0)}" placeholder="supplier bill no"></div></div>
         <div class="grid2"><div class="fld"><label>Invoice Date</label><input id="purInvD" type="date" value="${esc(invd0)}"></div><div class="fld" style="display:flex;align-items:flex-end;gap:6px"><button class="btn" id="purApply" style="margin:0;background:#0b2a4a;flex:1">⬇️ எல்லா item-க்கும் apply</button><button class="btn" id="purClearAll" style="margin:0;background:#8a1c1c;width:auto;padding:8px 12px">🧹 clear</button></div></div>
       </div>
       <div class="tablewrap" style="background:#fff;border-radius:10px"><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num puSell">Sell</th><th>Supplier / Shop</th><th class="num">Cost</th><th>Part No</th><th>Brand</th><th>Country</th></tr></thead><tbody>
-      ${items.map((it,ix)=>`<tr><td style="font-size:11.5px;color:#14213a;font-weight:600;background:#fff">${esc(it.description)}</td><td class="num" style="background:#fff">${esc(it.qty)}</td><td class="num puSell" style="background:#fff;color:#1a7f4b;font-weight:700">${fmt(it.total)}</td><td style="background:#fff"><div style="display:flex;align-items:center;gap:2px"><input data-pusup="${ix}" list="purSupDL" value="${esc(it.supplier||'')}" placeholder="supplier / SHOP" style="width:112px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px">${it.supplier?`<span data-puclr="${ix}" title="clear" style="cursor:pointer;color:var(--red);font-weight:800;font-size:14px;padding:0 3px">✕</span>`:''}</div></td><td class="num" style="background:#fff"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:62px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="background:#fff"><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:84px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:74px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puctry="${ix}" value="${esc(it.country||'')}" placeholder="country" style="width:72px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
+      ${items.map((it,ix)=>`<tr><td style="font-size:11.5px;color:#14213a;font-weight:600;background:#fff">${esc(it.description)}</td><td class="num" style="background:#fff">${esc(it.qty)}</td><td class="num puSell" style="background:#fff;color:#1a7f4b;font-weight:700">${fmt(it.total)}</td><td style="background:#fff"><div style="display:flex;align-items:center;gap:2px"><input data-pusup="${ix}" value="${esc(it.supplier||'')}" placeholder="supplier / SHOP" style="width:112px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px">${it.supplier?`<span data-puclr="${ix}" title="clear" style="cursor:pointer;color:var(--red);font-weight:800;font-size:14px;padding:0 3px">✕</span>`:''}</div></td><td class="num" style="background:#fff"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:62px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="background:#fff"><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:84px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:74px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puctry="${ix}" value="${esc(it.country||'')}" placeholder="country" style="width:72px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
       </tbody></table></div>
       <div class="dpanel" style="padding:8px 11px;margin-top:8px;font-size:12px;font-weight:700">வாங்கல் Rs ${fmt(cost)}<span class="puProfit"> · விற்பனை Rs ${fmt(sell)}${cost>0?` · <span style="color:${(sell-cost)>=0?'var(--green)':'var(--red)'}">லாபம் Rs ${fmt(sell-cost)}</span>`:' · <span style="color:var(--muted)">லாபம் — (cost போடு)</span>'}</span></div>
       <button class="btn gold" id="purExcel" style="margin-top:8px">📥 Busy Purchase Excel</button>
@@ -1889,6 +1916,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const save=async()=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}};
     $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=items[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=items[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}await save();_purRender();}));
+    _supAC($('purSup'),null);
+    $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=items[+inp.dataset.pusup];it.supplier=name;await save();_purRender();}));
     const pf=(sel,key)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=items[+inp.dataset[sel.replace('data-','')]];it[key]=inp.value.trim();await save();}));
     pf('data-pupart','partno');pf('data-pubrand','brand');pf('data-puctry','country');
     $('purApply').onclick=async()=>{const s=$('purSup').value.trim(),iv=$('purInv').value.trim(),dt=$('purInvD').value;
