@@ -1752,7 +1752,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     inp.addEventListener('focus',()=>{_supACInp=inp;_supACPick=onPick;_supACRender();});
     inp.addEventListener('input',()=>{_supACInp=inp;_supACPick=onPick;_supACRender();});
     inp.addEventListener('keydown',e=>{if(e.key==='Escape')_supACHide();});}
-  function _supOptions(){ // combine Busy master + used suppliers, alias as label    const seen={},out=[];
+  function _supOptions(){ // combine Busy master + used suppliers, alias as label
+    const seen={},out=[];
     _busySup.forEach(s=>{const n=(s.n||s.name||'').trim();if(!n)return;const k=n.toLowerCase();if(seen[k])return;seen[k]=1;out.push(`<option value="${esc(n)}">${esc(s.a||s.alias||'')}</option>`);});
     Object.values(_supCache||{}).forEach(n=>{const k=String(n).toLowerCase();if(seen[k])return;seen[k]=1;out.push(`<option value="${esc(n)}"></option>`);});
     return out.join('');
