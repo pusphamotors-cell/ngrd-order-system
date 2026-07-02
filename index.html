@@ -3182,20 +3182,28 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const rows=pend.map(o=>{const dd=o.delivery_date||'';const ds=daysSince(dd);return{no:o.order_no,camp:_campOf(o),veh:o.model||'',naha:o.naha_no||'',items:(o.items||[]).length,delivery:dd,days_left:ds==null?null:-ds,staff:o.assignee_name||o.assignee||'',stage:_stageOf(o)};})
       .sort((a,b)=>((a.days_left==null?9999:a.days_left)-(b.days_left==null?9999:b.days_left))).slice(0,60);
     let staff=[];try{const u=await fbUsersGet();staff=Object.keys(u).map(k=>(u[k]&&u[k].name)||k);}catch(e){}
-    const prompt=`You are the operations manager for NGRD Motors, a Sri Lanka Navy vehicle spare-parts supplier. Today = ${today}. There are ${pend.length} PENDING orders (not yet supplied). Staff who can be assigned work: ${staff.join(', ')||'(none listed)'}.
-Give a SHORT, practical daily work plan for the OWNER, written in TAMIL (Tanglish is fine, "bro" style OK). Use clear bullet points and emojis. Cover:
-1. 🔴 URGENT today — orders whose delivery deadline is nearest/overdue (LD penalty risk). List order no + camp + days left.
-2. 🏕️ Which camp has the most pending work.
-3. 👷 Suggest how to split the work among the staff listed (by camp or vehicle).
-4. ✅ Top 5 orders to do FIRST today, in order.
-Keep it concise (under ~180 words). Do NOT invent data. If days_left is negative it means overdue.
-Pending orders (JSON, sorted by urgency, max 60 shown): ${JSON.stringify(rows)}`;
+    const prompt=`You are "NGRD AI" — the trusted right-hand business partner & operations manager for Puspha, the owner of NGRD Motors (a Sri Lanka Navy vehicle spare-parts supplier). You are sharp, warm, motivating, and honest like a loyal senior partner who genuinely wants the business to GROW and the owner to WIN. Speak in TAMIL (Tanglish, friendly "bro" style), with emojis and clear bullet points.
+
+Today = ${today}. There are ${pend.length} PENDING orders (not yet supplied). Staff who can be assigned: ${staff.join(', ')||'(none listed)'}.
+
+Give a daily briefing with these sections (keep total under ~230 words, punchy):
+1. 👋 ஒரு வரி warm greeting + இன்னைக்கி mood/energy line (motivating).
+2. 🔴 URGENT — deadline நெருங்கின/overdue orders (order no · camp · days left). LD penalty risk-ஐ தெளிவா சொல்லு.
+3. 🏕️ எந்த camp-ல அதிக pending — ஒரு வரி.
+4. 👷 Staff split — staff பேர் வெச்சு யாருக்கு எந்த camp/orders (practical).
+5. ✅ Top 5 orders to do FIRST (priority order).
+6. 📈 Business growth tip — ஒரு நிஜமான, actionable advice (உதा: late orders குறைச்சா profit/reputation கூடும், எந்த camp-ல வாய்ப்பு அதிகம், items enter பண்ணாத orders உடனே பண்ணு போன்றவை — data-ல இருந்து பார்த்து).
+7. 💪 ஒரு powerful motivation line-ல முடி (owner-ஐ energize பண்ணு).
+
+Be a real partner, not a robot. Do NOT invent data. days_left negative = overdue. If some orders have 0 items, flag them ("items enter பண்ணல").
+Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     try{
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[{type:'text',text:prompt}]})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
       const data=await resp.json();
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n').trim();
-      out.innerHTML='<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.55;background:#faf8ff;border:1px solid #e6ddfa;border-radius:10px;padding:12px;color:#2a2140">'+esc(text||'—')+'</div>';
+      const _mdLite=t=>{let h=esc(t);h=h.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');h=h.replace(/^\s*#{1,6}\s*(.+)$/gm,'<b style="color:#5a3fb0;font-size:13px">$1</b>');h=h.replace(/^\s*[-*]\s+/gm,'• ');h=h.replace(/^---+\s*$/gm,'<span style="color:#cbb8ee">──────────</span>');return h;};
+      out.innerHTML='<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.6;background:#faf8ff;border:1px solid #e6ddfa;border-radius:10px;padding:12px 14px;color:#2a2140">'+_mdLite(text||'—')+'</div>';
     }catch(e){out.innerHTML='<div class="err">⚠️ '+esc(e.message)+' — internet பாரு, திரும்ப try</div>';}
   }
   function renderDash(){
