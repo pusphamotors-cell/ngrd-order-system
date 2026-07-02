@@ -1879,13 +1879,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   // ===== Purchasing tab (order-wise: supplier + cost + part/brand/country + invoice → Busy) =====
   let _purOrder=null;
   async function renderPurchasing(){
-    await _loadBusyItems();await _loadBusyCfg();await _loadBusySuppliers();
     let dlEl=document.getElementById('purOrdList');
     if(!dlEl){dlEl=document.createElement('datalist');dlEl.id='purOrdList';document.body.appendChild(dlEl);}
     dlEl.innerHTML=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('');
     const lb=$('purLoad');if(lb)lb.onclick=_purLoad;
     const s=$('purSearch');if(s&&!s._wired){s._wired=1;s.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_purLoad();}});}
     if(_purOrder)_purRender();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';
+    try{await _loadBusyItems();await _loadBusyCfg();await _loadBusySuppliers();if(_purOrder)_purRender();}catch(e){}
   }
   function _purFind(q){q=(q||'').trim().toLowerCase();if(!q)return null;return orders.find(x=>(x.order_no||'').toLowerCase()===q)||orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q))||orders.find(x=>(x.order_no||'').toLowerCase().includes(q));}
   function _purLoad(){const o=_purFind($('purSearch').value);if(!o){$('purBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_purOrder=null;return;}_purOrder=o;_purRender();}
