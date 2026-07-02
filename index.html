@@ -3173,6 +3173,47 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     el.innerHTML=`<div class="nudge">⚠️ ${last?days+' நாள்-ஆ':'இதுவரை'} data backup பண்ணல — safe-ஆ வைக்க <b>download பண்ணு</b><button id="nudgeGo">💾 Backup</button></div>`;
     const g=$('nudgeGo');if(g)g.onclick=()=>{setTab('users');renderUsers();setTimeout(()=>{const bb=$('btnBackup');if(bb)bb.scrollIntoView({behavior:'smooth',block:'center'});},80);};
   }
+  function _aiRender(out,text){const _md=t=>{let h=esc(t);h=h.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');h=h.replace(/^\s*#{1,6}\s*(.+)$/gm,'<b style="color:#0b6b4a;font-size:13px">$1</b>');h=h.replace(/^\s*[-*]\s+/gm,'• ');h=h.replace(/^---+\s*$/gm,'<span style="color:#bfe3d4">──────────</span>');return h;};out.innerHTML='<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.6;background:#f4fbf8;border:1px solid #cfeee0;border-radius:10px;padding:12px 14px;color:#173a2e">'+_md(text||'—')+'</div>';}
+  async function _aiGrowthPlan(){
+    const out=$('aiStaffOut');if(!out)return;
+    out.innerHTML='<div style="font-size:12px;color:var(--muted)"><span class="spin"></span> Business Advisor யோசிக்கிறது…</div>';
+    // full business snapshot
+    const today=_todayKey();
+    let totVal=0,totProfit=0,costedVal=0,pend=0,inv=0,paid=0,ldLate=0,noItem=0;
+    const camp={},veh={},comp={},sup={};
+    orders.forEach(o=>{const sell=Number(o.sell)||0;totVal+=sell;const pv=profitVal(o);if(pv!==null){totProfit+=pv;costedVal+=sell;}
+      if(o.paid)paid++;else if(o.supplied||o.bill_no)inv++;else pend++;
+      const a=deliveryAlert(o);if(a&&a.lvl===0&&!(o.paid||o.bill_no||o.supplied))ldLate++;
+      if(!(o.items||[]).length)noItem++;
+      const c=_campOf(o);camp[c]=camp[c]||{n:0,v:0,p:0};camp[c].n++;camp[c].v+=sell;if(pv!==null)camp[c].p+=pv;
+      const m=(o.model||'').trim();if(m){veh[m]=veh[m]||{n:0,v:0};veh[m].n++;veh[m].v+=sell;}
+      const co=_companyOf(o);comp[co]=comp[co]||{n:0,v:0};comp[co].n++;comp[co].v+=sell;
+      (o.items||[]).forEach(it=>{if(it.supplier){const s=it.supplier.trim();sup[s]=sup[s]||{n:0,cost:0};sup[s].n++;sup[s].cost+=(Number(it.cost)||0)*(Number(it.qty)||1);}});
+    });
+    const top=(obj,k,n)=>Object.keys(obj).map(x=>({name:x,...obj[x]})).sort((a,b)=>(b[k]||0)-(a[k]||0)).slice(0,n);
+    const snap={date:today,total_orders:orders.length,total_sales:Math.round(totVal),total_profit:Math.round(totProfit),margin_pct:costedVal>0?+(totProfit/costedVal*100).toFixed(1):null,pending:pend,invoiced:inv,paid,ld_late_pending:ldLate,orders_with_no_items:noItem,
+      camps:top(camp,'v',10).map(c=>({camp:c.name,orders:c.n,sales:Math.round(c.v),profit:Math.round(c.p)})),
+      top_vehicles:top(veh,'n',8).map(v=>({vehicle:v.name,orders:v.n,sales:Math.round(v.v)})),
+      companies:top(comp,'v',3).map(c=>({shop:c.name,orders:c.n,sales:Math.round(c.v)})),
+      top_suppliers:top(sup,'cost',8).map(s=>({supplier:s.name,items:s.n,spend:Math.round(s.cost)}))};
+    const prompt=`You are "NGRD AI" — Siva's trusted business partner & strategic advisor. Siva OWNS two shops: NGRD Motors & Puspha Motors, supplying vehicle spare parts to Sri Lanka Navy camps (and expanding). You think like a smart CEO's right hand: spot opportunities, risks, and growth moves. Address him as "Siva bro". Reply in TAMIL (Tanglish, warm, sharp), emojis + bullets.
+
+Using the FULL business snapshot below, give a strategic growth briefing (under ~260 words) with:
+1. 📊 ஒரு வரி — business இப்போ எப்படி இருக்கு (health check).
+2. 🌟 வளர்ச்சி வாய்ப்பு (Opportunities) — எந்த camp/vehicle-ல அதிக sales/orders → அங்க இன்னும் focus பண்ணு. புது camp/department (Army, Air Force, STF, Police) target பண்ண idea.
+3. 💰 Profit — margin எப்படி? எந்த supplier-க்கு அதிக spend (negotiate பண்ண வாய்ப்பு?). Cost குறைக்க/profit கூட்ட 1-2 நிஜ move.
+4. ⚠️ Risk — LD late orders, items enter பண்ணாத orders, payment வராதது — எச்சரிக்கை + fix.
+5. 🎯 இந்த வாரம் 3 strategic action (Siva இதை பண்ணா business வளரும்).
+6. 💪 ஒரு powerful partner-style motivation line.
+Think deep like a real business advisor, use the numbers, don't invent. Snapshot(JSON): ${JSON.stringify(snap)}`;
+    try{
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[{type:'text',text:prompt}]})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n').trim();
+      _aiRender(out,text);
+    }catch(e){out.innerHTML='<div class="err">⚠️ '+esc(e.message)+' — internet பாரு, திரும்ப try</div>';}
+  }
   async function _aiStaffPlan(){
     const out=$('aiStaffOut');if(!out)return;
     out.innerHTML='<div style="font-size:12px;color:var(--muted)"><span class="spin"></span> AI யோசிக்கிறது…</div>';
@@ -3182,7 +3223,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const rows=pend.map(o=>{const dd=o.delivery_date||'';const ds=daysSince(dd);return{no:o.order_no,camp:_campOf(o),veh:o.model||'',naha:o.naha_no||'',items:(o.items||[]).length,delivery:dd,days_left:ds==null?null:-ds,staff:o.assignee_name||o.assignee||'',stage:_stageOf(o)};})
       .sort((a,b)=>((a.days_left==null?9999:a.days_left)-(b.days_left==null?9999:b.days_left))).slice(0,60);
     let staff=[];try{const u=await fbUsersGet();staff=Object.keys(u).map(k=>(u[k]&&u[k].name)||k);}catch(e){}
-    const prompt=`You are "NGRD AI" — the trusted right-hand business partner & operations manager for Puspha, the owner of NGRD Motors (a Sri Lanka Navy vehicle spare-parts supplier). You are sharp, warm, motivating, and honest like a loyal senior partner who genuinely wants the business to GROW and the owner to WIN. Speak in TAMIL (Tanglish, friendly "bro" style), with emojis and clear bullet points.
+    const prompt=`You are "NGRD AI" — the trusted right-hand business partner & operations manager for Siva, the OWNER of NGRD Motors & Puspha Motors (these are his two SHOP names — a Sri Lanka Navy vehicle spare-parts supply business). Address the owner as "Siva" (or "Siva bro"). You are sharp, warm, motivating, and honest like a loyal senior partner who genuinely wants his business to GROW and Siva to WIN. Speak in TAMIL (Tanglish, friendly "bro" style), with emojis and clear bullet points.
 
 Today = ${today}. There are ${pend.length} PENDING orders (not yet supplied). Staff who can be assigned: ${staff.join(', ')||'(none listed)'}.
 
@@ -3249,7 +3290,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       <div class="dpanel" style="padding:12px 13px;margin-bottom:12px;border-left:4px solid #5a3fb0">
         <div style="font-size:13px;font-weight:800;color:#5a3fb0;margin-bottom:4px">🤖 AI Staff — Pending வேலை Plan</div>
         <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px">Pending orders-ஐ AI பார்த்து — urgent எது, camp வாரி, staff பங்கீடு, priority suggest பண்ணும்.</div>
-        <button class="btn" id="aiStaffBtn" style="margin:0;background:#5a3fb0">🤖 இன்னைக்கு Plan பண்ணு</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="aiStaffBtn" style="margin:0;background:#5a3fb0;flex:1;min-width:150px">🤖 இன்னைக்கி வேலை</button><button class="btn" id="aiGrowthBtn" style="margin:0;background:#0b6b4a;flex:1;min-width:150px">📈 Business Advisor</button></div>
         <div id="aiStaffOut" style="margin-top:10px"></div>
       </div>
       <div class="drow">
@@ -3295,6 +3336,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     $('dashOrd').onclick=()=>{_listFilter=null;setTab('list');renderList();};
     dw.querySelectorAll('[data-attn]').forEach(el=>el.addEventListener('click',()=>_openOrderEdit(el.dataset.attn)));
     const aib=$('aiStaffBtn');if(aib)aib.onclick=_aiStaffPlan;
+    const agb=$('aiGrowthBtn');if(agb)agb.onclick=_aiGrowthPlan;
     dw.querySelectorAll('[data-fltt]').forEach(el=>{el.style.cursor='pointer';el.title='Click → orders பாரு';
       el.addEventListener('click',()=>{const t=el.dataset.fltt,v=el.dataset.fltv;
         if(t==='all')gotoList(null);
