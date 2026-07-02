@@ -407,7 +407,8 @@
   </div>
 
   <div class="wrap hide" id="viewPur">
-    <div class="step">🛒 Purchasing — order-க்கு supplier கிட்ட வாங்கறது (Busy-க்கு)</div>
+    <div class="step">🛒 Purchasing / Return</div>
+    <div class="modetoggle"><button class="mbtn on" id="purModeBuy">📦 Purchase (வாங்கு)</button><button class="mbtn" id="purModeRet">↩️ Return (திருப்பம்)</button></div>
     <div class="fld"><label>Order தேர்ந்தெடு (Order No — last 4 digit தேடலாம்)</label><input id="purSearch" list="purOrdList" placeholder="உதा: 0431 / SEC/APOSE/PO/2026/0431" autocomplete="off"></div>
     <button class="btn gold" id="purLoad" style="margin-top:0">🔄 Order load பண்ணு</button>
     <div id="purBody" style="margin-top:10px"></div>
@@ -450,6 +451,7 @@
       <button class="mbtn" id="rmSales" type="button">📋 Sales Register</button>
       <button class="mbtn" id="rmTender" type="button">🎯 Tender</button>
       <button class="mbtn" id="rmBusy" type="button">🔗 Busy</button>
+      <button class="mbtn" id="rmReturn" type="button">↩️ Return</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -475,6 +477,7 @@
     <div id="repSalesWrap" class="hide"></div>
     <div id="repTenderWrap" class="hide"></div>
     <div id="repBusyWrap" class="hide"></div>
+    <div id="repReturnWrap" class="hide"></div>
     <div class="brandcard">
       <div class="bcrest">NGRD</div>
       <h2>NGRD MOTORS</h2>
@@ -1657,6 +1660,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('rmSales').onclick=()=>{setRepMode('sales');renderSales();};
     $('rmTender').onclick=()=>{setRepMode('tender');renderTender();};
     $('rmBusy').onclick=()=>{setRepMode('busy');renderBusy();};
+    $('rmReturn').onclick=()=>{setRepMode('return');renderReturn();};
     renderReport();
   }
   var V3_DB='https://ngrd-motors-default-rtdb.firebaseio.com/ngrd';
@@ -1878,18 +1882,38 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     XLSX.writeFile(wb,'Busy_Purchase_'+((sup.replace(/[^A-Za-z0-9]/g,'_').slice(0,18))||'sup')+'_'+today+'.xlsx');
   }
   // ===== Purchasing tab (order-wise: supplier + cost + part/brand/country + invoice → Busy) =====
-  let _purOrder=null;
+  let _purOrder=null,_purMode='buy';
   async function renderPurchasing(){
     let dlEl=document.getElementById('purOrdList');
     if(!dlEl){dlEl=document.createElement('datalist');dlEl.id='purOrdList';document.body.appendChild(dlEl);}
     dlEl.innerHTML=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('');
     const lb=$('purLoad');if(lb)lb.onclick=_purLoad;
     const s=$('purSearch');if(s&&!s._wired){s._wired=1;s.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_purLoad();}});}
-    if(_purOrder)_purRender();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';
-    try{await _loadBusyItems();await _loadBusyCfg();await _loadBusySuppliers();if(_purOrder)_purRender();}catch(e){}
+    const mb=$('purModeBuy'),mr=$('purModeRet');
+    if(mb)mb.onclick=()=>{_purMode='buy';mb.classList.add('on');mr&&mr.classList.remove('on');if(_purOrder)_purRender();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';};
+    if(mr)mr.onclick=()=>{_purMode='ret';mr.classList.add('on');mb&&mb.classList.remove('on');if(_purOrder)_retRender();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';};
+    if(_purOrder)(_purMode==='ret'?_retRender:_purRender)();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';
+    try{await _loadBusyItems();await _loadBusyCfg();await _loadBusySuppliers();if(_purOrder&&_purMode==='buy')_purRender();}catch(e){}
   }
   function _purFind(q){q=(q||'').trim().toLowerCase();if(!q)return null;return orders.find(x=>(x.order_no||'').toLowerCase()===q)||orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q))||orders.find(x=>(x.order_no||'').toLowerCase().includes(q));}
-  function _purLoad(){const o=_purFind($('purSearch').value);if(!o){$('purBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_purOrder=null;return;}_purOrder=o;_purRender();}
+  function _purLoad(){const o=_purFind($('purSearch').value);if(!o){$('purBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_purOrder=null;return;}_purOrder=o;(_purMode==='ret'?_retRender:_purRender)();}
+  function _retRender(){
+    const o=_purOrder;if(!o)return;
+    const items=(o.items||[]).filter(it=>it.description);
+    const rc=items.filter(it=>it.returned).length,pend=items.filter(it=>it.returned&&!it.replaced).length;
+    $('purBody').innerHTML=`
+      <div style="font-size:11px;color:var(--navy);background:#fff4f0;border-radius:8px;padding:7px 10px;margin-bottom:8px">↩️ <b>${esc(o.order_no)}</b> · ${esc(_campOf(o))} · Invoice ${esc(o.bill_no||'—')} · ${items.length} item${rc?` · <b style="color:var(--red)">${rc} return</b>${pend?' ('+pend+' replace பாக்கி)':''}`:''}</div>
+      <div class="note" style="text-align:left;font-size:10.5px;margin-bottom:6px">Wrong item-ஐ ✓ பண்ணு. <b>Busy-க்கு எதுவும் அனுப்பாது</b> — same invoice, order record மட்டும்.</div>
+      <div class="tablewrap" style="background:#fff;border-radius:10px"><table><thead><tr><th></th><th>Item</th><th class="num">Qty</th><th class="num">Ret</th><th>காரணம்</th><th>Status</th></tr></thead><tbody>
+      ${items.map((it,ix)=>{const on=!!it.returned;return `<tr style="background:${on?'#fff4f0':'#fff'}"><td style="text-align:center;background:inherit"><input type="checkbox" data-retck="${ix}" ${on?'checked':''}></td><td style="font-size:11.5px;color:#14213a;font-weight:600;background:inherit">${esc(it.description)}${(it.partno||it.brand)?`<div style="font-size:9.5px;color:var(--muted);font-weight:400">${esc(it.brand||'')} ${esc(it.partno||'')}</div>`:''}</td><td class="num" style="background:inherit">${esc(it.qty)}</td><td class="num" style="background:inherit">${on?`<input type="number" data-retqty="${ix}" value="${it.return_qty!=null?it.return_qty:it.qty}" style="width:46px;font-size:11px;padding:2px 4px;border:1px solid var(--line);border-radius:6px;text-align:right">`:'—'}</td><td style="background:inherit">${on?`<input data-retrsn="${ix}" value="${esc(it.return_reason||'')}" placeholder="காரணம்" style="width:120px;font-size:11px;padding:2px 5px;border:1px solid var(--line);border-radius:6px">`:'—'}</td><td style="background:inherit;font-size:11px">${on?(it.replaced?`<span style="color:var(--green);font-weight:700">✅ Replace ஆச்சு</span> <button class="copyprev" data-retunrep="${ix}" style="margin:0;padding:2px 6px;width:auto">↺</button>`:`<button class="btn" data-retrep="${ix}" style="margin:0;width:auto;padding:4px 9px;background:var(--green);font-size:11px">Replace ஆச்சு</button>`):'—'}</td></tr>`;}).join('')}
+      </tbody></table></div>`;
+    const save=async()=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}};
+    $('purBody').querySelectorAll('[data-retck]').forEach(cb=>cb.addEventListener('change',async()=>{const it=items[+cb.dataset.retck];if(cb.checked){it.returned=true;it.return_date=it.return_date||_todayKey();it.return_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';if(it.return_qty==null)it.return_qty=it.qty;}else{it.returned=false;it.replaced=false;}await save();_retRender();}));
+    $('purBody').querySelectorAll('[data-retqty]').forEach(inp=>inp.addEventListener('change',async()=>{items[+inp.dataset.retqty].return_qty=Number(inp.value)||0;await save();}));
+    $('purBody').querySelectorAll('[data-retrsn]').forEach(inp=>inp.addEventListener('change',async()=>{items[+inp.dataset.retrsn].return_reason=inp.value.trim();await save();}));
+    $('purBody').querySelectorAll('[data-retrep]').forEach(b=>b.addEventListener('click',async()=>{const it=items[+b.dataset.retrep];it.replaced=true;it.replace_date=_todayKey();await save();_retRender();}));
+    $('purBody').querySelectorAll('[data-retunrep]').forEach(b=>b.addEventListener('click',async()=>{items[+b.dataset.retunrep].replaced=false;await save();_retRender();}));
+  }
   function _purRender(){
     const o=_purOrder;if(!o)return;
     const items=(o.items||[]).filter(it=>it.description);
@@ -1950,6 +1974,46 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Purchase');
     XLSX.writeFile(wb,'Busy_Purchase_'+(o.order_no||'order').replace(/[^A-Za-z0-9]/g,'_')+'_'+today+'.xlsx');
     showInfoModal('Export','✅ '+sups.length+' supplier · '+(aoa.length-1)+' item Purchase Excel. (SHOP/STORE stock தவிர்க்கப்பட்டது.)');
+  }
+  // ===== Return tracker (Order System only — no Busy) =====
+  let _retOrder=null;
+  function renderReturn(){
+    const wrap=$('repReturnWrap');
+    let dl=document.getElementById('retOrdList');
+    if(!dl){dl=document.createElement('datalist');dl.id='retOrdList';document.body.appendChild(dl);}
+    dl.innerHTML=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('');
+    // pending returns across all orders
+    const pend=[];
+    orders.forEach(o=>(o.items||[]).forEach((it,ix)=>{if(it.ret&&it.ret.status==='pending')pend.push({o,it,ix});}));
+    wrap.innerHTML=`<div class="dpanel" style="padding:12px 13px">
+      <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:6px">↩️ Return / Replacement <span style="font-weight:400;color:var(--muted);font-size:11px">— invoice-ல wrong item · Order System-ல மட்டும் (Busy மாறாது)</span></div>
+      <div class="fld"><label>Order தேடு (Order No — last 4 digit)</label><input id="retSearch" list="retOrdList" placeholder="உதा: 0814" autocomplete="off" value="${esc(_retOrder?_retOrder.order_no:'')}"></div>
+      <button class="btn gold" id="retLoad" style="margin:0">🔄 Order items load</button>
+      <div id="retBody" style="margin-top:8px"></div>
+    </div>
+    <div class="dpanel" style="padding:12px 13px;margin-top:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:6px">🔴 Replacement பண்ண வேண்டியவை — ${pend.length}</div>
+      ${pend.length?`<div class="tablewrap"><table><thead><tr><th>Item</th><th class="num">Ret Qty</th><th>Order</th><th>Return date</th><th></th></tr></thead><tbody>
+        ${pend.map(p=>`<tr><td style="font-size:11px">${esc(p.it.description)}</td><td class="num">${esc(p.it.ret.qty)}</td><td style="font-size:10px;color:var(--muted)">${esc(p.o.order_no)}</td><td style="font-size:10px">${esc(p.it.ret.date||'')}${p.it.ret.note?'<br><span style="color:var(--muted)">'+esc(p.it.ret.note)+'</span>':''}</td><td><button class="btn" data-retdone="${esc(p.o.id)}|${p.ix}" style="margin:0;width:auto;padding:4px 9px;background:var(--green);font-size:11px">✅ Replaced ஆச்சு</button></td></tr>`).join('')}
+      </tbody></table></div>`:'<div class="empty" style="padding:10px">Pending return இல்ல 🎉</div>'}
+    </div>`;
+    $('retLoad').onclick=()=>{const o=orders.find(x=>(x.order_no||'').toLowerCase()===$('retSearch').value.trim().toLowerCase())||orders.find(x=>(x.order_no||'').toLowerCase().endsWith($('retSearch').value.trim().toLowerCase()))||orders.find(x=>(x.order_no||'').toLowerCase().includes($('retSearch').value.trim().toLowerCase()));if(!o){$('retBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_retOrder=null;return;}_retOrder=o;_retRenderBody();};
+    if(_retOrder)_retRenderBody();
+    wrap.querySelectorAll('[data-retdone]').forEach(b=>b.addEventListener('click',async()=>{const a=b.dataset.retdone.split('|');const o=orders.find(x=>x.id===a[0]);if(!o)return;const it=(o.items||[])[+a[1]];if(it&&it.ret){it.ret.status='done';it.ret.done_at=Date.now();try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderReturn();}}));
+  }
+  function _retRenderBody(){
+    const o=_retOrder;if(!o)return;const items=(o.items||[]).filter(it=>it.description);
+    $('retBody').innerHTML=`<div style="font-size:11px;color:var(--navy);background:#f3f6fb;border-radius:8px;padding:6px 9px;margin:6px 0">${esc(o.order_no)} · ${esc(_campOf(o))} · ${items.length} item · ${o.bill_no?'🧾 Invoice '+esc(o.bill_no):'invoice இல்ல'}</div>
+      <div class="tablewrap"><table><thead><tr><th>✓</th><th>Item</th><th class="num">Qty</th><th class="num">Ret Qty</th><th>Status</th></tr></thead><tbody>
+      ${(o.items||[]).map((it,ix)=>it.description?`<tr><td style="text-align:center"><input type="checkbox" data-retck="${ix}" ${it.ret?'checked':''}></td><td style="font-size:11px">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td class="num"><input data-retqty="${ix}" type="number" value="${it.ret?it.ret.qty:it.qty}" style="width:52px;font-size:11px;padding:2px 4px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="font-size:10px">${it.ret?(it.ret.status==='pending'?'<span style="color:var(--red)">🔴 return pending</span>':'<span style="color:var(--green)">✅ replaced</span>'):'—'}</td></tr>`:'').join('')}
+      </tbody></table></div>
+      <div class="fld" style="margin-top:6px"><label>Return reason (option)</label><input id="retNote" placeholder="உதा: wrong size / defective"></div>
+      <button class="btn" id="retMark" style="margin-top:4px;background:#8a1c1c">↩️ தேர்ந்தெடுத்த item-ஐ Return mark</button>`;
+    $('retMark').onclick=async()=>{const note=$('retNote').value.trim();let n=0;
+      $('retBody').querySelectorAll('[data-retck]').forEach(ck=>{const ix=+ck.dataset.retck;const it=(o.items||[])[ix];if(!it)return;
+        if(ck.checked){const q=Number(($('retBody').querySelector('[data-retqty="'+ix+'"]')||{}).value)||it.qty;it.ret={qty:q,date:_todayKey?_todayKey():new Date().toISOString().slice(0,10),by:(CURRENT&&(CURRENT.name||CURRENT.u))||'',note,status:(it.ret&&it.ret.status==='done')?'done':'pending'};n++;}
+        else if(it.ret&&it.ret.status!=='done'){delete it.ret;}});
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderReturn();showInfoModal('Saved','✅ '+n+' item return mark ஆச்சு. Replacement பண்ணி supply பண்ணு (அதே invoice). Busy மாறாது.');};
   }
   async function renderBusy(){
     const wrap=$('repBusyWrap');
@@ -2129,10 +2193,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const rb=$('tRetry2');if(rb)rb.onclick=()=>renderTender(true);
   }
   function setRepMode(m){
-    ['Report','Pending','Daily','Cal','Out','Comm','Sum','Sales','Tender','Busy'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
-    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy'};
+    ['Report','Pending','Daily','Cal','Out','Comm','Sum','Sales','Tender','Busy','Return'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
+    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy',return:'Return'};
     const b=$('rm'+(map[m]||'Report'));if(b)b.classList.add('on');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');$('repReturnWrap').classList.toggle('hide',m!=='return');
   }
   let _dailyBasis='bill';
   function renderDaily(){
