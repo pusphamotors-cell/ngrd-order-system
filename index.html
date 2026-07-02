@@ -3173,6 +3173,31 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     el.innerHTML=`<div class="nudge">⚠️ ${last?days+' நாள்-ஆ':'இதுவரை'} data backup பண்ணல — safe-ஆ வைக்க <b>download பண்ணு</b><button id="nudgeGo">💾 Backup</button></div>`;
     const g=$('nudgeGo');if(g)g.onclick=()=>{setTab('users');renderUsers();setTimeout(()=>{const bb=$('btnBackup');if(bb)bb.scrollIntoView({behavior:'smooth',block:'center'});},80);};
   }
+  async function _aiStaffPlan(){
+    const out=$('aiStaffOut');if(!out)return;
+    out.innerHTML='<div style="font-size:12px;color:var(--muted)"><span class="spin"></span> AI யோசிக்கிறது…</div>';
+    const today=_todayKey();
+    const pend=orders.filter(o=>!o.paid&&!o.bill_no&&!o.supplied);
+    if(!pend.length){out.innerHTML='<div class="empty">Pending order இல்ல 🎉</div>';return;}
+    const rows=pend.map(o=>{const dd=o.delivery_date||'';const ds=daysSince(dd);return{no:o.order_no,camp:_campOf(o),veh:o.model||'',naha:o.naha_no||'',items:(o.items||[]).length,delivery:dd,days_left:ds==null?null:-ds,staff:o.assignee_name||o.assignee||'',stage:_stageOf(o)};})
+      .sort((a,b)=>((a.days_left==null?9999:a.days_left)-(b.days_left==null?9999:b.days_left))).slice(0,60);
+    let staff=[];try{const u=await fbUsersGet();staff=Object.keys(u).map(k=>(u[k]&&u[k].name)||k);}catch(e){}
+    const prompt=`You are the operations manager for NGRD Motors, a Sri Lanka Navy vehicle spare-parts supplier. Today = ${today}. There are ${pend.length} PENDING orders (not yet supplied). Staff who can be assigned work: ${staff.join(', ')||'(none listed)'}.
+Give a SHORT, practical daily work plan for the OWNER, written in TAMIL (Tanglish is fine, "bro" style OK). Use clear bullet points and emojis. Cover:
+1. 🔴 URGENT today — orders whose delivery deadline is nearest/overdue (LD penalty risk). List order no + camp + days left.
+2. 🏕️ Which camp has the most pending work.
+3. 👷 Suggest how to split the work among the staff listed (by camp or vehicle).
+4. ✅ Top 5 orders to do FIRST today, in order.
+Keep it concise (under ~180 words). Do NOT invent data. If days_left is negative it means overdue.
+Pending orders (JSON, sorted by urgency, max 60 shown): ${JSON.stringify(rows)}`;
+    try{
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[{type:'text',text:prompt}]})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n').trim();
+      out.innerHTML='<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.55;background:#faf8ff;border:1px solid #e6ddfa;border-radius:10px;padding:12px;color:#2a2140">'+esc(text||'—')+'</div>';
+    }catch(e){out.innerHTML='<div class="err">⚠️ '+esc(e.message)+' — internet பாரு, திரும்ப try</div>';}
+  }
   function renderDash(){
     const dw=$('dashContent');
     _renderCustChips();_backupNudge();
@@ -3213,6 +3238,12 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="dsec">🏕️ Top Camps (value)</div>
       <div class="dpanel" style="padding:12px 12px 8px">${_hbarChart(topCamps,'#1f3864')}</div>`;
     dw.innerHTML=`
+      <div class="dpanel" style="padding:12px 13px;margin-bottom:12px;border-left:4px solid #5a3fb0">
+        <div style="font-size:13px;font-weight:800;color:#5a3fb0;margin-bottom:4px">🤖 AI Staff — Pending வேலை Plan</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px">Pending orders-ஐ AI பார்த்து — urgent எது, camp வாரி, staff பங்கீடு, priority suggest பண்ணும்.</div>
+        <button class="btn" id="aiStaffBtn" style="margin:0;background:#5a3fb0">🤖 இன்னைக்கு Plan பண்ணு</button>
+        <div id="aiStaffOut" style="margin-top:10px"></div>
+      </div>
       <div class="drow">
         <div class="dstat" data-fltt="all"><div class="k">மொத்த Orders</div><div class="v">${tot}</div></div>
         <div class="dstat gold"><div class="k">மொத்த Value</div><div class="v">${fmt(value)}</div><div class="s">Rs</div></div>
@@ -3255,6 +3286,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('dashRep').onclick=()=>{setTab('rep');initReport();};
     $('dashOrd').onclick=()=>{_listFilter=null;setTab('list');renderList();};
     dw.querySelectorAll('[data-attn]').forEach(el=>el.addEventListener('click',()=>_openOrderEdit(el.dataset.attn)));
+    const aib=$('aiStaffBtn');if(aib)aib.onclick=_aiStaffPlan;
     dw.querySelectorAll('[data-fltt]').forEach(el=>{el.style.cursor='pointer';el.title='Click → orders பாரு';
       el.addEventListener('click',()=>{const t=el.dataset.fltt,v=el.dataset.fltv;
         if(t==='all')gotoList(null);
