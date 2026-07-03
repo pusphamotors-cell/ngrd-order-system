@@ -3256,6 +3256,76 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       out.innerHTML='<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.6;background:#faf8ff;border:1px solid #e6ddfa;border-radius:10px;padding:12px 14px;color:#2a2140">'+_mdLite(text||'—')+'</div>';
     }catch(e){out.innerHTML='<div class="err">⚠️ '+esc(e.message)+' — internet பாரு, திரும்ப try</div>';}
   }
+  // ===== 💬 System AI Assistant (chat — type + voice) =====
+  let _aiChatHist=[],_aiChatBusy=false;
+  function _aiChatCtx(){
+    const showVal=(typeof can!=='function')||can('value');
+    let pend=0,inv=0,paid=0;const camp={};const plist=[];
+    orders.forEach(o=>{if(o.paid)paid++;else if(o.supplied||o.bill_no)inv++;else pend++;
+      if(!(o.paid||o.bill_no||o.supplied)){const c=_campOf(o);camp[c]=(camp[c]||0)+1;
+        const r={no:o.order_no,camp:c,veh:o.model||'',items:(o.items||[]).length,delivery:o.delivery_date||'',stage:_stageOf(o),staff:o.assignee_name||o.assignee||''};if(showVal)r.value=Number(o.sell)||0;plist.push(r);}});
+    plist.sort((a,b)=>(a.delivery||'zzz').localeCompare(b.delivery||'zzz'));
+    return JSON.stringify({today:_todayKey(),total_orders:orders.length,pending:pend,invoiced:inv,paid,camp_pending:camp,pending_orders:plist.slice(0,80)});
+  }
+  function _aiChatAdd(who,txt){
+    const box=$('aiChatBody');if(!box)return null;
+    const d=document.createElement('div');
+    d.style.cssText='margin:6px 0;display:flex;'+(who==='me'?'justify-content:flex-end':'justify-content:flex-start');
+    d.innerHTML='<div style="max-width:82%;padding:8px 11px;border-radius:12px;font-size:12.5px;line-height:1.5;white-space:pre-wrap;'+(who==='me'?'background:#5a3fb0;color:#fff;border-bottom-right-radius:3px':'background:#f1eefb;color:#2a2140;border-bottom-left-radius:3px')+'">'+txt+'</div>';
+    box.appendChild(d);box.scrollTop=box.scrollHeight;return d.firstChild;
+  }
+  function _aiMd(t){let h=esc(t);h=h.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');h=h.replace(/^\s*[-*]\s+/gm,'• ');return h;}
+  async function _aiChatSend(){
+    const inp=$('aiChatIn');if(!inp||_aiChatBusy)return;const q=inp.value.trim();if(!q)return;
+    inp.value='';_aiChatAdd('me',esc(q));_aiChatBusy=true;
+    const bub=_aiChatAdd('ai','<span class="spin"></span> யோசிக்கிறேன்…');
+    const hist=_aiChatHist.slice(-5).map(h=>'Siva: '+h.q+'\nAI: '+h.a).join('\n');
+    const prompt='You are "NGRD AI", Siva\'s friendly assistant INSIDE his order-management system. Siva owns NGRD Motors & Puspha Motors (shops supplying vehicle spare parts to Sri Lanka Navy). Answer his question using ONLY the business data below. Reply in TAMIL (Tanglish, short, warm, "bro" style). If the data does not contain the answer, say so honestly — do NOT invent. Business data (JSON): '+_aiChatCtx()+(hist?'\n\nRecent chat:\n'+hist:'')+'\n\nSiva\'s question: '+q;
+    try{
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[{type:'text',text:prompt}]})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n').trim()||'—';
+      if(bub)bub.innerHTML=_aiMd(text);
+      _aiChatHist.push({q,a:text});
+      if($('aiChatSpk')&&$('aiChatSpk').dataset.on==='1'&&window.speechSynthesis){try{const u=new SpeechSynthesisUtterance(text.replace(/[*#•]/g,''));u.lang='ta-IN';speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
+    }catch(e){if(bub)bub.innerHTML='<span style="color:#b00">⚠️ '+esc(e.message)+'</span>';}
+    _aiChatBusy=false;
+  }
+  function _aiChatVoice(){
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){alert('இந்த browser-ல voice support இல்ல bro. Chrome/Edge-ல try பண்ணு.');return;}
+    const mic=$('aiChatMic');const r=new SR();r.lang='ta-IN';r.interimResults=false;r.maxAlternatives=1;
+    if(mic)mic.textContent='🔴';
+    r.onresult=e=>{const t=e.results[0][0].transcript;const inp=$('aiChatIn');if(inp){inp.value=(inp.value?inp.value+' ':'')+t;inp.focus();}};
+    r.onerror=()=>{};r.onend=()=>{if(mic)mic.textContent='🎤';};
+    try{r.start();}catch(e){}
+  }
+  function _initAIChat(){
+    if(document.getElementById('aiChatFab'))return;
+    const c=document.createElement('div');c.innerHTML=`
+      <button id="aiChatFab" title="AI-கிட்ட கேளு" style="position:fixed;right:16px;bottom:16px;z-index:9998;width:56px;height:56px;border-radius:50%;border:0;background:#5a3fb0;color:#fff;font-size:24px;box-shadow:0 6px 18px rgba(90,63,176,.45);cursor:pointer">💬</button>
+      <div id="aiChatPanel" style="position:fixed;right:16px;bottom:82px;z-index:9998;width:min(370px,92vw);height:min(520px,72vh);background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);display:none;flex-direction:column;overflow:hidden;border:1px solid #e6ddfa">
+        <div style="background:#5a3fb0;color:#fff;padding:11px 14px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font-weight:800;font-size:13.5px">🤖 NGRD AI — கேளு</div>
+          <div style="display:flex;gap:8px;align-items:center"><span id="aiChatSpk" data-on="0" title="AI பேசணுமா" style="cursor:pointer;font-size:15px;opacity:.6">🔊</span><span id="aiChatClose" style="cursor:pointer;font-size:18px">✕</span></div>
+        </div>
+        <div id="aiChatBody" style="flex:1;overflow-y:auto;padding:12px;background:#faf9ff"></div>
+        <div style="padding:9px;border-top:1px solid #eee;display:flex;gap:6px;align-items:center;background:#fff">
+          <button id="aiChatMic" title="பேசு" style="border:0;background:#f1eefb;border-radius:50%;width:38px;height:38px;font-size:17px;cursor:pointer;flex:0 0 auto">🎤</button>
+          <input id="aiChatIn" placeholder="கேள்வி type பண்ணு / பேசு..." autocomplete="off" style="flex:1;border:1.5px solid #ddd;border-radius:20px;padding:9px 13px;font-size:13px;font-family:inherit">
+          <button id="aiChatSendB" style="border:0;background:#5a3fb0;color:#fff;border-radius:50%;width:38px;height:38px;font-size:16px;cursor:pointer;flex:0 0 auto">➤</button>
+        </div>
+      </div>`;
+    document.body.appendChild(c);
+    const panel=$('aiChatPanel');
+    $('aiChatFab').onclick=()=>{const open=panel.style.display==='flex';panel.style.display=open?'none':'flex';if(!open&&!_aiChatHist.length)_aiChatAdd('ai','வணக்கம் Siva bro! 🙏 உங்க orders பத்தி எதுவும் கேளுங்க — "Boossa-ல எத்தனை pending?", "எந்த order urgent?", "இன்னைக்கி என்ன பண்ணணும்?" மாதிரி. Type பண்ணுங்க illa 🎤 பேசுங்க.');};
+    $('aiChatClose').onclick=()=>{panel.style.display='none';};
+    $('aiChatSendB').onclick=_aiChatSend;
+    $('aiChatMic').onclick=_aiChatVoice;
+    $('aiChatIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_aiChatSend();}});
+    $('aiChatSpk').onclick=()=>{const s=$('aiChatSpk');s.dataset.on=s.dataset.on==='1'?'0':'1';s.style.opacity=s.dataset.on==='1'?'1':'.6';};
+  }
   function renderDash(){
     const dw=$('dashContent');
     _renderCustChips();_backupNudge();
@@ -3355,7 +3425,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
         else if(t==='camp')gotoList({t:'camp',v});
         else gotoList({t});});});
   }
-  loadOrders().then(()=>{_loadEgpReg();_loadCommAdj();renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();_wireEgpSync();});
+  loadOrders().then(()=>{_loadEgpReg();_loadCommAdj();renderDash();_loadSuppliers();_wireDashSearch();_wireBackup();_wireEgpSync();_initAIChat();});
   function _wireEgpSync(){
     const b=$('egpSyncBtn');if(!b)return;
     b.onclick=async()=>{
