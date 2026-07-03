@@ -3273,6 +3273,18 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
 • Commission: agents Apo (usually 10%) & Clark (usually 5%); eGP orders get separate lower rates.
 • DATA: stored in Firebase cloud (auto-synced). Backup/restore in Settings. The system does NOT track who uploaded files or a user activity/audit log — it has no upload-log feature.
 • Companies/shops: NGRD Motors and Puspha Motors (Siva owns both). Navy camps: Welisara(WNA), Trincomalee(ENA), Boossa/Galle(SNA), Jaffna(NNA), Puttalam(NWC), Pothuvil/Panama(SEC), Madawachchiya(NCC).`;
+  function _speak(text){
+    if(!window.speechSynthesis)return;
+    const say=()=>{
+      const vs=speechSynthesis.getVoices()||[];
+      const ta=vs.find(v=>/^ta(-|_|$)/i.test(v.lang))||vs.find(v=>/tamil/i.test(v.name))||vs.find(v=>/^(hi|en-IN)/i.test(v.lang));
+      const u=new SpeechSynthesisUtterance(text.replace(/[*#•➤]/g,' '));
+      u.lang=(ta&&ta.lang)||'ta-IN';if(ta)u.voice=ta;u.rate=.98;u.pitch=1;
+      speechSynthesis.cancel();speechSynthesis.speak(u);
+    };
+    if((speechSynthesis.getVoices()||[]).length)say();
+    else{speechSynthesis.onvoiceschanged=say;setTimeout(say,250);}
+  }
   let _aiChatHist=[],_aiChatBusy=false;
   function _aiChatCtx(){
     const showVal=(typeof can!=='function')||can('value');
@@ -3304,7 +3316,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n').trim()||'—';
       if(bub)bub.innerHTML=_aiMd(text);
       _aiChatHist.push({q,a:text});
-      if($('aiChatSpk')&&$('aiChatSpk').dataset.on==='1'&&window.speechSynthesis){try{const u=new SpeechSynthesisUtterance(text.replace(/[*#•]/g,''));u.lang='ta-IN';speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
+      if($('aiChatSpk')&&$('aiChatSpk').dataset.on==='1')_speak(text);
     }catch(e){if(bub)bub.innerHTML='<span style="color:#b00">⚠️ '+esc(e.message)+'</span>';}
     _aiChatBusy=false;
   }
