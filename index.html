@@ -3257,6 +3257,22 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     }catch(e){out.innerHTML='<div class="err">⚠️ '+esc(e.message)+' — internet பாரு, திரும்ப try</div>';}
   }
   // ===== 💬 System AI Assistant (chat — type + voice) =====
+  const _SYS_KB=`NGRD ORDER SYSTEM — full feature reference (for the assistant to explain how the system works):
+• PURPOSE: Siva's app to manage Sri Lanka Navy spare-parts orders end to end — from PO to payment, plus profit tracking.
+• TABS (top nav): Dashboard, புது Order (New Order), Purchasing, Saved, வேலை (Tasks/Work), Report, Settle, Users.
+• புது Order: Add a Navy PO 3 ways — (1) File upload (PDF/image), (2) Paste text/image (Ctrl+V, multi-page), (3) 📷 Camera photo (multi-page). Then "Extract (AI)" auto-reads Order No, File No, NAHA, Civil No, Model, items, prices. AI extract is a DRAFT — staff must verify item names against the paper PO before sourcing.
+• Verify: On an order's detail there is a ⚠️ verify strip with a value cross-check (item totals vs order value). Press "✅ Verify ஆச்சு" after checking. Green = verified.
+• Saved: All saved orders. Filters — 🏕️ Camp, 🏢 Company, 🚗 Vehicle (type to search), 📋 Status (Pending/Invoiced/Paid). A total line shows count/value/pending-invoiced-paid. A camp-wise pending strip on top (click a camp → filter). Each card shows vehicle + NAHA.
+• வேலை (Tasks): Staff work. Admin assigns an order to a staff (👷 Assign). Staff move each order through 4 stages: 🔵 New → 🟡 Sourcing → 🟢 Ready → ✅ Supplied (auto when bill entered). Admin sees per-staff counts and who is late.
+• Purchasing tab: Order-wise purchase entry. Search an order → its items load. For each item: Supplier (Busy-style autocomplete, type name or alias like 227), Cost, Part No, Brand, Country. Group-level Supplier/Invoice No/Date with "apply to all". Items marked SHOP/STORE = own stock (excluded from purchase). "📥 Busy Purchase Excel" groups by supplier → one purchase voucher per supplier. Staff cannot see Sell price or profit (only owner/admin).
+• Report tab sub-tabs: Report, Pending, Day-wise, Calendar, Outstanding, Commission, Summary, Sales Register, Tender, 🔗 Busy, ↩️ Return.
+• 🔗 Busy: (a) Item Match — links PO item names to Busy master items (learns over time). (b) Busy Sales Excel Export — order → auto items → Excel for Busy import. (c) Supplier Purchase list. (d) Busy import mark (records who/when imported). (e) Settings (Series, MC, Party names).
+• BUSY IMPORT RULE: Every export Excel has a header row → in Busy always use "Starting Row = 2". Format = IM ORDERS (A-K columns). Uncheck "Create New Master". Voucher type = Sales Order/Sales for sales, Purchase for purchase.
+• ↩️ Return: If some items of an invoiced order are wrong/returned, mark them here. This is ORDER-SYSTEM ONLY (Busy invoice stays same — you re-supply correct items under the same invoice). Mark returned → later press "✅ Replaced".
+• Dashboard: order counts, total profit, payment-pending, LD risk; ⚠️ Attention board (🚚 supply-due, 🧾 bill-due); status breakdown; camp-wise & company-wise; 🤖 AI Staff (daily work plan) and 📈 Business Advisor (growth strategy).
+• Commission: agents Apo (usually 10%) & Clark (usually 5%); eGP orders get separate lower rates.
+• DATA: stored in Firebase cloud (auto-synced). Backup/restore in Settings. The system does NOT track who uploaded files or a user activity/audit log — it has no upload-log feature.
+• Companies/shops: NGRD Motors and Puspha Motors (Siva owns both). Navy camps: Welisara(WNA), Trincomalee(ENA), Boossa/Galle(SNA), Jaffna(NNA), Puttalam(NWC), Pothuvil/Panama(SEC), Madawachchiya(NCC).`;
   let _aiChatHist=[],_aiChatBusy=false;
   function _aiChatCtx(){
     const showVal=(typeof can!=='function')||can('value');
@@ -3280,7 +3296,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     inp.value='';_aiChatAdd('me',esc(q));_aiChatBusy=true;
     const bub=_aiChatAdd('ai','<span class="spin"></span> யோசிக்கிறேன்…');
     const hist=_aiChatHist.slice(-5).map(h=>'Siva: '+h.q+'\nAI: '+h.a).join('\n');
-    const prompt='You are "NGRD AI", Siva\'s friendly assistant INSIDE his order-management system. Siva owns NGRD Motors & Puspha Motors (shops supplying vehicle spare parts to Sri Lanka Navy). Answer his question using ONLY the business data below. Reply in TAMIL (Tanglish, short, warm, "bro" style). If the data does not contain the answer, say so honestly — do NOT invent. Business data (JSON): '+_aiChatCtx()+(hist?'\n\nRecent chat:\n'+hist:'')+'\n\nSiva\'s question: '+q;
+    const prompt='You are "NGRD AI", Siva\'s smart, loyal right-hand assistant INSIDE his NGRD Order System (admin assistant). Siva owns NGRD Motors & Puspha Motors (shops supplying vehicle spare parts to Sri Lanka Navy). You help him with EVERYTHING: answering questions about his orders/business data AND explaining how to use any part of the system (how-to, where a feature is, what a button does). Be warm, sharp, and helpful like a trusted senior partner "bro". Reply in TAMIL (Tanglish, short, clear). For business questions use ONLY the DATA. For "how does the system work / how to do X" use the SYSTEM REFERENCE. If neither has the answer, say so honestly — never invent.\n\n=== SYSTEM REFERENCE ===\n'+_SYS_KB+'\n\n=== BUSINESS DATA (JSON) ===\n'+_aiChatCtx()+(hist?'\n\n=== RECENT CHAT ===\n'+hist:'')+'\n\nSiva\'s question: '+q;
     try{
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[{type:'text',text:prompt}]})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
@@ -3302,6 +3318,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     try{r.start();}catch(e){}
   }
   function _initAIChat(){
+    if(!(CURRENT&&CURRENT.role==='admin'))return; // admin only
     if(document.getElementById('aiChatFab'))return;
     const c=document.createElement('div');c.innerHTML=`
       <button id="aiChatFab" title="AI-கிட்ட கேளு" style="position:fixed;right:16px;bottom:16px;z-index:9998;width:56px;height:56px;border-radius:50%;border:0;background:#5a3fb0;color:#fff;font-size:24px;box-shadow:0 6px 18px rgba(90,63,176,.45);cursor:pointer">💬</button>
