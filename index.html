@@ -902,6 +902,17 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     ov.querySelector('.mclose').addEventListener('click',()=>ov.remove());
     document.body.appendChild(ov);
   }
+  function showConfirm(title,bodyHtml){
+    return new Promise(res=>{
+      const ov=document.createElement('div');ov.className='modal';
+      ov.innerHTML='<div class="modalbox"><h3>'+title+'</h3><div style="font-size:13px;color:#333;line-height:1.7">'+bodyHtml+'</div><div style="display:flex;gap:8px;margin-top:16px"><button class="btn gold mok" style="flex:1;margin:0">✅ சரி</button><button class="btn mno" style="flex:1;margin:0;background:#8a8f98">✖ வேண்டாம்</button></div></div>';
+      let done=false;const fin=v=>{if(done)return;done=true;ov.remove();res(v);};
+      ov.addEventListener('click',e=>{if(e.target===ov)fin(false);});
+      ov.querySelector('.mok').addEventListener('click',()=>fin(true));
+      ov.querySelector('.mno').addEventListener('click',()=>fin(false));
+      document.body.appendChild(ov);
+    });
+  }
   // ---- end Parts Master ----
 
   // ---- Supplier Master (dropdown) ----
@@ -1126,6 +1137,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="sec">📝 Order Info — typo / date திருத்த</div>
       <div class="grid2" style="padding:0 13px 4px">
         <div class="fld full"><label>Order No</label><input id="e_orderNo" value="${v(o.order_no)}"></div>
+        <div class="fld full"><label>🏢 Company (letterhead · Busy series · bank)</label><select id="e_company"><option value="NGRD Motors" ${_companyOf(o)!=='Puspha Motors'?'selected':''}>NGRD Motors</option><option value="Puspha Motors" ${_companyOf(o)==='Puspha Motors'?'selected':''}>Puspha Motors</option></select></div>
         <div class="fld"><label>Vehicle / NAHA No</label><input id="e_naha" value="${v(o.naha_no)}"></div>
         <div class="fld"><label>Civil No</label><input id="e_civil" value="${v(o.civil_no)}"></div>
         <div class="fld full"><label>Model / Vehicle</label><input id="e_model" value="${v(o.model)}"></div>
@@ -1363,13 +1375,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const _eg=box.querySelector('#e_egp');if(_eg)o.egp=_eg.checked;
       const _egr=box.querySelector('#e_egpRef');if(_egr)o.egp_ref=_egr.value.trim();
       const _egd=box.querySelector('#e_egpDate');if(_egd)o.egp_date=_egd.value||'';
+      const _co=box.querySelector('#e_company');if(_co)o.company=_co.value;
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail: '+e.message);return;}
       renderList();
     });
   }
 
   let _listFilter=null;
-  function _companyOf(o){const sup=(o.supplier||'').toLowerCase();return sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';}
+  function _companyOf(o){if(o&&o.company){const c=o.company.toLowerCase();if(c.indexOf('puspha')>=0)return 'Puspha Motors';if(c.indexOf('ngrd')>=0)return 'NGRD Motors';}const sup=(o.supplier||'').toLowerCase();return sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';}
   var _CAMPS=[
     {code:'WNA',name:'Welisara (Western)'},
     {code:'NCC',name:'Madawachchiya (North Central)'},
@@ -2085,9 +2098,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     </div>`;
     const _naBtn=out.querySelector('#naLetterBtn');if(_naBtn)_naBtn.onclick=async()=>{const rsn=(out.querySelector('#naReason').value||'').trim();o.na_reason=rsn;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_genNALetter(o,rsn);};
     const save=async(msg)=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail');return;}if(msg)showInfoModal('Saved',msg);_billRenderOrder(o,head,'','');};
-    out.querySelectorAll('[data-bilna]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilna];if(!it)return;if(!confirm('"'+it.description+'" — market-ல இல்ல, N/A ஆ mark பண்ணட்டா? (Navy-க்கு letter கொடுத்திருக்கணும்)'))return;it.na=true;it.na_date=_todayKey?_todayKey():new Date().toISOString().slice(0,10);it.na_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone?true:o.supplied;o.partial=!allDone;await save('🚫 N/A mark ஆச்சு.');});
+    out.querySelectorAll('[data-bilna]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilna];if(!it)return;if(!await showConfirm('🚫 N/A mark','<b>'+esc(it.description)+'</b><br>market-ல இல்ல — N/A ஆ mark பண்ணட்டா?<br><span style="color:#999;font-size:11px">(Navy-க்கு letter கொடுத்திருக்கணும். தப்பானா ↺ போட்டு மாத்தலாம்.)</span>'))return;it.na=true;it.na_date=_todayKey?_todayKey():new Date().toISOString().slice(0,10);it.na_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone?true:o.supplied;o.partial=!allDone;await save('🚫 N/A mark ஆச்சு.');});
     out.querySelectorAll('[data-bilundo]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilundo];if(!it)return;delete it.na;delete it.na_date;delete it.na_by;o.partial=!its.every(x=>x.bill||x.na);await save('↺ N/A மாற்றிட்டேன்.');});
-    out.querySelectorAll('[data-bilunbill]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilunbill];if(!it)return;if(!confirm('"'+it.description+'" — bill-ல இருந்து எடுக்கட்டா? (அப்புறம் N/A ஆ mark பண்ணலாம்)'))return;delete it.bill;delete it.bill_date;it.supplied=false;const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone;o.partial=!allDone;await save('↺ Bill-ல இருந்து எடுத்தாச்சு. இப்போ 🚫 N/A ஆக்கலாம்.');});
+    out.querySelectorAll('[data-bilunbill]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilunbill];if(!it)return;if(!await showConfirm('↺ Un-bill','<b>'+esc(it.description)+'</b><br>bill-ல இருந்து எடுக்கட்டா?<br><span style="color:#999;font-size:11px">(அப்புறம் 🚫 N/A ஆ mark பண்ணலாம்)</span>'))return;delete it.bill;delete it.bill_date;it.supplied=false;const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone;o.partial=!allDone;await save('↺ Bill-ல இருந்து எடுத்தாச்சு. இப்போ 🚫 N/A ஆக்கலாம்.');});
     const _ba=$('billAssign');if(_ba)_ba.onclick=async()=>{
       const bn=($('billNoIn').value||'').trim();const bd=$('billDtIn').value||'';
       if(!bn){alert('Bill No போடு bro');return;}
