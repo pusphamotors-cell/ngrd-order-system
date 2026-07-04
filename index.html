@@ -1975,61 +1975,71 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const items=(o.items||[]).filter(it=>it.description);
     const sell=items.reduce((a,it)=>a+(Number(it.total)||0),0);
     const cost=items.reduce((a,it)=>a+(Number(it.cost)||0)*(Number(it.qty)||1),0);
-    const sup0=(items.find(it=>it.supplier)||{}).supplier||'';
-    const inv0=(items.find(it=>it.inv_no)||{}).inv_no||'';
-    const invd0=(items.find(it=>it.inv_date)||{}).inv_date||'';
     const nolink=items.filter(it=>!_busyItemLink(it.description,_busyGuessGroup(o.model))).length;
-    const sups=Object.values(_supCache||{}).sort();
     const done=o.busy_purchase&&o.busy_purchase.done;
+    const isStock=s=>/^(shop|store|stock)$/i.test((s||'').trim());
+    const groups={};
+    items.forEach(it=>{const s=(it.supplier||'').trim();if(!s||isStock(s))return;const key=s.toLowerCase()+'|'+(it.inv_no||'').trim().toLowerCase();(groups[key]=groups[key]||{sup:s,inv:it.inv_no||'',dt:it.inv_date||'',items:[]}).items.push(it);});
+    const gList=Object.values(groups);
+    const noBill=items.filter(it=>{const s=(it.supplier||'').trim();return s&&!isStock(s)&&!(it.inv_no||'').trim();}).length;
+    const billsSummary=gList.length?`<div class="dpanel" style="padding:8px 11px;margin-bottom:8px;font-size:11.5px"><b>🧾 இந்த order-la ${gList.length} bill:</b>${gList.map(g=>`<div style="margin-top:4px;padding:4px 7px;background:#f3f6fb;border-radius:6px">• <b>${esc(g.sup)}</b> · Bill ${esc(g.inv||'⚠️ இல்ல')}${g.dt?' · '+esc(g.dt):''} · ${g.items.length} item · Rs ${fmt(g.items.reduce((a,it)=>a+(Number(it.cost)||0)*(Number(it.qty)||1),0))}</div>`).join('')}${noBill?`<div style="margin-top:4px;color:var(--amber);font-size:11px">⚠️ ${noBill} item-ku bill no இல்ல — export-ல auto ref போடும்.</div>`:''}</div>`:'';
     $('purBody').innerHTML=`
       <datalist id="purSupDL">${_supOptions()}</datalist>
       <div style="font-size:11px;color:var(--navy);background:#f3f6fb;border-radius:8px;padding:6px 9px;margin-bottom:8px">🚗 <b>${esc(o.model||'—')}</b> · ${esc(_campOf(o))} · ${items.length} item${nolink?' · <span style="color:var(--amber)">'+nolink+' Busy link இல்ல (🔗 Match-ல link)</span>':''}</div>
       <div class="dpanel" style="padding:9px 11px;margin-bottom:8px">
-        <div class="grid2"><div class="fld"><label>Supplier (இந்த order-க்கு)</label><input id="purSup" value="${esc(sup0)}" placeholder="supplier (பேர்/alias type)"></div><div class="fld"><label>Invoice No</label><input id="purInv" value="${esc(inv0)}" placeholder="supplier bill no"></div></div>
-        <div class="grid2"><div class="fld"><label>Invoice Date</label><input id="purInvD" type="date" value="${esc(invd0)}"></div><div class="fld" style="display:flex;align-items:flex-end;gap:6px"><button class="btn" id="purApply" style="margin:0;background:#0b2a4a;flex:1">⬇️ எல்லா item-க்கும் apply</button><button class="btn" id="purClearAll" style="margin:0;background:#8a1c1c;width:auto;padding:8px 12px">🧹 clear</button></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">✅ கீழ items <b>tick</b> பண்ணு → supplier + bill + date போடு → <b>"tick பண்ணதுக்கு apply"</b>. வேற bill-ku வேற items tick பண்ணி repeat பண்ணு. (ஒரு item தனியா சரி பண்ண row-லயே type பண்ணலாம்.)</div>
+        <div class="grid2"><div class="fld"><label>Supplier</label><input id="purSup" list="purSupDL" placeholder="supplier (பேர்/alias)"></div><div class="fld"><label>Bill / Invoice No</label><input id="purInv" placeholder="supplier bill no"></div></div>
+        <div class="grid2"><div class="fld"><label>Bill Date</label><input id="purInvD" type="date"></div><div class="fld" style="display:flex;align-items:flex-end;gap:6px"><button class="btn" id="purApply" style="margin:0;background:#0b2a4a;flex:1">⬇️ Tick பண்ணதுக்கு apply</button><button class="btn" id="purClearSel" style="margin:0;background:#8a8f98;width:auto;padding:8px 12px">tick clear</button></div></div>
       </div>
-      <div class="tablewrap" style="background:#fff;border-radius:10px"><table><thead><tr><th>Item</th><th class="num">Qty</th><th class="num puSell">Sell</th><th>Supplier / Shop</th><th class="num">Cost</th><th>Part No</th><th>Brand</th><th>Country</th></tr></thead><tbody>
-      ${items.map((it,ix)=>`<tr><td style="font-size:11.5px;color:#14213a;font-weight:600;background:#fff">${esc(it.description)}</td><td class="num" style="background:#fff">${esc(it.qty)}</td><td class="num puSell" style="background:#fff;color:#1a7f4b;font-weight:700">${fmt(it.total)}</td><td style="background:#fff"><div style="display:flex;align-items:center;gap:2px"><input data-pusup="${ix}" value="${esc(it.supplier||'')}" placeholder="supplier / SHOP" style="width:112px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px">${it.supplier?`<span data-puclr="${ix}" title="clear" style="cursor:pointer;color:var(--red);font-weight:800;font-size:14px;padding:0 3px">✕</span>`:''}</div></td><td class="num" style="background:#fff"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:62px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="background:#fff"><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:84px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:74px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puctry="${ix}" value="${esc(it.country||'')}" placeholder="country" style="width:72px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
+      ${billsSummary}
+      <div class="tablewrap" style="background:#fff;border-radius:10px"><table><thead><tr><th style="width:24px"><input type="checkbox" id="purSelAll"></th><th>Item</th><th class="num">Qty</th><th class="num puSell">Sell</th><th>Supplier / Shop</th><th class="num">Cost</th><th>Bill No</th><th>Date</th><th>Part No</th><th>Brand</th><th>Country</th></tr></thead><tbody>
+      ${items.map((it,ix)=>`<tr><td style="text-align:center;background:#fff"><input type="checkbox" class="purSel" data-pusel="${ix}"></td><td style="font-size:11.5px;color:#14213a;font-weight:600;background:#fff">${esc(it.description)}</td><td class="num" style="background:#fff">${esc(it.qty)}</td><td class="num puSell" style="background:#fff;color:#1a7f4b;font-weight:700">${fmt(it.total)}</td><td style="background:#fff"><div style="display:flex;align-items:center;gap:2px"><input data-pusup="${ix}" list="purSupDL" value="${esc(it.supplier||'')}" placeholder="supplier / SHOP" style="width:102px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px">${it.supplier?`<span data-puclr="${ix}" title="clear" style="cursor:pointer;color:var(--red);font-weight:800;font-size:14px;padding:0 3px">✕</span>`:''}</div></td><td class="num" style="background:#fff"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:56px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="background:#fff"><input data-puinv="${ix}" value="${esc(it.inv_no||'')}" placeholder="bill no" style="width:78px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puinvd="${ix}" type="date" value="${esc(it.inv_date||'')}" style="font-size:10px;padding:3px 3px;border:1px solid var(--line);border-radius:6px;width:118px"></td><td style="background:#fff"><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:76px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:68px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puctry="${ix}" value="${esc(it.country||'')}" placeholder="country" style="width:66px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
       </tbody></table></div>
       <div class="dpanel" style="padding:8px 11px;margin-top:8px;font-size:12px;font-weight:700">வாங்கல் Rs ${fmt(cost)}<span class="puProfit"> · விற்பனை Rs ${fmt(sell)}${cost>0?` · <span style="color:${(sell-cost)>=0?'var(--green)':'var(--red)'}">லாபம் Rs ${fmt(sell-cost)}</span>`:' · <span style="color:var(--muted)">லாபம் — (cost போடு)</span>'}</span></div>
-      <button class="btn gold" id="purExcel" style="margin-top:8px">📥 Busy Purchase Excel</button>
+      <button class="btn gold" id="purExcel" style="margin-top:8px">📥 Busy Purchase Excel (bill-வாரியா split)</button>
       <div style="margin-top:8px;font-size:11.5px;border-top:1px dashed var(--line);padding-top:8px">🧾 Busy import: ${done?('✅ <b>'+esc(o.busy_purchase.by)+'</b> · '+new Date(o.busy_purchase.at).toLocaleDateString('en-GB')):'⬜ இல்ல'} ${done?`<button class="copyprev" id="purUnmark" style="margin:0;padding:2px 7px;width:auto">↺ மாற்று</button>`:`<button class="btn" id="purMark" style="margin:0;width:auto;padding:5px 12px;background:var(--green)">✅ Purchase import ஆச்சு</button>`}</div>`;
     const save=async()=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}};
+    const selIdx=()=>[...$('purBody').querySelectorAll('.purSel')].filter(c=>c.checked).map(c=>+c.dataset.pusel);
     $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=items[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=items[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}await save();_purRender();}));
-    _supAC($('purSup'),null);
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=items[+inp.dataset.pusup];it.supplier=name;await save();_purRender();}));
-    const pf=(sel,key)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=items[+inp.dataset[sel.replace('data-','')]];it[key]=inp.value.trim();await save();}));
+    _supAC($('purSup'),null);
+    const pf=(sel,key,re)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=items[+inp.dataset[sel.replace('data-','')]];it[key]=(inp.value||'').trim();await save();if(re)_purRender();}));
     pf('data-pupart','partno');pf('data-pubrand','brand');pf('data-puctry','country');
+    pf('data-puinv','inv_no',true);pf('data-puinvd','inv_date',true);
+    const selAll=$('purSelAll');if(selAll)selAll.onclick=()=>{$('purBody').querySelectorAll('.purSel').forEach(c=>c.checked=selAll.checked);};
     $('purApply').onclick=async()=>{const s=$('purSup').value.trim(),iv=$('purInv').value.trim(),dt=$('purInvD').value;
-      items.forEach(it=>{if(s&&!(it.supplier||'').trim())it.supplier=s;if(iv)it.inv_no=iv;if(dt)it.inv_date=dt;});
-      if(s){const k=_supKey(s);if(k)_supCache[k]=s;}await save();_purRender();showInfoModal('Saved','✅ Supplier (காலி item-க்கு) + Invoice apply ஆச்சு. வேற supplier வேணும்னா அந்த item-ல தனியா மாத்து.');};
+      if(!s&&!iv&&!dt){alert('Supplier / Bill / Date எதாவது போடு bro');return;}
+      let tgt=selIdx();const all=tgt.length===0;if(all)tgt=items.map((_,i)=>i);
+      tgt.forEach(i=>{const it=items[i];if(s)it.supplier=s;if(iv)it.inv_no=iv;if(dt)it.inv_date=dt;});
+      if(s){const k=_supKey(s);if(k)_supCache[k]=s;}await save();_purRender();
+      showInfoModal('Saved','✅ '+tgt.length+' item-ku apply ஆச்சு'+(all?' (எல்லாத்துக்கும் — tick பண்ணல)':' (tick பண்ணதுக்கு மட்டும்)')+'. வேற bill-ku வேற items tick பண்ணி repeat பண்ணு.');};
+    const pcs=$('purClearSel');if(pcs)pcs.onclick=()=>{$('purBody').querySelectorAll('.purSel').forEach(c=>c.checked=false);if(selAll)selAll.checked=false;};
     $('purBody').querySelectorAll('[data-puclr]').forEach(b=>b.addEventListener('click',async()=>{const it=items[+b.dataset.puclr];it.supplier='';await save();_purRender();}));
-    const pca=$('purClearAll');if(pca)pca.onclick=async()=>{if(!confirm('இந்த order-ஓட எல்லா item-ஓட supplier + invoice-ஐ clear பண்ணட்டா?'))return;items.forEach(it=>{it.supplier='';it.inv_no='';it.inv_date='';});$('purSup').value='';$('purInv').value='';$('purInvD').value='';await save();_purRender();};
     $('purExcel').onclick=()=>_genOrderPurchase(o,items);
     const pm=$('purMark');if(pm)pm.onclick=async()=>{o.busy_purchase={done:true,by:(CURRENT&&(CURRENT.name||CURRENT.u))||'?',at:Date.now()};await save();_purRender();};
-    const pu=$('purUnmark');if(pu)pu.onclick=async()=>{if(confirm('Purchase mark மாற்றட்டா?')){o.busy_purchase=null;await save();_purRender();}};
+    const pu=$('purUnmark');if(pu)pu.onclick=async()=>{if(await showConfirm('↺ மாற்று','Purchase import mark மாற்றட்டா?')){o.busy_purchase=null;await save();_purRender();}};
   }
   function _genOrderPurchase(o,items){
     if(!window.XLSX){alert('Excel library load ஆகல');return;}
-    const bySup={};items.forEach(it=>{const s=(it.supplier||'').trim();if(!s||/^(shop|store|stock)$/i.test(s))return;(bySup[s]=bySup[s]||[]).push(it);});
-    const sups=Object.keys(bySup);
-    if(!sups.length){alert('Supplier போட்ட item இல்ல.\n(SHOP/STORE stock item purchase-ல வராது — அவை உங்க own stock.)');return;}
+    const byBill={};items.forEach(it=>{const s=(it.supplier||'').trim();if(!s||/^(shop|store|stock)$/i.test(s))return;const key=s+' ||| '+(it.inv_no||'').trim();(byBill[key]=byBill[key]||{sup:s,inv:(it.inv_no||'').trim(),dt:it.inv_date||'',rows:[]}).rows.push(it);});
+    const bills=Object.values(byBill);
+    if(!bills.length){alert('Supplier போட்ட item இல்ல.\n(SHOP/STORE stock item purchase-ல வராது — அவை உங்க own stock.)');return;}
     const today=new Date().toLocaleDateString('en-GB').replace(/\//g,'-');
     const series=(_companyOf(o)==='Puspha Motors')?(_busyCfg.seriesP||'PUSPHA'):(_busyCfg.seriesN||'NGRD');
     const aoa=[['VCH_SERIES','VCH/BILL_DATE','VCH/BILL_NO','SALE/PURC_TYPE','PARTY_NAME','ITEM_MC_NAME','ITEM_NAME','QUANTITY','UNIT','PRICE','AMOUNT']];
     const missing=[];
-    sups.forEach(sup=>{const rows=bySup[sup];
-      const invNo=(rows.find(r=>r.inv_no)||{}).inv_no||('PUR-'+today.replace(/-/g,'')+'-'+((sup.replace(/[^A-Za-z0-9]/g,'').slice(0,6).toUpperCase())||'X'));
-      const invDt=(()=>{const d=(rows.find(r=>r.inv_date)||{}).inv_date;const p=parseDate(d);return p?p.toLocaleDateString('en-GB').replace(/\//g,'-'):today;})();
+    bills.forEach(g=>{const rows=g.rows;
+      const invNo=g.inv||('PUR-'+today.replace(/-/g,'')+'-'+((g.sup.replace(/[^A-Za-z0-9]/g,'').slice(0,6).toUpperCase())||'X'));
+      const invDt=(()=>{const p=parseDate(g.dt);return p?p.toLocaleDateString('en-GB').replace(/\//g,'-'):today;})();
       rows.forEach((it,ix)=>{const lk=_busyItemLink(it.description,_busyGuessGroup(o.model));if(!lk)missing.push(it.description);
         const cost=Number(it.cost)||0,qty=Number(it.qty)||1;
-        const row=ix===0?[series,invDt,invNo,_busyCfg.purcType,sup]:['','','','',''];
+        const row=ix===0?[series,invDt,invNo,_busyCfg.purcType,g.sup]:['','','','',''];
         row.push(_busyCfg.mc,lk?lk.name:('?? '+it.description),qty,(lk?lk.unit:(it.unit||'NOS')),cost,cost*qty);aoa.push(row);});});
     if(missing.length&&!confirm('⚠️ '+missing.length+' item Busy link இல்ல ("?? name"). இப்பவே export பண்ணட்டா?'))return;
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Purchase');
     XLSX.writeFile(wb,'Busy_Purchase_'+(o.order_no||'order').replace(/[^A-Za-z0-9]/g,'_')+'_'+today+'.xlsx');
-    showInfoModal('Export','✅ '+sups.length+' supplier · '+(aoa.length-1)+' item Purchase Excel. (SHOP/STORE stock தவிர்க்கப்பட்டது.)');
+    showInfoModal('Export','✅ '+bills.length+' bill (supplier+invoice வாரியா) · '+(aoa.length-1)+' item Purchase Excel. (SHOP/STORE stock தவிர்க்கப்பட்டது.)');
   }
   // ===== 🧾 Bill Entry — invoice photo → auto bill no/date → match order → mark invoiced =====
   let _billImgs=[];
