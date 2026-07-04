@@ -2062,6 +2062,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     out.innerHTML=head+`<div class="dpanel" style="padding:9px 11px">
       <div style="font-weight:800;color:var(--navy)">✅ Order match: ${esc(o.order_no)}</div>
       <div style="font-size:11px;color:var(--muted);margin:2px 0 6px">${esc(_campOf(o))} · <b>${billed}/${total} supplied</b>${na?' · 🚫 '+na+' N/A':''}${pending>0?' · ⏳ '+pending+' pending':''}</div>
+      <div class="puProfit" style="font-size:11px;background:#eef4ff;border-radius:7px;padding:5px 9px;margin-bottom:6px">💵 Order Rs ${fmt(o.sell)} · <b style="color:#1a7f4b">Bill(payment) Rs ${fmt(_billedAmount(o))}</b>${na?' · 🚫 N/A Rs '+fmt(_naAmount(o)):''}</div>
       ${done?'<div style="color:var(--green);font-weight:700;font-size:12px">🎉 Order முடிஞ்சது (supplied + N/A). Pending இல்ல.</div>':`
       <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Bill-ல வர்ற items-ஐ tick வெச்சு Bill போடு · market-ல இல்லாததை <b style="color:#b00">🚫 N/A</b> (letter கொடுத்தது)</div>
       <div class="tablewrap"><table><thead><tr><th>✓</th><th>Item</th><th class="num">Qty</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -2111,7 +2112,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     <p>With reference to the above Purchase Order${o.model?' for vehicle '+esc(o.model)+(o.naha_no?' ('+esc(o.naha_no)+')':''):''}, we regret to inform you that the following item(s) are <b>currently not available in the market</b>, and therefore could not be supplied:</p>
     <table><thead><tr><th>No</th><th>Item Description</th><th>Qty</th></tr></thead><tbody>${naRows}</tbody></table>
     ${reason?`<p><b>Reason:</b> ${esc(reason)}</p>`:''}
-    <p>We have supplied the remaining items against the above order${bills.length?' under Invoice No. <b>'+bills.map(esc).join(', ')+'</b>':''}. We kindly request you to arrange the <b>payment for the supplied items</b> accordingly.</p>
+    <p>We have supplied the remaining items against the above order${bills.length?' under Invoice No. <b>'+bills.map(esc).join(', ')+'</b>':''}${(function(){const s=(o.items||[]).filter(it=>it.bill).reduce((a,it)=>a+(Number(it.total)||0),0);return s?' (Total: <b>Rs '+(s.toLocaleString('en-US'))+'</b>)':'';})()}. We kindly request you to arrange the <b>payment for the supplied items</b> accordingly.</p>
     <p>We apologize for any inconvenience caused and assure you of our best service at all times.</p>
     <div class="sign">Thanking you,<br>Yours faithfully,<br><b>For ${comp}</b><div class="line">Authorized Signature</div></div>
     </body></html>`;
@@ -3246,13 +3247,20 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     res.querySelectorAll('[data-wapay]').forEach(b=>b.onclick=()=>_waPayReminder(b.dataset.wapay));
     res.querySelectorAll('[data-verify]').forEach(b=>b.onclick=async()=>{const k=b.dataset.verify;const o=orders.find(x=>(x.id===k)||(x.order_no===k));if(!o)return;o.verified={by:(CURRENT&&(CURRENT.name||CURRENT.u))||'',at:Date.now()};try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderDashSearch();});
   }
+  function _billedAmount(o){
+    const its=o.items||[];
+    const anyFlag=its.some(it=>it.bill||it.na);
+    if(anyFlag){const s=its.filter(it=>it.bill).reduce((a,it)=>a+(Number(it.total)||0),0);return s||Number(o.bill_amt)||0;}
+    return Number(o.bill_amt)||Number(o.sell)||0;
+  }
+  function _naAmount(o){return (o.items||[]).filter(it=>it.na).reduce((a,it)=>a+(Number(it.total)||0),0);}
   function _waPayReminder(key){
     const o=orders.find(x=>(x.id===key)||(x.order_no===key));if(!o)return;
     const comp=_companyOf(o);
     const isP=comp==='Puspha Motors';
     const phone=isP?'0779 338 696 / 0759 515 507':'011 244 9385 / 076 688 6526';
     const days=o.bill_date?daysSince(o.bill_date):null;
-    const amt=can('value')?('Amount: Rs '+fmt(o.sell)+'\n'):'';
+    const amt=can('value')?('Amount: Rs '+fmt(_billedAmount(o))+'\n'):'';
     const msg=`🧾 ${comp}\n`+
       `Order No: ${o.order_no||''}\n`+
       (o.bill_no?`Invoice No: ${o.bill_no}\n`:'')+
