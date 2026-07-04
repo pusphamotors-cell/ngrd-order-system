@@ -1149,6 +1149,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         ${CURRENT&&CURRENT.role==='admin'?`<button class="btn" data-assign="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#5a3fb0">👷 Assign</button>`:''}
         ${can('purchase')?`<button class="btn" data-purchase="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#0b2a4a">🛒 Purchase PDF</button>`:''}
         ${can('value')?`<button class="btn" data-orderpdf="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1f6f8b">📄 Order PDF</button>`:''}
+        <button class="btn" data-sample="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#7a5c00">📋 Sample Letter</button>
         <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
         <button class="del" data-del="${esc(o.id)}" style="font-size:16px;font-weight:700">🗑</button>
       </div>
@@ -1243,6 +1244,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(asg)asg.addEventListener('click',async()=>{const users=await fbUsersGet();box.innerHTML=assignForm(o,users);wireAssign(box,o);});
     const opdf=box.querySelector('[data-orderpdf]');
     if(opdf)opdf.addEventListener('click',()=>openOrderPDF(o));
+    const sm=box.querySelector('[data-sample]');
+    if(sm)sm.addEventListener('click',()=>_sampleModal(o));
   }
 
   function purchaseForm(o){
@@ -2187,6 +2190,86 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       const allDone=its.every(it=>it.bill||it.na);o.supplied=allDone?true:(o.supplied||false);o.partial=!allDone;
       await save('✅ '+n+' item — Bill '+bn+'-ல போட்டாச்சு.'+(allDone?' Order முடிஞ்சது! 🎉':' மீதி items அப்புறம்.'));
     };
+  }
+  function _coInfo(company){const isP=company==='Puspha Motors';return{
+    name:isP?'PUSPHA MOTORS':'NGRD MOTORS',
+    addr:isP?'No. 202/19 A, Mohideen Masjid Road, Panchikawatta, Colombo 10.':'No. 202/17 B, Mohideen Masjid Road, Panchikawatta, Colombo 10.',
+    tel:isP?'Tel/Fax: 0112 449385 · Hotline: 075 9515507 / 077 9338696':'Tel: 0112 449385 · 076 6886526 / 071 5748561',
+    email:isP?'pusphamotors@gmail.com':'ngrdmotors@gmail.com'};}
+  function _sampleLetterBlock(company,camp,entries){
+    const ci=_coInfo(company);const today=new Date().toLocaleDateString('en-GB');
+    const single=entries.length===1;const o0=entries[0].o;
+    const metaRight=single?`<b>Order No:</b> ${esc(o0.order_no||'')}${o0.file_no?'<br><b>File No:</b> '+esc(o0.file_no):''}`:`<b>No. of Orders:</b> ${entries.length}`;
+    const vehLine=single?` in respect of vehicle <b>${esc(o0.model||'the noted vehicle')}${o0.naha_no?' ('+esc(o0.naha_no)+')':''}${o0.chassis_no?', Chassis No. '+esc(o0.chassis_no):''}</b>`:` in respect of the vehicles listed below`;
+    const poWord=single?'Purchase Order':'Purchase Orders';
+    const sections=entries.map((en,idx)=>{const o=en.o;
+      const rows=en.items.map((it,i)=>`<tr><td style="text-align:center;width:40px">${i+1}</td><td>${esc(it.description)}</td><td style="text-align:center;width:64px">${esc(it.qty)}</td></tr>`).join('');
+      const oh=single?'':`<div class="oh">Order ${idx+1}: ${esc(o.order_no||'')}${o.file_no?' &nbsp;·&nbsp; File No. '+esc(o.file_no):''} &nbsp;&mdash;&nbsp; ${esc(o.model||'')}${o.naha_no?' ('+esc(o.naha_no)+')':''}${o.chassis_no?', Chassis '+esc(o.chassis_no):''}</div>`;
+      return `${oh}<table><thead><tr><th>No</th><th>Item Description</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>`;}).join('');
+    return `<div class="pg">
+      <div class="hd"><h1>${ci.name}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${ci.addr} &nbsp;·&nbsp; ${ci.tel} &nbsp;·&nbsp; ${ci.email}</div></div>
+      <div class="meta"><div><b>Date:</b> ${today}</div><div style="text-align:right">${metaRight}</div></div>
+      <div class="to">The Superintendent Logistics,<br>Sri Lanka Navy${camp?' &mdash; '+esc(camp):''},</div>
+      <div class="subj">Subject: Request for Item Sample(s) for Accurate Supply${single?' &mdash; Order '+esc(o0.order_no||''):''}</div>
+      <p>Dear Sir,</p>
+      <p>We thank you for the above ${poWord}${vehLine}, and we are pleased to attend to the supply.</p>
+      <p>In the course of sourcing, we find that a few of the requested components need to be confirmed against the actual fitment of the vehicle${single?'':'s'}, as certain parts on service vehicles are, in the course of use, <b>modified or replaced</b> and may vary from the standard catalogue specification. To ensure that the <b>exact and correct part</b> is supplied &mdash; and to avoid any mismatch or delay at the point of delivery &mdash; we respectfully request that a <b>physical sample</b> of the following item(s) be made available to us for verification.</p>
+      ${sections}
+      <p>On receipt of the sample(s), we assure you of the <b>prompt supply of the correct items</b>, in keeping with our commitment to quality and dependable service to the Sri Lanka Navy.</p>
+      <p>We are grateful for your kind cooperation in this matter.</p>
+      <div class="sign">Yours faithfully,<br><b>For ${ci.name}</b><div class="line">Authorized Signature</div></div>
+    </div>`;
+  }
+  function _genSampleLetters(entries){
+    const groups={};
+    entries.forEach(en=>{const c=_companyOf(en.o),camp=_campOf(en.o),key=c+'||'+camp;(groups[key]=groups[key]||{company:c,camp:camp,list:[]}).list.push(en);});
+    const letters=Object.values(groups).map(g=>_sampleLetterBlock(g.company,g.camp,g.list));
+    const html=`<html><head><meta charset="utf-8"><title>Sample Request Letter</title><style>
+      *{font-family:Georgia,'Times New Roman',serif;box-sizing:border-box}
+      body{margin:0;color:#111;font-size:13.5px;line-height:1.6}
+      .pg{padding:34px 42px;page-break-after:always}.pg:last-child{page-break-after:auto}
+      .hd{text-align:center;border-bottom:3px double #0b2a4a;padding-bottom:10px;margin-bottom:6px}
+      .hd h1{margin:0;color:#0b2a4a;font-size:28px;letter-spacing:1px}.hd .sub{color:#555;font-size:11px;margin-top:2px}.hd .a{font-size:11px;color:#333;margin-top:4px}
+      .meta{display:flex;justify-content:space-between;margin:16px 0 8px;font-size:12.5px}.to{margin:6px 0}
+      .subj{text-align:center;font-weight:bold;text-decoration:underline;margin:14px 0 10px;font-size:14px}
+      table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #444;padding:6px 8px;font-size:12.5px}th{background:#eef2f8}
+      .oh{font-weight:bold;margin:12px 0 2px;color:#0b2a4a;font-size:12.5px}p{margin:9px 0}
+      .sign{margin-top:40px}.line{border-top:1px solid #000;width:230px;margin-top:34px;padding-top:3px;font-size:12px}
+      @media print{.pg{padding:22px}}
+    </style></head><body>${letters.join('')}</body></html>`;
+    const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
+    w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},400);
+  }
+  function _sampleModal(preO){
+    const sel=new Set([preO.id]);let itemSel=null;
+    const list=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||''));
+    const ov=document.createElement('div');ov.className='modal';document.body.appendChild(ov);
+    function coShort(c){return c==='Puspha Motors'?'Puspha':(c==='NGRD Motors'?'NGRD':'?');}
+    function render(){
+      const single=sel.size===1;const theOne=single?list.find(o=>sel.has(o.id)):null;
+      const orderRows=list.map(o=>`<label style="display:flex;gap:7px;align-items:center;padding:4px 2px;font-size:11.5px;border-bottom:1px solid var(--line)"><input type="checkbox" data-so="${esc(o.id)}" ${sel.has(o.id)?'checked':''}><span style="flex:1">${esc(o.order_no)} <span style="color:var(--muted)">· ${esc(_campOf(o).replace(/\s*\(.*\)/,''))} · ${coShort(_companyOf(o))} · ${(o.items||[]).length} it</span></span></label>`).join('');
+      let itemPanel;
+      if(single&&theOne){const its=(theOne.items||[]);
+        itemPanel=`<div style="margin-top:8px"><div style="font-weight:700;font-size:12px;color:var(--navy);margin-bottom:3px">📦 Items — sample venum-na tick (default எல்லாம்)</div>${its.map((it,ix)=>`<label style="display:flex;gap:7px;align-items:center;padding:2px;font-size:11px"><input type="checkbox" data-si="${ix}" ${(itemSel===null||itemSel.has(ix))?'checked':''}><span>${esc(it.description)} <span style="color:var(--muted)">×${esc(it.qty)}</span></span></label>`).join('')}</div>`;
+      } else itemPanel=`<div style="margin-top:8px;font-size:11px;color:var(--muted)">📦 பல order தேர்ந்தது — ஒவ்வொரு order-oda <b>எல்லா items-um</b> letter-la வரும்.</div>`;
+      const chosen=list.filter(o=>sel.has(o.id));const g={};chosen.forEach(o=>{const k=coShort(_companyOf(o))+' · '+_campOf(o).replace(/\s*\(.*\)/,'');g[k]=(g[k]||0)+1;});
+      const prev=Object.keys(g).length?`<div style="font-size:11px;color:#0b6b4a;margin-top:7px">📄 ${Object.keys(g).length} letter உருவாகும்: ${Object.entries(g).map(([k,n])=>esc(k)+' ('+n+')').join(' · ')}</div>`:'';
+      ov.innerHTML=`<div class="modalbox" style="max-width:520px;text-align:left"><h3>📋 Sample Request Letter</h3>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Orders tick பண்ணு — NGRD / Puspha auto தனி letter, camp வாரியா. ஒரு order மட்டுமானா items select பண்ணலாம்.</div>
+        <div style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:3px 8px">${orderRows}</div>
+        ${itemPanel}${prev}
+        <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold smGen" style="flex:1;margin:0">📄 Letter உருவாக்கு / Print</button><button class="btn smClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div></div>`;
+      ov.querySelectorAll('[data-so]').forEach(cb=>cb.onchange=()=>{const id=cb.dataset.so;if(cb.checked)sel.add(id);else sel.delete(id);itemSel=null;render();});
+      ov.querySelectorAll('[data-si]').forEach(cb=>cb.onchange=()=>{if(itemSel===null)itemSel=new Set((theOne.items||[]).map((_,i)=>i));const ix=+cb.dataset.si;if(cb.checked)itemSel.add(ix);else itemSel.delete(ix);});
+      ov.querySelector('.smClose').onclick=()=>ov.remove();
+      ov.querySelector('.smGen').onclick=()=>{
+        if(!sel.size){alert('குறைந்தது ஒரு order tick பண்ணு');return;}
+        const entries=list.filter(o=>sel.has(o.id)).map(o=>{let items=(o.items||[]).filter(it=>!it.na);if(sel.size===1&&itemSel!==null)items=items.filter((it,i)=>itemSel.has(i));return{o,items};}).filter(e=>e.items.length);
+        if(!entries.length){alert('Sample-ku items இல்ல (N/A தவிர).');return;}
+        ov.remove();_genSampleLetters(entries);
+      };
+    }
+    render();ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
   }
   function _genNALetter(o,reason){
     const isP=_companyOf(o)==='Puspha Motors';
