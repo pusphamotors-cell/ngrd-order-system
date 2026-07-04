@@ -1877,7 +1877,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     let pool=[];if(groups.length){groups.forEach(g=>{if(_busyGroup.has(g))pool=pool.concat(_busyGroup.get(g));});}else pool=_busy;
     let scored=pool.map(it=>({it,s:_busyScore(qtok,it)+(gset.has(it.g)?6:0)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,5);
     // fallback: weak/empty in-group → also scan whole master so engine/shared parts aren't missed
-    if(groups.length&&(!scored.length||scored[0].s<55)){
+    if(!_busyStrict&&groups.length&&(!scored.length||scored[0].s<55)){
       const seen=new Set(scored.map(x=>x.it._k));
       const all=_busy.map(it=>({it,s:_busyScore(qtok,it)})).filter(x=>x.s>0&&!seen.has(x.it._k)).sort((a,b)=>b.s-a.s).slice(0,5);
       scored=scored.concat(all).sort((a,b)=>b.s-a.s).slice(0,6);
@@ -1893,6 +1893,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     return bs>=0.34?best:'';
   }
   let _busyExpOrderNo='',_busyExpRows=[],_busyExpOrder=null;
+  let _busyStrict=true; // 🎯 group-ku மட்டும் — no whole-master fallback for fuzzy
   // ===== Supplier-wise consolidated purchase (many orders → one supplier voucher) =====
   function _purchaseGroups(){
     const g={};
@@ -2241,7 +2242,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:6px">🔗 Busy Item Match <span style="font-weight:400;color:var(--muted);font-size:11px">— master ${_busy.length} items · ${_busyGroup.size} groups · learned ${Object.keys(_busyLearn).length}</span></div>
       <div class="fld"><label>Vehicle group (match accuracy கூட்டும்)</label><select id="busyGroup">${gopt}</select></div>
       <div class="fld"><label>Engine / extra group (option — உதा: 4D56)</label><select id="busyGroup2">${gopt}</select></div>
-      <div class="note" style="text-align:left;margin:0 0 8px;font-size:10.5px">💡 L200 K34 மாதிரி — Vehicle = L200 K34, Engine = 4D56 ரெண்டும் தேர்ந்தெடு. ரெண்டு group-ஐயும் சேர்த்து தேடும். (Score குறைவா இருந்தா முழு master-லயும் தானா தேடும்.)</div>
+      <label class="toggle" style="margin:2px 0 6px"><input type="checkbox" id="busyStrict" ${_busyStrict?'checked':''}><span>🎯 Group-ku மட்டும் — வேற brand/vehicle (TATA மாதிரி) காட்டாது</span></label>
+      <div class="note" style="text-align:left;margin:0 0 8px;font-size:10.5px">💡 L200 K34 மாதிரி — Vehicle + Engine group தேர்ந்தெடு. "🎯 Group-ku மட்டும்" ON ஆனா அந்த group items மட்டும்; OFF ஆனா score குறைவா இருந்தா முழு master-லயும் தேடும்.</div>
       <div class="fld"><label>PO item descriptions — ஒரு வரிக்கு ஒண்ணு</label><textarea id="busyPaste" rows="5" placeholder="BRAKE SHOE ASSY&#10;CLUTCH PLATE&#10;OIL FILTER"></textarea></div>
       <button class="btn gold" id="busyMatchBtn" style="margin:0">🔗 Match பண்ணு</button>
       ${tot?`<div style="margin-top:10px;font-size:12px;font-weight:700;color:${linked===tot?'var(--green)':'var(--amber)'}">${linked}/${tot} link ஆச்சு ${linked===tot?'✅ 100%':'⏳'}</div>
@@ -2252,6 +2254,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div style="padding:10px 13px">
         <div class="fld"><label>Order தேர்ந்தெடு (Order No — last 4 digit தேடலாம்)</label><input id="busyExpSearch" list="busyExpList" placeholder="உதा: 0125 / WNA/APOW/PO/2026/0125" autocomplete="off" value="${esc(_busyExpOrderNo||'')}"><datalist id="busyExpList">${orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('')}</datalist></div>
         <div class="grid2"><div class="fld"><label>Vehicle group (option)</label><select id="busyExpG">${gopt}</select></div><div class="fld"><label>Engine/extra group (option)</label><select id="busyExpG2">${gopt}</select></div></div>
+        <label class="toggle" style="margin:2px 0 6px"><input type="checkbox" id="busyExpStrict" ${_busyStrict?'checked':''}><span>🎯 Group-ku மட்டும் — வேற brand/vehicle (TATA மாதிரி) dropdown-ல காட்டாது</span></label>
         <button class="btn gold" id="busyExpLoad" style="margin:0">🔄 Order items load பண்ணு</button>
         <div id="busyExpBody" style="margin-top:8px"></div>
       </div>
@@ -2277,6 +2280,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         return{desc,groups:gs,chosen:'',via:'fuzzy',score:0,top:m.top};});
       renderBusy();
     };
+    const _bst=$('busyStrict');if(_bst)_bst.onchange=()=>{_busyStrict=_bst.checked;if(_busyRows&&_busyRows.length)$('busyMatchBtn').onclick();};
     wrap.querySelectorAll('[data-bpick]').forEach(sel=>sel.addEventListener('change',()=>{const i=+sel.dataset.bpick;if(sel.value){_busyRows[i].chosen=sel.value;_busyRows[i].via='pick';_busyRows[i].score=0;renderBusy();}}));
     wrap.querySelectorAll('[data-bunlink]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.bunlink;const m=_busyMatch(_busyRows[i].desc,_busyRows[i].groups||[]);_busyRows[i].chosen='';_busyRows[i].top=m.via==='fuzzy'?m.top:[{it:m.it,score:m.score}];renderBusy();}));
     const sv=$('busySaveBtn');if(sv)sv.onclick=async()=>{let n=0;const vg=$('busyGroup').value;_busyRows.forEach(r=>{if(r.chosen){_busyLearn[(vg?_bzkey(vg)+'::':'')+_bzkey(r.desc)]=r.chosen;n++;}});await _saveBusyLearn();showInfoModal('Saved','✅ '+n+' link learn பண்ணிட்டேன்'+(vg?' ('+esc(vg)+' group-க்கு)':'')+'. அடுத்த தடவ இதே description + group வந்தா auto 100%.');};
@@ -2353,6 +2357,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       _genBusyExcel([o.id],kind,linkMap);
     }
     const _el=$('busyExpLoad');if(_el)_el.onclick=_expLoad;
+    const _est=$('busyExpStrict');if(_est)_est.onchange=()=>{_busyStrict=_est.checked;if(_busyExpOrder)_expLoad();};
     const _es=$('busyExpSearch');if(_es)_es.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_expLoad();}});
     if(_busyExpOrderNo&&_busyExpOrder)_expRender();
     // settings
