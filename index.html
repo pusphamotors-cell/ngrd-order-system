@@ -2154,9 +2154,9 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const _ba=$('billAssign');if(_ba)_ba.onclick=async()=>{
       const bn=($('billNoIn').value||'').trim();const bd=$('billDtIn').value||'';
       if(!bn){alert('Bill No போடு bro');return;}
-      let n=0;out.querySelectorAll('[data-bilck]').forEach(ck=>{if(ck.checked){const it=its[+ck.dataset.bilck];if(it){it.bill=bn;it.bill_date=bd;it.supplied=true;n++;}}});
+      let n=0;const _who=(CURRENT&&(CURRENT.name||CURRENT.u))||'';out.querySelectorAll('[data-bilck]').forEach(ck=>{if(ck.checked){const it=its[+ck.dataset.bilck];if(it){it.bill=bn;it.bill_date=bd;it.supplied=true;it.bill_by=_who;it.bill_at=Date.now();n++;}}});
       if(!n){alert('குறைந்தது ஒரு item tick பண்ணு');return;}
-      o.bill_no=o.bill_no||bn;if(bd)o.bill_date=o.bill_date||bd;
+      o.bill_no=o.bill_no||bn;if(bd)o.bill_date=o.bill_date||bd;o.bill_by=o.bill_by||_who;
       const allDone=its.every(it=>it.bill||it.na);o.supplied=allDone?true:(o.supplied||false);o.partial=!allDone;
       await save('✅ '+n+' item — Bill '+bn+'-ல போட்டாச்சு.'+(allDone?' Order முடிஞ்சது! 🎉':' மீதி items அப்புறம்.'));
     };
@@ -3821,19 +3821,58 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     const alv=statusOf(o).c;
     return `<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(_campOf(o))} · ${(o.items||[]).length} items</span>${o.task_date?'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">📅 '+_fmtDk(o.task_date)+(o.delivery_date?' · Delivery '+esc(o.delivery_date):'')+'</div>':''}</div><div style="display:flex;align-items:center;gap:3px;white-space:nowrap">${right}</div></div>`;
   }
+  // ---- 👤 Staff Activity (admin) ----
+  let _staffActQ='';
+  function _actTs(v){if(!v)return 0;if(typeof v==='number')return v;const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v));if(m)return new Date(+m[1],+m[2]-1,+m[3]).getTime();const p=Date.parse(v);return isNaN(p)?0:p;}
+  function _staffNames(){const s=new Set();orders.forEach(o=>{[o.assignee_name,o.assignee,o.stage_by,o.bill_by,(o.verified||{}).by,(o.busy_sales||{}).by,(o.busy_purchase||{}).by].forEach(x=>{if(x&&String(x).trim())s.add(String(x).trim());});(o.items||[]).forEach(it=>{[it.na_by,it.bill_by,it.return_by,(it.ret||{}).by].forEach(x=>{if(x&&String(x).trim())s.add(String(x).trim());});});});return [...s].sort();}
+  function _staffActivity(name){
+    const nm=(name||'').trim().toLowerCase();
+    const eq=v=>v!=null&&String(v).trim().toLowerCase()===nm;
+    const R={assigned:0,ready:0,sourcing:0,billed:0,na:0,verified:0,busy:0,returns:0,log:[]};
+    orders.forEach(o=>{const no=o.order_no||'—';
+      if(eq(o.assignee_name)||eq(o.assignee))R.assigned++;
+      if(eq(o.stage_by)){const st=o.stage||'';if(st==='ready'){R.ready++;R.log.push({ts:_actTs(o.stage_at),act:'🟢 Ready ஆக்கினார்',no});}else if(st==='sourcing'){R.sourcing++;R.log.push({ts:_actTs(o.stage_at),act:'🟡 Sourcing ஆக்கினார்',no});}}
+      if(o.verified&&eq(o.verified.by)){R.verified++;R.log.push({ts:_actTs(o.verified.at),act:'✅ Verify பண்ணினார்',no});}
+      if(o.busy_sales&&o.busy_sales.done&&eq(o.busy_sales.by)){R.busy++;R.log.push({ts:_actTs(o.busy_sales.at),act:'🧾 Sales import',no});}
+      if(o.busy_purchase&&o.busy_purchase.done&&eq(o.busy_purchase.by)){R.busy++;R.log.push({ts:_actTs(o.busy_purchase.at),act:'🧾 Purchase import',no});}
+      let billed=false,na=0,ret=0;
+      (o.items||[]).forEach(it=>{
+        if(eq(it.bill_by)){billed=true;if(it.bill_at)R.log.push({ts:_actTs(it.bill_at),act:'💵 Bill '+(it.bill||'')+' போட்டார்',no});}
+        if(eq(it.na_by)){na++;R.log.push({ts:_actTs(it.na_date),act:'🚫 N/A: '+esc(it.description||''),no});}
+        if(eq(it.return_by)||(it.ret&&eq(it.ret.by)))ret++;
+      });
+      if(billed)R.billed++;R.na+=na;R.returns+=ret;
+    });
+    R.log.sort((a,b)=>(b.ts||0)-(a.ts||0));
+    return R;
+  }
+  function _staffActRender(){const box=$('staffActBody');if(!box)return;
+    const nm=(_staffActQ||'').trim();
+    if(!nm){box.innerHTML='<div style="font-size:11.5px;color:var(--muted);padding:4px 2px">👆 மேல staff name தேடு — அவங்க எத்தன order ready பண்ணாங்க, எத்தன bill போட்டாங்க எல்லாம் காட்டும்.</div>';return;}
+    const R=_staffActivity(nm);
+    const card=(ic,lbl,n,col)=>`<div style="flex:1;min-width:82px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:7px 9px;text-align:center"><div style="font-size:17px;font-weight:800;color:${col||'var(--navy)'}">${n}</div><div style="font-size:9.5px;color:var(--muted);font-weight:700">${ic} ${lbl}</div></div>`;
+    const logRows=R.log.slice(0,25).map(l=>`<tr><td style="font-size:10px;color:var(--muted);white-space:nowrap">${l.ts?new Date(l.ts).toLocaleDateString('en-GB'):'—'}</td><td style="font-size:11px">${l.act}</td><td style="font-size:10px;color:var(--muted)">${esc(l.no)}</td></tr>`).join('');
+    box.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 8px">
+        ${card('👷','Assigned',R.assigned,'#5a3fb0')}${card('🟢','Ready',R.ready,'#1a7f4b')}${card('💵','Bill',R.billed,'#0b6b4a')}${card('🚫','N/A',R.na,'#b00')}${card('✅','Verify',R.verified,'#1f5bb5')}${card('🧾','Busy',R.busy,'#9a6b00')}${R.returns?card('↩️','Return',R.returns,'#b3261e'):''}</div>
+      ${R.log.length?`<div class="tablewrap" style="background:#fff;border-radius:9px"><table><thead><tr><th>தேதி</th><th>வேலை</th><th>Order</th></tr></thead><tbody>${logRows}</tbody></table></div>${R.log.length>25?`<div style="font-size:10px;color:var(--muted);margin-top:3px">…மேலும் ${R.log.length-25} activity</div>`:''}`:'<div style="font-size:11.5px;color:var(--muted);padding:6px 2px">இந்த staff-ku system-la activity இல்ல (illa name சரியா type பண்ணு).</div>'}
+      <div style="font-size:9.5px;color:var(--muted);margin-top:5px">ℹ️ Ready/Sourcing = கடைசி action-ஐ யாரு பண்ணாங்க. Bill count இன்றிலிருந்து track ஆகுது.</div>`;
+  }
   function renderTasks(){
     const box=$('taskList');const isAdmin=CURRENT&&CURRENT.role==='admin';
     $('taskHead').textContent=isAdmin?'👷 வேலை — யாருக்கு எந்த order assign ஆச்சு':'👷 என் வேலை — நான் ready பண்ண வேண்டிய orders';
     const assigned=orders.filter(o=>o.assignee);
+    const actPanel=isAdmin?`<div class="dpanel" style="padding:9px 11px;margin-bottom:10px"><div style="font-weight:800;color:var(--navy);font-size:12.5px;margin-bottom:6px">👤 Staff Activity — யாரு எத்தன பண்ணாங்க</div><input id="staffActSearch" list="staffActDL" placeholder="staff name தேடு / தேர்ந்தெடு" value="${esc(_staffActQ||'')}" autocomplete="off" style="width:100%;border:1.5px solid var(--gold);border-radius:10px;padding:9px 11px;font-size:13px;font-family:inherit;background:#fffdf6"><datalist id="staffActDL">${_staffNames().map(n=>`<option value="${esc(n)}">`).join('')}</datalist><div id="staffActBody" style="margin-top:6px"></div></div>`:'';
     if(isAdmin){
-      if(!assigned.length){box.innerHTML='<div class="empty">இன்னும் order assign பண்ணல.<br>Order open → "👷 Assign" → staff + date தேர்வு பண்ணு</div>';return;}
       const byU={};assigned.forEach(o=>{const k=o.assignee_name||o.assignee;(byU[k]=byU[k]||[]).push(o);});
       const today=_todayKey();
-      box.innerHTML=Object.keys(byU).sort().map(u=>{const arr=byU[u].slice().sort((a,b)=>(a.task_date||'').localeCompare(b.task_date||''));
+      const assignedHtml=assigned.length?Object.keys(byU).sort().map(u=>{const arr=byU[u].slice().sort((a,b)=>(a.task_date||'').localeCompare(b.task_date||''));
         const cnt={new:0,sourcing:0,ready:0,supplied:0};let late=0;
         arr.forEach(o=>{const s=_stageOf(o);cnt[s]++;const dl=o.task_date||o.delivery_date||'';if(s!=='supplied'&&s!=='ready'&&dl&&dl<today)late++;});
         const active=arr.filter(o=>_stageOf(o)!=='supplied');
-        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · 🔵${cnt.new} 🟡${cnt.sourcing} 🟢${cnt.ready} ✅${cnt.supplied}${late?' · <span style="color:var(--red)">🔴'+late+' late</span>':''}</div><div class="dpanel">${(active.length?active:arr).map(o=>taskRow(o,true)).join('')}</div>`;}).join('');
+        return `<div class="sec">👷 ${esc(u)} — ${arr.length} order · 🔵${cnt.new} 🟡${cnt.sourcing} 🟢${cnt.ready} ✅${cnt.supplied}${late?' · <span style="color:var(--red)">🔴'+late+' late</span>':''}</div><div class="dpanel">${(active.length?active:arr).map(o=>taskRow(o,true)).join('')}</div>`;}).join(''):'<div class="empty">இன்னும் order assign பண்ணல.<br>Order open → "👷 Assign" → staff + date தேர்வு பண்ணு</div>';
+      box.innerHTML=actPanel+assignedHtml;
+      _staffActRender();
+      const _sa=$('staffActSearch');if(_sa)_sa.addEventListener('input',()=>{_staffActQ=_sa.value;_staffActRender();});
     } else {
       const arr=orders.filter(o=>o.assignee===CURRENT.u);
       if(!arr.length){box.innerHTML='<div class="empty">இன்னைக்கு வேலை இல்ல 🎉<br>Admin assign பண்ணா இங்க வரும்</div>';return;}
