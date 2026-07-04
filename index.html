@@ -463,6 +463,7 @@
       <button class="mbtn" id="rmTender" type="button">🎯 Tender</button>
       <button class="mbtn" id="rmBusy" type="button">🔗 Busy</button>
       <button class="mbtn" id="rmReturn" type="button">↩️ Return</button>
+      <button class="mbtn" id="rmBill" type="button">🧾 Bill Entry</button>
     </div>
     <div id="repNormal">
       <div class="step">Report — Camp + Status filter பண்ணி பாரு</div>
@@ -489,6 +490,7 @@
     <div id="repTenderWrap" class="hide"></div>
     <div id="repBusyWrap" class="hide"></div>
     <div id="repReturnWrap" class="hide"></div>
+    <div id="repBillWrap" class="hide"></div>
     <div class="brandcard">
       <div class="bcrest">NGRD</div>
       <h2>NGRD MOTORS</h2>
@@ -1687,6 +1689,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     $('rmTender').onclick=()=>{setRepMode('tender');renderTender();};
     $('rmBusy').onclick=()=>{setRepMode('busy');renderBusy();};
     $('rmReturn').onclick=()=>{setRepMode('return');renderReturn();};
+    $('rmBill').onclick=()=>{setRepMode('bill');renderBill();};
     renderReport();
   }
   var V3_DB='https://ngrd-motors-default-rtdb.firebaseio.com/ngrd';
@@ -2001,6 +2004,60 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     XLSX.writeFile(wb,'Busy_Purchase_'+(o.order_no||'order').replace(/[^A-Za-z0-9]/g,'_')+'_'+today+'.xlsx');
     showInfoModal('Export','✅ '+sups.length+' supplier · '+(aoa.length-1)+' item Purchase Excel. (SHOP/STORE stock தவிர்க்கப்பட்டது.)');
   }
+  // ===== 🧾 Bill Entry — invoice photo → auto bill no/date → match order → mark invoiced =====
+  let _billImgs=[];
+  function renderBill(){
+    const w=$('repBillWrap');if(!w)return;_billImgs=[];
+    w.innerHTML=`<div class="dpanel" style="padding:12px 13px">
+      <div style="font-weight:800;color:var(--navy);font-size:13px;margin-bottom:4px">🧾 Invoice → Auto Bill Entry</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px">Invoice (NGRD/Puspha) photo/PDF கொடு → AI Order No + Bill No + Date படிக்கும் → order-ஐ auto match → 1-tap invoiced mark.</div>
+      <label class="btn" style="background:#0b2a4a;margin:0 0 6px;display:block;text-align:center;cursor:pointer"><input type="file" id="billFile" accept="image/*,application/pdf" capture="environment" multiple hidden>📷 Invoice photo/PDF எடு / சேர்</label>
+      <div id="billThumbs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
+      <textarea id="billPaste" class="pastebox" placeholder="illa invoice text-ஐ இங்க paste பண்ணு..." style="min-height:52px"></textarea>
+      <button class="btn gold" id="billRead" style="margin-top:6px">🔍 Invoice படி (AI)</button>
+      <div id="billOut" style="margin-top:10px"></div>
+    </div>`;
+    $('billFile').addEventListener('change',e=>{[...e.target.files].forEach(f=>_billImgs.push(f));_billThumbs();e.target.value='';});
+    $('billRead').onclick=_billRead;
+  }
+  function _billThumbs(){const t=$('billThumbs');if(!t)return;t.innerHTML=_billImgs.map((f,i)=>`<div style="position:relative"><div style="width:54px;height:54px;border-radius:8px;background:#eef1f6;display:flex;align-items:center;justify-content:center;font-size:20px">${f.type==='application/pdf'?'📄':'🖼️'}</div><span data-brm="${i}" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer">✕</span></div>`).join('');t.querySelectorAll('[data-brm]').forEach(b=>b.onclick=()=>{_billImgs.splice(+b.dataset.brm,1);_billThumbs();});}
+  async function _billRead(){
+    const out=$('billOut');const paste=($('billPaste').value||'').trim();
+    if(!_billImgs.length&&!paste){alert('Invoice photo illa text கொடு bro');return;}
+    out.innerHTML='<div style="font-size:12px;color:var(--muted)"><span class="spin"></span> AI படிக்கிறது…</div>';
+    const PROMPT='Read this Sri Lanka Navy supplier INVOICE (from NGRD Motors or Puspha Motors to a Navy camp). Return ONLY JSON, no markdown: {"order_no":"","bill_no":"","bill_date":"YYYY-MM-DD","amount":0}. order_no = the "Customer Order No" or "Order No" printed on the invoice (example WNA/APOW/PO/2026/0949). bill_no = the Invoice No / bill number (example RAG/0250 or 4253). bill_date = invoice date as YYYY-MM-DD. amount = grand total as a number (no commas). If a field is missing use "" or 0. Keep order_no and bill_no exactly as written.';
+    let content;
+    try{
+      if(_billImgs.length){content=[];for(const f of _billImgs){const c=await _compressImg(f);content.push(c.pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:c.b64}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.b64}});}content.push({type:'text',text:PROMPT});}
+      else content=[{type:'text',text:'Invoice text:\n'+paste+'\n\n'+PROMPT}];
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      let txt=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('').trim().replace(/```json|```/g,'').trim();
+      const j=JSON.parse(txt);
+      _billShow(j);
+    }catch(e){out.innerHTML='<div class="err">⚠️ படிக்க முடியல ('+esc(e.message)+'). திரும்ப try பண்ணு illa clear photo எடு.</div>';}
+  }
+  function _billShow(j){
+    const out=$('billOut');const ono=(j.order_no||'').trim();
+    const o=orders.find(x=>(x.order_no||'').toLowerCase()===ono.toLowerCase())||orders.find(x=>ono&&(x.order_no||'').toLowerCase().endsWith(ono.toLowerCase()))||orders.find(x=>ono&&(x.order_no||'').toLowerCase().includes(ono.toLowerCase()));
+    const read=`<div style="font-size:11.5px;background:#f3f6fb;border-radius:8px;padding:8px 10px;margin-bottom:8px">📄 AI படிச்சது:<br>Order No: <b>${esc(ono||'—')}</b><br>Bill No: <b>${esc(j.bill_no||'—')}</b> · Date: <b>${esc(j.bill_date||'—')}</b>${j.amount?' · Rs '+fmt(j.amount):''}</div>`;
+    if(!o){out.innerHTML=read+'<div class="err">⚠️ இந்த Order No system-ல கிடைக்கல. Order No சரியா படிச்சதா பாரு.</div>';return;}
+    const already=o.bill_no;
+    out.innerHTML=read+
+      `<div class="dpanel" style="padding:9px 11px"><div style="font-weight:800;color:var(--navy)">✅ Order match ஆச்சு: ${esc(o.order_no)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(_campOf(o))} · ${(o.items||[]).length} item · Value Rs ${fmt(o.sell)}</div>`+
+      (already?`<div style="color:var(--amber);font-size:11.5px;margin-top:6px">⚠️ இந்த order ஏற்கனவே invoiced (Bill ${esc(o.bill_no)}). மறுபடி mark பண்ணட்டா?</div>`:'')+
+      `<button class="btn" id="billMark" style="margin:8px 0 0;background:var(--green)">✅ இந்த order-ஐ Invoiced mark பண்ணு (Bill ${esc(j.bill_no||'')})</button></div>`;
+    $('billMark').onclick=async()=>{
+      o.bill_no=(j.bill_no||o.bill_no||'').toString();
+      if(j.bill_date)o.bill_date=j.bill_date;
+      if(j.amount)o.bill_amt=Number(j.amount)||o.bill_amt;
+      o.supplied=true;
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail');return;}
+      out.innerHTML='<div class="dpanel" style="padding:12px;text-align:center;color:var(--green);font-weight:800">✅ ${o.order_no} — Invoiced mark ஆச்சு!</div>'.replace('${o.order_no}',esc(o.order_no));
+      _billImgs=[];const t=$('billThumbs');if(t)t.innerHTML='';const bp=$('billPaste');if(bp)bp.value='';
+    };
+  }
   // ===== Return tracker (Order System only — no Busy) =====
   let _retOrder=null;
   function renderReturn(){
@@ -2219,10 +2276,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const rb=$('tRetry2');if(rb)rb.onclick=()=>renderTender(true);
   }
   function setRepMode(m){
-    ['Report','Pending','Daily','Cal','Out','Comm','Sum','Sales','Tender','Busy','Return'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
-    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy',return:'Return'};
+    ['Report','Pending','Daily','Cal','Out','Comm','Sum','Sales','Tender','Busy','Return','Bill'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
+    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy',return:'Return',bill:'Bill'};
     const b=$('rm'+(map[m]||'Report'));if(b)b.classList.add('on');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');$('repReturnWrap').classList.toggle('hide',m!=='return');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');$('repReturnWrap').classList.toggle('hide',m!=='return');$('repBillWrap').classList.toggle('hide',m!=='bill');
   }
   let _dailyBasis='bill';
   function renderDaily(){
