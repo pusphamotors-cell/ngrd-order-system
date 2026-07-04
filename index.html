@@ -2063,11 +2063,10 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div style="font-weight:800;color:var(--navy)">✅ Order match: ${esc(o.order_no)}</div>
       <div style="font-size:11px;color:var(--muted);margin:2px 0 6px">${esc(_campOf(o))} · <b>${billed}/${total} supplied</b>${na?' · 🚫 '+na+' N/A':''}${pending>0?' · ⏳ '+pending+' pending':''}</div>
       <div class="puProfit" style="font-size:11px;background:#eef4ff;border-radius:7px;padding:5px 9px;margin-bottom:6px">💵 Order Rs ${fmt(o.sell)} · <b style="color:#1a7f4b">Bill(payment) Rs ${fmt(_billedAmount(o))}</b>${na?' · 🚫 N/A Rs '+fmt(_naAmount(o)):''}</div>
-      ${done?'<div style="color:var(--green);font-weight:700;font-size:12px">🎉 Order முடிஞ்சது (supplied + N/A). Pending இல்ல.</div>':`
-      <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Bill-ல வர்ற items-ஐ tick வெச்சு Bill போடு · market-ல இல்லாததை <b style="color:#b00">🚫 N/A</b> (letter கொடுத்தது)</div>
+      ${done?'<div style="color:var(--green);font-weight:700;font-size:12px;margin-bottom:4px">🎉 Order முடிஞ்சது. மாத்தணும்னா கீழ ↺ (un-bill) / 🚫 N/A வெச்சு correct பண்ணு.</div>':'<div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Bill-ல வர்ற items-ஐ tick வெச்சு Bill போடு · market-ல இல்லாததை <b style="color:#b00">🚫 N/A</b> (letter கொடுத்தது)</div>'}
       <div class="tablewrap"><table><thead><tr><th>✓</th><th>Item</th><th class="num">Qty</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <div class="grid2" style="margin-top:8px"><div class="fld"><label>Bill No</label><input id="billNoIn" value="${esc(billNo)}" placeholder="RAG/0250 / 4253"></div><div class="fld"><label>Bill Date</label><input id="billDtIn" type="date" value="${esc(billDate)}"></div></div>
-      <button class="btn" id="billAssign" style="margin:6px 0 0;background:var(--green)">✅ Tick பண்ணதை Bill போடு</button>`}
+      ${pending>0?`<div class="grid2" style="margin-top:8px"><div class="fld"><label>Bill No</label><input id="billNoIn" value="${esc(billNo)}" placeholder="RAG/0250 / 4253"></div><div class="fld"><label>Bill Date</label><input id="billDtIn" type="date" value="${esc(billDate)}"></div></div>
+      <button class="btn" id="billAssign" style="margin:6px 0 0;background:var(--green)">✅ Tick பண்ணதை Bill போடு</button>`:''}
       ${naBlock}
     </div>`;
     const _naBtn=out.querySelector('#naLetterBtn');if(_naBtn)_naBtn.onclick=async()=>{const rsn=(out.querySelector('#naReason').value||'').trim();o.na_reason=rsn;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_genNALetter(o,rsn);};
@@ -2075,8 +2074,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     out.querySelectorAll('[data-bilna]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilna];if(!it)return;if(!confirm('"'+it.description+'" — market-ல இல்ல, N/A ஆ mark பண்ணட்டா? (Navy-க்கு letter கொடுத்திருக்கணும்)'))return;it.na=true;it.na_date=_todayKey?_todayKey():new Date().toISOString().slice(0,10);it.na_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone?true:o.supplied;o.partial=!allDone;await save('🚫 N/A mark ஆச்சு.');});
     out.querySelectorAll('[data-bilundo]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilundo];if(!it)return;delete it.na;delete it.na_date;delete it.na_by;o.partial=!its.every(x=>x.bill||x.na);await save('↺ N/A மாற்றிட்டேன்.');});
     out.querySelectorAll('[data-bilunbill]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilunbill];if(!it)return;if(!confirm('"'+it.description+'" — bill-ல இருந்து எடுக்கட்டா? (அப்புறம் N/A ஆ mark பண்ணலாம்)'))return;delete it.bill;delete it.bill_date;it.supplied=false;const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone;o.partial=!allDone;await save('↺ Bill-ல இருந்து எடுத்தாச்சு. இப்போ 🚫 N/A ஆக்கலாம்.');});
-    if(done)return;
-    $('billAssign').onclick=async()=>{
+    const _ba=$('billAssign');if(_ba)_ba.onclick=async()=>{
       const bn=($('billNoIn').value||'').trim();const bd=$('billDtIn').value||'';
       if(!bn){alert('Bill No போடு bro');return;}
       let n=0;out.querySelectorAll('[data-bilck]').forEach(ck=>{if(ck.checked){const it=its[+ck.dataset.bilck];if(it){it.bill=bn;it.bill_date=bd;it.supplied=true;n++;}}});
