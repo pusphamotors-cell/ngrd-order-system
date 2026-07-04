@@ -625,8 +625,11 @@
     async set(k,v){ if(!_cache)await _loadAll(); _cache[k]=v; try{localStorage.setItem(k,v);}catch(_){}
       try{ if(_fbOk){await firebase.database().ref('orders/'+k).set(v);_cloud(true);} }catch(e){_cloud(false);} return{key:k,value:v}; },
     async get(k){ if(!_cache)await _loadAll(); const v=_cache[k]; return v==null?null:{key:k,value:v}; },
-    async delete(k){ if(!_cache)await _loadAll(); delete _cache[k]; try{localStorage.removeItem(k);}catch(_){}
-      try{ if(_fbOk){await firebase.database().ref('orders/'+k).remove();_cloud(true);} }catch(e){_cloud(false);} return{deleted:true}; },
+    async delete(k){ if(!_cache)await _loadAll();
+      if(_fbOk){ try{ await firebase.database().ref('orders/'+k).remove(); _cloud(true); }
+                 catch(e){ _cloud(false); throw new Error('Cloud delete fail: '+((e&&e.message)||e)); } }
+      delete _cache[k]; try{localStorage.removeItem(k);}catch(_){}
+      return{deleted:true}; },
     async list(prefix){ await _loadAll(); return{keys:Object.keys(_cache).filter(x=>x.indexOf(prefix)===0)}; }
   };
   // ---- end Firebase ----
@@ -1179,7 +1182,18 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
 
   function wireDetail(box,o){
     const del=box.querySelector('[data-del]');
-    if(del)del.addEventListener('click',async ()=>{if(!confirm('இந்த order-ஐ delete பண்ணவா?'))return;try{await window.storage.delete(o.id);}catch(_){}orders=orders.filter(x=>x.id!==o.id);renderList();});
+    if(del)del.addEventListener('click',async ()=>{
+      const ono=(o.order_no||'').trim().toLowerCase();
+      const isTarget=x=>x.id===o.id||(ono&&(x.order_no||'').trim().toLowerCase()===ono);
+      const copies=orders.filter(isTarget);const n=copies.length;
+      if(!confirm('இந்த order-ஐ delete பண்ணவா?'+(n>1?'\n('+n+' duplicate copy இருக்கு — எல்லாத்தையும் delete பண்ணும்)':'')))return;
+      const failed=new Set();
+      for(const c of copies){try{await window.storage.delete(c.id);}catch(e){failed.add(c.id);}}
+      orders=orders.filter(x=>!(isTarget(x)&&!failed.has(x.id)));
+      renderList();
+      if(failed.size)alert('⚠️ '+failed.size+'/'+n+' copy cloud-ல delete ஆகல (net check பண்ணி மறுபடியும் try பண்ணு). மீதி '+(n-failed.size)+' போச்சு.');
+      else if(typeof showInfoModal==='function')showInfoModal('Deleted',n>1?('✅ '+n+' copy (duplicate உட்பட) delete ஆச்சு.'):'✅ Order delete ஆச்சு.');
+    });
     const ed=box.querySelector('[data-edit]');
     if(ed)ed.addEventListener('click',()=>{box.innerHTML=editForm(o);wireEdit(box,o);});
     const wa=box.querySelector('[data-wa]');
