@@ -753,6 +753,12 @@
   const PROMPT=`Extract details from this Sri Lanka Navy purchase order (PO). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
 {"order_no":"","file_no":"","proc_ref":"","naha_no":"","civil_no":"","chassis_no":"","engine_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
 
+IDENTIFIERS — read character-by-character, keep EVERY slash, never shorten or guess:
+- order_no = the PURCHASE ORDER number. Format like WNA/APOW/PO/2026/0949 — it contains "/PO/". Labelled "Order No" / "P.O. No".
+- file_no = the FILE number. Format like WNA/APO/FO/MT/2026/0974 — it contains "/FO/" and/or "/MT/". Labelled "File No".
+- order_no and file_no are DIFFERENT — never copy one into the other's field.
+- Digits are critical: watch 0-vs-O, 1-vs-7, 5-vs-6, 8-vs-B, 3-vs-8. Copy EXACTLY as printed. If a character is unclear, transcribe the single most-likely character but NEVER add or drop digits.
+
 Dates (read from the PO, do not invent):
 - po_date = the "DATE" shown at the top of the PO (e.g. 24/06/2026). This is the order date.
 - delivery_date = the date after "arrange supply of above mentioned items on or before" (e.g. 22/07/2026).
@@ -765,7 +771,15 @@ IMPORTANT - read ALL pages. The vehicle block (often on the LAST page, written i
 - chassis_no = the "Chassis No" / "Chassis Number" value if present (else "")
 - engine_no = the "Engine No" / "Engine Number" value if present (else "")
 - model = combine Make + Model & Type + Vehical Type into a short label (e.g. "SX4 ZXI Suzuki Car")
-buyer = the command/department at the top (e.g. Southern Naval Command - Captain Logistics Department (South)). Include ALL line items. Numbers plain, no commas. Missing text="" , missing number=0. Output only JSON.`;
+buyer = the command/department at the top (e.g. Southern Naval Command - Captain Logistics Department (South)).
+
+ITEMS — read the line-item table exactly:
+- One JSON item per printed table row. Keep "description" WORD-FOR-WORD as printed — do NOT abbreviate, expand, autocorrect, translate, or "fix" spelling. Keep tokens like LH/RH, ASSY, COMPLETE, R/KIT exactly.
+- qty = the number in the Quantity column ONLY (never from a part number, code, or price). Whole number.
+- unit_price / total = the numbers from the price columns (plain digits, no commas).
+- The count of items MUST equal the last serial number (SN). Do NOT skip, merge two rows into one, or duplicate a row. If a row is blurry, still include it with best-effort text but keep the correct row count.
+
+Never invent any value. If a field is missing or unreadable, use "" for text and 0 for numbers. Output ONLY the JSON object.`;
 
   async function extract(){
     const pasteText=$('pasteBox').value.trim();
