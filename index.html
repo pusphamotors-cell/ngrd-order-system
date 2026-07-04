@@ -2015,10 +2015,13 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div id="billThumbs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
       <textarea id="billPaste" class="pastebox" placeholder="illa invoice text-ஐ இங்க paste பண்ணு..." style="min-height:52px"></textarea>
       <button class="btn gold" id="billRead" style="margin-top:6px">🔍 Invoice படி (AI)</button>
+      <div style="text-align:center;font-size:11px;color:var(--muted);margin:8px 0">— illa —</div>
+      <div style="display:flex;gap:6px"><input id="billOrdSearch" list="retOrdList" placeholder="Order No type பண்ணு (partial bill-க்கு)" autocomplete="off" style="flex:1;border:1.5px solid var(--gold);border-radius:11px;padding:9px 12px;font-size:13px;font-family:inherit;background:#fffdf6"><button class="btn" id="billOrdBtn" style="margin:0;width:auto;padding:9px 14px">🔎</button></div>
       <div id="billOut" style="margin-top:10px"></div>
     </div>`;
     $('billFile').addEventListener('change',e=>{[...e.target.files].forEach(f=>_billImgs.push(f));_billThumbs();e.target.value='';});
     $('billRead').onclick=_billRead;
+    const bob=$('billOrdBtn');if(bob)bob.onclick=()=>{const q=($('billOrdSearch').value||'').trim().toLowerCase();if(!q)return;const o=orders.find(x=>(x.order_no||'').toLowerCase()===q)||orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q))||orders.find(x=>(x.order_no||'').toLowerCase().includes(q));if(!o){$('billOut').innerHTML='<div class="empty">Order கிடைக்கல</div>';return;}_billRenderOrder(o,'',o.bill_no||'',o.bill_date||'');};
   }
   function _billThumbs(){const t=$('billThumbs');if(!t)return;t.innerHTML=_billImgs.map((f,i)=>`<div style="position:relative"><div style="width:54px;height:54px;border-radius:8px;background:#eef1f6;display:flex;align-items:center;justify-content:center;font-size:20px">${f.type==='application/pdf'?'📄':'🖼️'}</div><span data-brm="${i}" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer">✕</span></div>`).join('');t.querySelectorAll('[data-brm]').forEach(b=>b.onclick=()=>{_billImgs.splice(+b.dataset.brm,1);_billThumbs();});}
   async function _billRead(){
@@ -2043,19 +2046,38 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const o=orders.find(x=>(x.order_no||'').toLowerCase()===ono.toLowerCase())||orders.find(x=>ono&&(x.order_no||'').toLowerCase().endsWith(ono.toLowerCase()))||orders.find(x=>ono&&(x.order_no||'').toLowerCase().includes(ono.toLowerCase()));
     const read=`<div style="font-size:11.5px;background:#f3f6fb;border-radius:8px;padding:8px 10px;margin-bottom:8px">📄 AI படிச்சது:<br>Order No: <b>${esc(ono||'—')}</b><br>Bill No: <b>${esc(j.bill_no||'—')}</b> · Date: <b>${esc(j.bill_date||'—')}</b>${j.amount?' · Rs '+fmt(j.amount):''}</div>`;
     if(!o){out.innerHTML=read+'<div class="err">⚠️ இந்த Order No system-ல கிடைக்கல. Order No சரியா படிச்சதா பாரு.</div>';return;}
-    const already=o.bill_no;
-    out.innerHTML=read+
-      `<div class="dpanel" style="padding:9px 11px"><div style="font-weight:800;color:var(--navy)">✅ Order match ஆச்சு: ${esc(o.order_no)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(_campOf(o))} · ${(o.items||[]).length} item · Value Rs ${fmt(o.sell)}</div>`+
-      (already?`<div style="color:var(--amber);font-size:11.5px;margin-top:6px">⚠️ இந்த order ஏற்கனவே invoiced (Bill ${esc(o.bill_no)}). மறுபடி mark பண்ணட்டா?</div>`:'')+
-      `<button class="btn" id="billMark" style="margin:8px 0 0;background:var(--green)">✅ இந்த order-ஐ Invoiced mark பண்ணு (Bill ${esc(j.bill_no||'')})</button></div>`;
-    $('billMark').onclick=async()=>{
-      o.bill_no=(j.bill_no||o.bill_no||'').toString();
-      if(j.bill_date)o.bill_date=j.bill_date;
-      if(j.amount)o.bill_amt=Number(j.amount)||o.bill_amt;
-      o.supplied=true;
-      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail');return;}
-      out.innerHTML='<div class="dpanel" style="padding:12px;text-align:center;color:var(--green);font-weight:800">✅ ${o.order_no} — Invoiced mark ஆச்சு!</div>'.replace('${o.order_no}',esc(o.order_no));
-      _billImgs=[];const t=$('billThumbs');if(t)t.innerHTML='';const bp=$('billPaste');if(bp)bp.value='';
+    _billRenderOrder(o,read,j.bill_no||'',j.bill_date||'');
+  }
+  function _billRenderOrder(o,head,billNo,billDate){
+    const out=$('billOut');const its=o.items||[];
+    const billed=its.filter(it=>it.bill).length,na=its.filter(it=>it.na).length,total=its.length;
+    const pending=total-billed-na;const done=pending<=0&&total>0;
+    const rows=its.map((it,ix)=>{
+      if(it.bill)return `<tr style="opacity:.6"><td style="text-align:center">✅</td><td style="font-size:11px">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td style="font-size:10px;color:var(--green)">Bill ${esc(it.bill)}</td></tr>`;
+      if(it.na)return `<tr style="opacity:.7;background:#fdf0f0"><td style="text-align:center">🚫</td><td style="font-size:11px">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td style="font-size:10px;color:#b00">N/A${it.na_date?' · '+esc(it.na_date):''} <span data-bilundo="${ix}" style="cursor:pointer;color:#1f5bb5">↺</span></td></tr>`;
+      return `<tr><td style="text-align:center"><input type="checkbox" data-bilck="${ix}" checked></td><td style="font-size:11px">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td><span data-bilna="${ix}" style="cursor:pointer;color:#b00;font-size:10.5px;font-weight:700">🚫 N/A</span></td></tr>`;
+    }).join('');
+    out.innerHTML=head+`<div class="dpanel" style="padding:9px 11px">
+      <div style="font-weight:800;color:var(--navy)">✅ Order match: ${esc(o.order_no)}</div>
+      <div style="font-size:11px;color:var(--muted);margin:2px 0 6px">${esc(_campOf(o))} · <b>${billed}/${total} supplied</b>${na?' · 🚫 '+na+' N/A':''}${pending>0?' · ⏳ '+pending+' pending':''}</div>
+      ${done?'<div style="color:var(--green);font-weight:700;font-size:12px">🎉 Order முடிஞ்சது (supplied + N/A). Pending இல்ல.</div>':`
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Bill-ல வர்ற items-ஐ tick வெச்சு Bill போடு · market-ல இல்லாததை <b style="color:#b00">🚫 N/A</b> (letter கொடுத்தது)</div>
+      <div class="tablewrap"><table><thead><tr><th>✓</th><th>Item</th><th class="num">Qty</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="grid2" style="margin-top:8px"><div class="fld"><label>Bill No</label><input id="billNoIn" value="${esc(billNo)}" placeholder="RAG/0250 / 4253"></div><div class="fld"><label>Bill Date</label><input id="billDtIn" type="date" value="${esc(billDate)}"></div></div>
+      <button class="btn" id="billAssign" style="margin:6px 0 0;background:var(--green)">✅ Tick பண்ணதை Bill போடு</button>`}
+    </div>`;
+    const save=async(msg)=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail');return;}if(msg)showInfoModal('Saved',msg);_billRenderOrder(o,head,'','');};
+    out.querySelectorAll('[data-bilna]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilna];if(!it)return;if(!confirm('"'+it.description+'" — market-ல இல்ல, N/A ஆ mark பண்ணட்டா? (Navy-க்கு letter கொடுத்திருக்கணும்)'))return;it.na=true;it.na_date=_todayKey?_todayKey():new Date().toISOString().slice(0,10);it.na_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone?true:o.supplied;o.partial=!allDone;await save('🚫 N/A mark ஆச்சு.');});
+    out.querySelectorAll('[data-bilundo]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilundo];if(!it)return;delete it.na;delete it.na_date;delete it.na_by;o.partial=!its.every(x=>x.bill||x.na);await save('↺ N/A மாற்றிட்டேன்.');});
+    if(done)return;
+    $('billAssign').onclick=async()=>{
+      const bn=($('billNoIn').value||'').trim();const bd=$('billDtIn').value||'';
+      if(!bn){alert('Bill No போடு bro');return;}
+      let n=0;out.querySelectorAll('[data-bilck]').forEach(ck=>{if(ck.checked){const it=its[+ck.dataset.bilck];if(it){it.bill=bn;it.bill_date=bd;it.supplied=true;n++;}}});
+      if(!n){alert('குறைந்தது ஒரு item tick பண்ணு');return;}
+      o.bill_no=o.bill_no||bn;if(bd)o.bill_date=o.bill_date||bd;
+      const allDone=its.every(it=>it.bill||it.na);o.supplied=allDone?true:(o.supplied||false);o.partial=!allDone;
+      await save('✅ '+n+' item — Bill '+bn+'-ல போட்டாச்சு.'+(allDone?' Order முடிஞ்சது! 🎉':' மீதி items அப்புறம்.'));
     };
   }
   // ===== Return tracker (Order System only — no Busy) =====
