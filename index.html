@@ -2052,6 +2052,8 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const out=$('billOut');const its=o.items||[];
     const billed=its.filter(it=>it.bill).length,na=its.filter(it=>it.na).length,total=its.length;
     const pending=total-billed-na;const done=pending<=0&&total>0;
+    const naItems=its.filter(it=>it.na);
+    const naBlock=naItems.length?`<div style="margin-top:9px;border-top:1px dashed var(--line);padding-top:8px"><div style="font-weight:800;font-size:11.5px;color:#b00;margin-bottom:5px">📄 N/A Letter (client-க்கு கொடுக்க · ${naItems.length} item)</div><div class="fld"><label>Reason</label><input id="naReason" value="${esc(o.na_reason||'')}" placeholder="உதा: market-ல stock இல்ல / discontinued / import delay"></div><button class="btn" id="naLetterBtn" style="margin:6px 0 0;background:#0b2a4a">📄 Letter உருவாக்கு / Print-PDF</button></div>`:'';
     const rows=its.map((it,ix)=>{
       if(it.bill)return `<tr style="opacity:.6"><td style="text-align:center">✅</td><td style="font-size:11px">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td style="font-size:10px;color:var(--green)">Bill ${esc(it.bill)}</td></tr>`;
       if(it.na)return `<tr style="opacity:.7;background:#fdf0f0"><td style="text-align:center">🚫</td><td style="font-size:11px">${esc(it.description)}</td><td class="num">${esc(it.qty)}</td><td style="font-size:10px;color:#b00">N/A${it.na_date?' · '+esc(it.na_date):''} <span data-bilundo="${ix}" style="cursor:pointer;color:#1f5bb5">↺</span></td></tr>`;
@@ -2065,7 +2067,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="tablewrap"><table><thead><tr><th>✓</th><th>Item</th><th class="num">Qty</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
       <div class="grid2" style="margin-top:8px"><div class="fld"><label>Bill No</label><input id="billNoIn" value="${esc(billNo)}" placeholder="RAG/0250 / 4253"></div><div class="fld"><label>Bill Date</label><input id="billDtIn" type="date" value="${esc(billDate)}"></div></div>
       <button class="btn" id="billAssign" style="margin:6px 0 0;background:var(--green)">✅ Tick பண்ணதை Bill போடு</button>`}
+      ${naBlock}
     </div>`;
+    const _naBtn=out.querySelector('#naLetterBtn');if(_naBtn)_naBtn.onclick=async()=>{const rsn=(out.querySelector('#naReason').value||'').trim();o.na_reason=rsn;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_genNALetter(o,rsn);};
     const save=async(msg)=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail');return;}if(msg)showInfoModal('Saved',msg);_billRenderOrder(o,head,'','');};
     out.querySelectorAll('[data-bilna]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilna];if(!it)return;if(!confirm('"'+it.description+'" — market-ல இல்ல, N/A ஆ mark பண்ணட்டா? (Navy-க்கு letter கொடுத்திருக்கணும்)'))return;it.na=true;it.na_date=_todayKey?_todayKey():new Date().toISOString().slice(0,10);it.na_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone?true:o.supplied;o.partial=!allDone;await save('🚫 N/A mark ஆச்சு.');});
     out.querySelectorAll('[data-bilundo]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilundo];if(!it)return;delete it.na;delete it.na_date;delete it.na_by;o.partial=!its.every(x=>x.bill||x.na);await save('↺ N/A மாற்றிட்டேன்.');});
@@ -2079,6 +2083,40 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       const allDone=its.every(it=>it.bill||it.na);o.supplied=allDone?true:(o.supplied||false);o.partial=!allDone;
       await save('✅ '+n+' item — Bill '+bn+'-ல போட்டாச்சு.'+(allDone?' Order முடிஞ்சது! 🎉':' மீதி items அப்புறம்.'));
     };
+  }
+  function _genNALetter(o,reason){
+    const isP=_companyOf(o)==='Puspha Motors';
+    const comp=isP?'PUSPHA MOTORS':'NGRD MOTORS';
+    const addr=isP?'No. 202/19 A, Mohideen Masjid Road, Panchikawatta, Colombo 10.':'No. 202/17 B, Mohideen Masjid Road, Panchikawatta, Colombo 10.';
+    const tel=isP?'Tel/Fax: 0112 449385 · Hotline: 075 9515507 / 077 9338696':'Tel: 0112 449385 · 076 6886526 / 071 5748561';
+    const email=isP?'pusphamotors@gmail.com':'ngrdmotors@gmail.com';
+    const na=(o.items||[]).filter(it=>it.na);
+    const bills=[...new Set((o.items||[]).filter(it=>it.bill).map(it=>it.bill))];
+    const today=new Date().toLocaleDateString('en-GB');
+    const camp=_campOf(o);
+    const naRows=na.map((it,i)=>`<tr><td style="text-align:center;width:36px">${i+1}</td><td>${esc(it.description)}</td><td style="text-align:center;width:60px">${esc(it.qty)}</td></tr>`).join('');
+    const html=`<html><head><meta charset="utf-8"><title>N/A Letter ${esc(o.order_no)}</title>
+    <style>*{font-family:Georgia,'Times New Roman',serif;box-sizing:border-box}body{margin:0;padding:34px 40px;color:#111;font-size:13.5px;line-height:1.55}
+    .hd{text-align:center;border-bottom:3px double #0b2a4a;padding-bottom:10px;margin-bottom:6px}.hd h1{margin:0;color:#0b2a4a;font-size:28px;letter-spacing:1px}.hd .sub{color:#a33;font-size:11.5px;margin-top:2px}.hd .a{font-size:11px;color:#333;margin-top:4px}
+    .meta{display:flex;justify-content:space-between;margin:14px 0 6px;font-size:12.5px}
+    table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #444;padding:6px 8px;font-size:12.5px}th{background:#eef2f8}
+    .sub2{text-align:center;font-weight:bold;text-decoration:underline;margin:14px 0 8px;font-size:14px}
+    .sign{margin-top:44px}.line{border-top:1px solid #000;width:230px;margin-top:34px;padding-top:3px;font-size:12px}
+    @media print{body{padding:20px}}</style></head><body>
+    <div class="hd"><h1>${comp}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${addr} · ${tel} · ${email}</div></div>
+    <div class="meta"><div><b>Date:</b> ${today}</div><div><b>Order No:</b> ${esc(o.order_no||'')}${o.file_no?'<br><b>File No:</b> '+esc(o.file_no):''}</div></div>
+    <div>To,<br>The Officer in Charge / Superintendent Logistics,<br>Sri Lanka Navy — ${esc(camp)}</div>
+    <div class="sub2">Subject: Non-availability of Items — Order ${esc(o.order_no||'')}</div>
+    <div>Dear Sir,</div>
+    <p>With reference to the above Purchase Order${o.model?' for vehicle '+esc(o.model)+(o.naha_no?' ('+esc(o.naha_no)+')':''):''}, we regret to inform you that the following item(s) are <b>currently not available in the market</b>, and therefore could not be supplied:</p>
+    <table><thead><tr><th>No</th><th>Item Description</th><th>Qty</th></tr></thead><tbody>${naRows}</tbody></table>
+    ${reason?`<p><b>Reason:</b> ${esc(reason)}</p>`:''}
+    <p>We have supplied the remaining items against the above order${bills.length?' under Invoice No. <b>'+bills.map(esc).join(', ')+'</b>':''}. We kindly request you to arrange the <b>payment for the supplied items</b> accordingly.</p>
+    <p>We apologize for any inconvenience caused and assure you of our best service at all times.</p>
+    <div class="sign">Thanking you,<br>Yours faithfully,<br><b>For ${comp}</b><div class="line">Authorized Signature</div></div>
+    </body></html>`;
+    const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
+    w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
   }
   // ===== Return tracker (Order System only — no Busy) =====
   let _retOrder=null;
