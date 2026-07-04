@@ -883,20 +883,33 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(window._costMode&&window._costMode()==='items'){return sumItemCost($('costItems'));}
     return Number(($('buyIn')||{}).value)||0;
   }
-  // ---- Parts Master (model+item → part no, brand) ----
+  // ---- Parts Master (vehicle-group + item → part no, brand, country, cost) ----
   let _partsCache=null;
   function _norm(s){return (s||'').toString().toLowerCase().replace(/\s+/g,' ').trim();}
-  function partKey(model,desc){return (_norm(model)+'|'+_norm(desc)).replace(/[.#$\[\]\/]/g,'_').slice(0,700);}
+  // canonical vehicle group: token-sorted + year-stripped so "L200 Double Cab", "Double Cab L200 1998" → same key
+  function _vehGroup(model){let m=(model||'').toLowerCase().replace(/\b(19|20)\d\d\b/g,' ').replace(/[^a-z0-9 ]/g,' ');const t=m.split(/\s+/).filter(x=>x.length>1).sort();return t.join(' ');}
+  function partKey(model,desc){return (_vehGroup(model)+'|'+_norm(desc)).replace(/[.#$\[\]\/]/g,'_').slice(0,700);}
+  function partKeyRaw(model,desc){return (_norm(model)+'|'+_norm(desc)).replace(/[.#$\[\]\/]/g,'_').slice(0,700);} // legacy
   async function _loadParts(){
     try{if(!_fbOk)throw 0;const s=await firebase.database().ref('parts').once('value');_partsCache=s.val()||{};try{localStorage.setItem('__parts_cache',JSON.stringify(_partsCache));}catch(e){}}
     catch(e){try{_partsCache=JSON.parse(localStorage.getItem('__parts_cache')||'{}');}catch(_){_partsCache={};}}
     return _partsCache;
   }
-  function lookupPart(model,desc){if(!_partsCache)return null;return _partsCache[partKey(model,desc)]||null;}
-  async function savePart(model,desc,partno,brand){
-    partno=(partno||'').trim();if(!partno||!_norm(desc))return;
-    const k=partKey(model,desc);const rec={partno,brand:(brand||'').trim(),model:model||'',desc:desc||''};
-    if(!_partsCache)_partsCache={};_partsCache[k]=rec;
+  function lookupPart(model,desc){if(!_partsCache)return null;return _partsCache[partKey(model,desc)]||_partsCache[partKeyRaw(model,desc)]||null;}
+  async function savePart(model,desc,partno,brand,country,cost){
+    if(!_norm(desc))return;
+    const k=partKey(model,desc);if(!_partsCache)_partsCache={};
+    const prev=_partsCache[k]||{};
+    const pick=(v,p)=>{v=(v==null?'':String(v)).trim();return v!==''?v:(p||'');};
+    const rec={
+      partno:pick(partno,prev.partno),
+      brand:pick(brand,prev.brand),
+      country:pick(country,prev.country),
+      cost:(cost!=null&&cost!==''&&Number(cost)>0)?Number(cost):(prev.cost||0),
+      model:model||prev.model||'',desc:desc||prev.desc||''
+    };
+    if(!rec.partno&&!rec.brand&&!rec.country&&!(rec.cost>0))return; // nothing to learn
+    _partsCache[k]=rec;
     try{localStorage.setItem('__parts_cache',JSON.stringify(_partsCache));}catch(e){}
     try{if(_fbOk)await firebase.database().ref('parts/'+k).set(rec);}catch(e){}
   }
@@ -1962,6 +1975,18 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   // ===== Purchasing tab (order-wise: supplier + cost + part/brand/country + invoice → Busy) =====
   let _purOrder=null,_purMode='buy';
   let _purSelSet=new Set(),_purFocus=false,_purHideNA=true;
+  let _purStickySup='',_purStickyBill='',_purStickyDate='';
+  function _purAutofill(o){const af=new Set();if(!_partsCache||!o)return af;let changed=false;
+    (o.items||[]).forEach((it,ix)=>{if(it.na)return;const pm=lookupPart(o.model,it.description);if(!pm)return;let hit=false;
+      if(!(it.partno||'').trim()&&pm.partno){it.partno=pm.partno;hit=true;}
+      if(!(it.brand||'').trim()&&pm.brand){it.brand=pm.brand;hit=true;}
+      if(!(it.country||'').trim()&&pm.country){it.country=pm.country;hit=true;}
+      if(!(Number(it.cost)>0)&&Number(pm.cost)>0){it.cost=Number(pm.cost);it.before=it.cost;it.discount=0;hit=true;}
+      if(hit){af.add(ix);changed=true;}});
+    if(changed){try{window.storage.set(o.id,JSON.stringify(o));}catch(e){}}
+    return af;
+  }
+  function _learnPart(o,it){if(!o||!it)return;savePart(o.model,it.description,it.partno,it.brand,it.country,it.cost);}
   async function renderPurchasing(){
     let dlEl=document.getElementById('purOrdList');
     if(!dlEl){dlEl=document.createElement('datalist');dlEl.id='purOrdList';document.body.appendChild(dlEl);}
@@ -1995,6 +2020,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   function _purRender(){
     const o=_purOrder;if(!o)return;
+    const _af=_purAutofill(o);
     const allItems=(o.items||[]).filter(it=>it.description);
     const purItems=allItems.filter(it=>!it.na);            // N/A = supply பண்ணல = purchase வேண்டாm
     const naCount=allItems.length-purItems.length;
@@ -2022,13 +2048,13 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <div style="font-size:11px;color:var(--navy);background:#f3f6fb;border-radius:8px;padding:6px 9px;margin-bottom:8px">🚗 <b>${esc(o.model||'—')}</b> · ${esc(_campOf(o))} · ${purItems.length} item purchase${naCount?' · 🚫 '+naCount+' N/A':''}${nolink?' · <span style="color:var(--amber)">'+nolink+' Busy link இல்ல (🔗 Match-ல link)</span>':''}</div>
       <div class="dpanel" style="padding:9px 11px;margin-bottom:8px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:6px">✅ கீழ items <b>tick</b> பண்ணு → supplier + bill + date போடு → <b>"tick பண்ணதுக்கு apply"</b>. வேற bill-ku வேற items tick பண்ணி repeat பண்ணு. (ஒரு item தனியா சரி பண்ண row-லயே type பண்ணலாம்.)</div>
-        <div class="grid2"><div class="fld"><label>Supplier</label><input id="purSup" list="purSupDL" placeholder="supplier (பேர்/alias)"></div><div class="fld"><label>Bill / Invoice No</label><input id="purInv" placeholder="supplier bill no"></div></div>
-        <div class="grid2"><div class="fld"><label>Bill Date</label><input id="purInvD" type="date"></div><div class="fld" style="display:flex;align-items:flex-end;gap:6px"><button class="btn" id="purApply" style="margin:0;background:#0b2a4a;flex:1">⬇️ Tick பண்ணதுக்கு apply</button><button class="btn" id="purClearSel" style="margin:0;background:#8a8f98;width:auto;padding:8px 12px">tick clear</button></div></div>
+        <div class="grid2"><div class="fld"><label>Supplier</label><input id="purSup" list="purSupDL" value="${esc(_purStickySup)}" placeholder="supplier (பேர்/alias)"></div><div class="fld"><label>Bill / Invoice No</label><input id="purInv" value="${esc(_purStickyBill)}" placeholder="supplier bill no"></div></div>
+        <div class="grid2"><div class="fld"><label>Bill Date</label><input id="purInvD" type="date" value="${esc(_purStickyDate)}"></div><div class="fld" style="display:flex;align-items:flex-end;gap:6px"><button class="btn" id="purApply" style="margin:0;background:#0b2a4a;flex:1">⬇️ Tick பண்ணதுக்கு apply</button><button class="btn" id="purClearSel" style="margin:0;background:#8a8f98;width:auto;padding:8px 12px">tick clear</button></div></div>
       </div>
       ${billsSummary}
       ${toggles}
       <div class="tablewrap" style="background:#fff;border-radius:10px"><table><thead><tr><th style="width:24px"><input type="checkbox" id="purSelAll"></th><th>Item</th><th class="num">Qty</th><th class="num puSell">Sell</th><th>Supplier / Shop</th><th class="num">Cost</th><th>Bill No</th><th>Date</th><th>Part No</th><th>Brand</th><th>Country</th></tr></thead><tbody>
-      ${view.map(({it,ix})=>`<tr${it.na?' style="opacity:.55;background:#fdf0f0"':''}><td style="text-align:center;background:#fff"><input type="checkbox" class="purSel" data-pusel="${ix}" ${_purSelSet.has(ix)?'checked':''}${it.na?' disabled':''}></td><td style="font-size:11.5px;color:#14213a;font-weight:600;background:#fff">${esc(it.description)}${it.na?' <span style="color:#b00;font-size:9.5px;font-weight:700">🚫 N/A</span>':''}</td><td class="num" style="background:#fff">${esc(it.qty)}</td><td class="num puSell" style="background:#fff;color:#1a7f4b;font-weight:700">${fmt(it.total)}</td><td style="background:#fff"><div style="display:flex;align-items:center;gap:2px"><input data-pusup="${ix}" list="purSupDL" value="${esc(it.supplier||'')}" placeholder="supplier / SHOP" style="width:102px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px">${it.supplier?`<span data-puclr="${ix}" title="clear" style="cursor:pointer;color:var(--red);font-weight:800;font-size:14px;padding:0 3px">✕</span>`:''}</div></td><td class="num" style="background:#fff"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:56px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="background:#fff"><input data-puinv="${ix}" value="${esc(it.inv_no||'')}" placeholder="bill no" style="width:78px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puinvd="${ix}" type="date" value="${esc(it.inv_date||'')}" style="font-size:10px;padding:3px 3px;border:1px solid var(--line);border-radius:6px;width:118px"></td><td style="background:#fff"><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:76px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:68px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puctry="${ix}" list="purCtryDL" value="${esc(it.country||'')}" placeholder="country" style="width:66px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
+      ${view.map(({it,ix})=>`<tr${it.na?' style="opacity:.55;background:#fdf0f0"':''}><td style="text-align:center;background:#fff"><input type="checkbox" class="purSel" data-pusel="${ix}" ${_purSelSet.has(ix)?'checked':''}${it.na?' disabled':''}></td><td style="font-size:11.5px;color:#14213a;font-weight:600;background:#fff">${esc(it.description)}${it.na?' <span style="color:#b00;font-size:9.5px;font-weight:700">🚫 N/A</span>':''}${_af.has(ix)?' <span style="color:#0b6b4a;font-size:9px;font-weight:700" title="parts memory-ல இருந்து auto">✨ auto</span>':''}</td><td class="num" style="background:#fff">${esc(it.qty)}</td><td class="num puSell" style="background:#fff;color:#1a7f4b;font-weight:700">${fmt(it.total)}</td><td style="background:#fff"><div style="display:flex;align-items:center;gap:2px"><input data-pusup="${ix}" list="purSupDL" value="${esc(it.supplier||'')}" placeholder="supplier / SHOP" style="width:102px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px">${it.supplier?`<span data-puclr="${ix}" title="clear" style="cursor:pointer;color:var(--red);font-weight:800;font-size:14px;padding:0 3px">✕</span>`:''}</div></td><td class="num" style="background:#fff"><input data-pucost="${ix}" type="number" inputmode="decimal" value="${it.cost||''}" placeholder="0" style="width:56px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td><td style="background:#fff"><input data-puinv="${ix}" value="${esc(it.inv_no||'')}" placeholder="bill no" style="width:78px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puinvd="${ix}" type="date" value="${esc(it.inv_date||'')}" style="font-size:10px;padding:3px 3px;border:1px solid var(--line);border-radius:6px;width:118px"></td><td style="background:#fff"><input data-pupart="${ix}" value="${esc(it.partno||'')}" placeholder="part no" style="width:76px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-pubrand="${ix}" value="${esc(it.brand||'')}" placeholder="brand" style="width:68px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td><td style="background:#fff"><input data-puctry="${ix}" list="purCtryDL" value="${esc(it.country||'')}" placeholder="country" style="width:66px;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join('')}
       ${view.length?'':'<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:14px;font-size:12px">'+(_purFocus?'Tick பண்ணது ஒண்ணும் இல்ல — items tick பண்ணு':'item இல்ல')+'</td></tr>'}
       </tbody></table></div>
       <div class="dpanel" style="padding:8px 11px;margin-top:8px;font-size:12px;font-weight:700">வாங்கல் Rs ${fmt(cost)}<span class="puProfit"> · விற்பனை Rs ${fmt(sell)}${cost>0?` · <span style="color:${(sell-cost)>=0?'var(--green)':'var(--red)'}">லாபம் Rs ${fmt(sell-cost)}</span>`:' · <span style="color:var(--muted)">லாபம் — (cost போடு)</span>'}</span></div>
@@ -2037,17 +2063,18 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const save=async()=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}};
     // checkbox → maintain _purSelSet (survives re-render)
     $('purBody').querySelectorAll('.purSel').forEach(cb=>cb.addEventListener('change',()=>{const ix=+cb.dataset.pusel;if(cb.checked)_purSelSet.add(ix);else _purSelSet.delete(ix);}));
-    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_purRender();}));
+    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_learnPart(o,it);_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}await save();_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=allItems[+inp.dataset.pusup];it.supplier=name;await save();_purRender();}));
     _supAC($('purSup'),null);
-    const pf=(sel,key,re)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset[sel.replace('data-','')]];it[key]=(inp.value||'').trim();await save();if(re)_purRender();}));
+    const pf=(sel,key,re)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset[sel.replace('data-','')]];it[key]=(inp.value||'').trim();await save();if(key==='partno'||key==='brand'||key==='country')_learnPart(o,it);if(re)_purRender();}));
     pf('data-pupart','partno');pf('data-pubrand','brand');pf('data-puctry','country');
     pf('data-puinv','inv_no',true);pf('data-puinvd','inv_date',true);
     const selAll=$('purSelAll');if(selAll)selAll.onclick=()=>{const on=selAll.checked;$('purBody').querySelectorAll('.purSel').forEach(c=>{if(c.disabled)return;c.checked=on;const ix=+c.dataset.pusel;if(on)_purSelSet.add(ix);else _purSelSet.delete(ix);});};
     const tn=$('purToggleNA');if(tn)tn.onclick=()=>{_purHideNA=!_purHideNA;_purRender();};
     const tf=$('purToggleFocus');if(tf)tf.onclick=()=>{_purFocus=!_purFocus;_purRender();};
     $('purApply').onclick=async()=>{const s=$('purSup').value.trim(),iv=$('purInv').value.trim(),dt=$('purInvD').value;
+      _purStickySup=s||_purStickySup;_purStickyBill=iv||_purStickyBill;_purStickyDate=dt||_purStickyDate;
       const tgt=[..._purSelSet].filter(i=>allItems[i]&&!allItems[i].na);const all=tgt.length===0;
       if(!s&&!iv&&!dt){alert(tgt.length?('👆 மேல box-la முதல்ல Supplier / Bill No / Date போடு → அப்புறம் "apply" (இப்ப '+tgt.length+' item tick). இல்லனா row-லயே type பண்ணு.'):'முதல்ல: மேல Supplier/Bill/Date போடு → items tick பண்ணு → apply. (ஒரு item மட்டுமானா row-லயே type பண்ணு.)');return;}
       const list=all?purItems.map(it=>allItems.indexOf(it)):tgt;
