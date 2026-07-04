@@ -2009,7 +2009,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     pf('data-puinv','inv_no',true);pf('data-puinvd','inv_date',true);
     const selAll=$('purSelAll');if(selAll)selAll.onclick=()=>{$('purBody').querySelectorAll('.purSel').forEach(c=>c.checked=selAll.checked);};
     $('purApply').onclick=async()=>{const s=$('purSup').value.trim(),iv=$('purInv').value.trim(),dt=$('purInvD').value;
-      if(!s&&!iv&&!dt){alert('Supplier / Bill / Date எதாவது போடு bro');return;}
+      if(!s&&!iv&&!dt){const nsel=selIdx().length;alert(nsel?('👆 மேல box-la முதல்ல Supplier / Bill No / Date போடு → அப்புறம் "apply" (இப்ப '+nsel+' item tick ஆயிருக்கு). இல்லனா row-லயே நேரடியா type பண்ணு.'):'முதல்ல: மேல Supplier/Bill/Date போடு → items tick பண்ணு → apply. (ஒரு item மட்டுமானா row-லயே type பண்ணு.)');return;}
       let tgt=selIdx();const all=tgt.length===0;if(all)tgt=items.map((_,i)=>i);
       tgt.forEach(i=>{const it=items[i];if(s)it.supplier=s;if(iv)it.inv_no=iv;if(dt)it.inv_date=dt;});
       if(s){const k=_supKey(s);if(k)_supCache[k]=s;}await save();_purRender();
