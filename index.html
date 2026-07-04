@@ -1018,9 +1018,14 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
   async function saveOrder(){
     const order_no=(current.order_no||'').trim();
     if(!order_no){alert('Order No இல்ல — save பண்ண முடியாது');return;}
-    // duplicate check
+    // duplicate check — block save, offer to view existing
     const dup=orders.find(o=>(o.order_no||'').trim().toLowerCase()===order_no.toLowerCase());
-    if(dup){alert('⚠️ இந்த Order No ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\nஒரே order-க்கு ஒன்னு தான். Duplicate ஆகாது.');return;}
+    if(dup){
+      if(confirm('⚠️ இந்த PO Number ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\n\nஅந்த order-ஐ இப்போ பாக்கணுமா?\n(OK = அந்த order-ஐ பாரு · Cancel = வேண்டாம், திரும்ப check பண்ணு)')){
+        current=null;try{_openOrderEdit(dup.id);}catch(e){setTab('list');renderList();}
+      }
+      return;
+    }
     const sell=Number($('sellIn').value)||0,buy=currentBuy();
     const items=(window._costMode&&window._costMode()==='items')?readItemDetails($('costItems'),current.items):(current.items||[]);
     const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',proc_ref:current.proc_ref||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
@@ -1649,8 +1654,9 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
     if(!list.length){lc.innerHTML=chip+'<div class="empty">'+(q?'🔍 "'+esc(q)+'" — match ஆகல':'இந்த filter-க்கு order இல்ல')+'</div>';const fc=$('fltClear');if(fc)fc.onclick=()=>{_listFilter=null;renderList();};return;}
     lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
-      return `<div class="orow"><div class="ohead" data-i="${idx}">
-        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
+      const overdue=!(o.paid||o.bill_no||o.supplied)&&o.delivery_date&&daysSince(o.delivery_date)>0;
+      return `<div class="orow"${overdue?' style="border-left:4px solid #c2452f"':''}><div class="ohead" data-i="${idx}">
+        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${overdue?' <span class="badge" style="background:#fdecec;color:#c2452f">⏰ Overdue '+daysSince(o.delivery_date)+'d</span>':''}${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
           <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}${o.model?' · 🚗 '+esc(o.model):''}${o.naha_no?' · '+esc(o.naha_no):''}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}</div>
@@ -3355,6 +3361,40 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     $('aiChatIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_aiChatSend();}});
     $('aiChatSpk').onclick=()=>{const s=$('aiChatSpk');s.dataset.on=s.dataset.on==='1'?'0':'1';s.style.opacity=s.dataset.on==='1'?'1':'.6';};
   }
+  function _morningBriefing(){
+    const isPend=o=>!(o.paid||o.bill_no||o.supplied);
+    const overdue=orders.filter(o=>isPend(o)&&o.delivery_date&&daysSince(o.delivery_date)>0).sort((a,b)=>daysSince(b.delivery_date)-daysSince(a.delivery_date));
+    const readyNS=orders.filter(o=>isPend(o)&&_stageOf(o)==='ready');
+    const gc={};orders.forEach(o=>{const k=(o.order_no||'').trim().toLowerCase();if(!k)return;(gc[k]=gc[k]||[]).push(o);});
+    const dups=Object.keys(gc).filter(k=>gc[k].length>1).map(k=>({no:gc[k][0].order_no,n:gc[k].length}));
+    const unassigned=orders.filter(o=>isPend(o)&&!o.assignee);
+    const stuck=orders.filter(o=>isPend(o)&&_stageOf(o)==='sourcing'&&o.stage_at&&(Date.now()-o.stage_at)>3*864e5);
+    const dueSoon=orders.filter(o=>isPend(o)&&o.delivery_date&&(daysSince(o.delivery_date)===0||daysSince(o.delivery_date)===-1));
+    let pendVal=0;const staff={};let unN=0;
+    orders.filter(isPend).forEach(o=>{pendVal+=Number(o.sell)||0;if(o.assignee){const k=o.assignee_name||o.assignee;staff[k]=(staff[k]||0)+1;}else unN++;});
+    const row=(o,note,col)=>`<div data-mbo="${esc(o.id)}" style="cursor:pointer;display:flex;justify-content:space-between;gap:8px;padding:5px 8px;border-radius:7px;background:#fff;margin-top:4px;font-size:11.5px"><span><b>${esc(o.order_no)}</b> <span style="color:var(--muted)">· ${esc(_campOf(o))}</span></span><span style="color:${col||'var(--muted)'};white-space:nowrap">${note}</span></div>`;
+    const list=(arr,noteFn,col,cap)=>arr.slice(0,cap||8).map(o=>row(o,noteFn(o),col)).join('')+(arr.length>(cap||8)?`<div style="font-size:10.5px;color:var(--muted);padding:3px 8px">…இன்னும் ${arr.length-(cap||8)}</div>`:'');
+    const sec=(title,bg,bd,inner)=>`<details open style="margin-bottom:8px;background:${bg};border-left:4px solid ${bd};border-radius:10px;padding:8px 11px"><summary style="cursor:pointer;font-weight:800;font-size:12.5px;color:${bd};list-style:none">${title}</summary><div style="margin-top:6px">${inner}</div></details>`;
+    // RED
+    let red='';
+    if(overdue.length)red+=`<div style="font-weight:700;font-size:11.5px;color:#b00;margin-top:4px">⏰ Overdue — ${overdue.length}</div>`+list(overdue,o=>daysSince(o.delivery_date)+' நாள் late!','#b00');
+    if(readyNS.length)red+=`<div style="font-weight:700;font-size:11.5px;color:#b00;margin-top:6px">🟢 Ready ஆச்சு · supply பண்ணல — ${readyNS.length}</div>`+list(readyNS,o=>'supply பண்ணு','#c2452f');
+    if(dups.length)red+=`<div style="font-weight:700;font-size:11.5px;color:#b00;margin-top:6px">🔁 Duplicate PO — ${dups.length} <span style="font-weight:400;color:var(--muted)">(click → பாரு)</span></div>`+dups.slice(0,6).map(d=>`<div data-mbdup="${esc(d.no)}" style="cursor:pointer;font-size:11.5px;padding:5px 8px;color:#b00;background:#fff;border-radius:7px;margin-top:4px">⚠️ ${esc(d.no)} — ${d.n} தடவ · 🗑 duplicate-ஐ delete பண்ணு</div>`).join('');
+    // YELLOW
+    let yel='';
+    if(unassigned.length)yel+=`<div style="font-weight:700;font-size:11.5px;color:#9a6b00;margin-top:4px">👤 Staff assign பண்ணல — ${unassigned.length}</div>`+list(unassigned,o=>_campOf(o).replace(/\s*\(.*\)/,''),'#9a6b00');
+    if(stuck.length)yel+=`<div style="font-weight:700;font-size:11.5px;color:#9a6b00;margin-top:6px">🟡 Sourcing 3+ நாள் stuck — ${stuck.length}</div>`+list(stuck,o=>Math.floor((Date.now()-o.stage_at)/864e5)+' நாள்','#9a6b00');
+    if(dueSoon.length)yel+=`<div style="font-weight:700;font-size:11.5px;color:#9a6b00;margin-top:6px">📅 Delivery இன்னைக்கி/நாளைக்கி — ${dueSoon.length}</div>`+list(dueSoon,o=>daysSince(o.delivery_date)===0?'இன்னைக்கி!':'நாளைக்கி','#9a6b00');
+    // GREEN
+    const staffRows=Object.keys(staff).sort((a,b)=>staff[b]-staff[a]).map(k=>`<span style="display:inline-block;background:#fff;border-radius:7px;padding:3px 9px;margin:3px 4px 0 0;font-size:11px">👷 ${esc(k)} <b>${staff[k]}</b></span>`).join('')+(unN?`<span style="display:inline-block;background:#fff6e5;border-radius:7px;padding:3px 9px;margin:3px 4px 0 0;font-size:11px;color:#9a6b00">⬜ Unassigned <b>${unN}</b></span>`:'');
+    const grn=`<div class="puProfit" style="font-size:12px;font-weight:700;color:#1a7f4b">💰 Pending மொத்த மதிப்பு: Rs ${fmt(pendVal)}</div><div style="margin-top:6px">${staffRows||'<span style="color:var(--muted);font-size:11px">—</span>'}</div>`;
+    let html='';
+    if(red)html+=sec('🔴 URGENT — இன்னைக்கே fix பண்ணு','#fdecec','#c2452f',red);
+    if(yel)html+=sec('🟡 TODAY — கவனம் தேவை','#fff6e5','#c98a00',yel);
+    html+=sec('🟢 THIS WEEK — overview','#e9f7ef','#1a7f4b',grn);
+    return `<div style="margin-bottom:12px"><div style="font-size:13.5px;font-weight:800;color:var(--navy);margin-bottom:7px">☀️ Morning Briefing</div>${html}</div>`;
+  }
+  function _morningBriefing_ORIG(){return '';}
   function renderDash(){
     const dw=$('dashContent');
     _renderCustChips();_backupNudge();
@@ -3395,6 +3435,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       <div class="dsec">🏕️ Top Camps (value)</div>
       <div class="dpanel" style="padding:12px 12px 8px">${_hbarChart(topCamps,'#1f3864')}</div>`;
     dw.innerHTML=`
+      ${_morningBriefing()}
       <div class="dpanel" style="padding:12px 13px;margin-bottom:12px;border-left:4px solid #5a3fb0">
         <div style="font-size:13px;font-weight:800;color:#5a3fb0;margin-bottom:4px">🤖 AI Staff — Pending வேலை Plan</div>
         <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px">Pending orders-ஐ AI பார்த்து — urgent எது, camp வாரி, staff பங்கீடு, priority suggest பண்ணும்.</div>
@@ -3444,6 +3485,8 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     $('dashOrd').onclick=()=>{_listFilter=null;setTab('list');renderList();};
     dw.querySelectorAll('[data-attn]').forEach(el=>el.addEventListener('click',()=>_openOrderEdit(el.dataset.attn)));
     const aib=$('aiStaffBtn');if(aib)aib.onclick=_aiStaffPlan;
+    dw.querySelectorAll('[data-mbo]').forEach(el=>el.addEventListener('click',()=>_openOrderEdit(el.dataset.mbo)));
+    dw.querySelectorAll('[data-mbdup]').forEach(el=>el.addEventListener('click',()=>{setTab('list');renderList();setTimeout(()=>{const sb=$('searchBox');if(sb){sb.value=el.dataset.mbdup;renderList();sb.scrollIntoView({block:'center'});}},60);}));
     const agb=$('aiGrowthBtn');if(agb)agb.onclick=_aiGrowthPlan;
     dw.querySelectorAll('[data-fltt]').forEach(el=>{el.style.cursor='pointer';el.title='Click → orders பாரு';
       el.addEventListener('click',()=>{const t=el.dataset.fltt,v=el.dataset.fltv;
