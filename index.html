@@ -1144,6 +1144,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
       <div class="grid2">
         <div class="fld"><label>Bill No</label><input id="e_billNo" value="${v(o.bill_no)}"></div>
         <div class="fld"><label>Bill Date</label><input type="date" id="e_billDate" value="${v(o.bill_date)}"></div>
+        <div class="fld full"><label>Goods Received By (யார் வாங்கினாங்க)</label><input id="e_recvBy" value="${v(o.received_by)}" placeholder="Navy person name / rank"></div>
         ${showVal?'<div class="fld full"><label>Bill Amount (Rs)</label><input type="number" id="e_billAmt" inputmode="decimal" value="'+(o.bill_amt||'')+'"></div>':''}
       </div>`:''}
       ${showPay?`<label class="toggle"><input type="checkbox" id="e_paid" ${o.paid?'checked':''}><span>Payment வந்துடுச்சா? ✓</span></label>
@@ -1327,7 +1328,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
         if(eMode==='items'){o.items=readItemDetails(box.querySelector('#e_costItems'),o.items);buy=o.items.reduce((a,it)=>a+(Number(it.cost)||0),0);}
         else{buy=Number(box.querySelector('#e_buy').value)||0;}
         o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;}
-      const _sup=box.querySelector('#e_supplied');if(_sup){o.supplied=_sup.checked;o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';}
+      const _sup=box.querySelector('#e_supplied');if(_sup){o.supplied=_sup.checked;o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';const _rb=box.querySelector('#e_recvBy');if(_rb)o.received_by=_rb.value||'';}
       const _ba=box.querySelector('#e_billAmt');if(_ba)o.bill_amt=Number(_ba.value)||0;
       const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
       if(_apoP){const a=_apoP.value.trim();o.apo_pct=a===''?null:Number(a)||0;o.apo_comm=(Number(o.sell)||0)*(o.apo_pct||0)/100;}
@@ -3098,7 +3099,7 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const items=(o.items||[]);
     const rows=items.length?items.map((it,n)=>`<tr><td class="ctr">${n+1}</td><td>${esc(it.description||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td class="num">${esc(it.qty||'')}</td><td class="num">${it.unit_price?fmt(it.unit_price):'—'}</td><td class="num">${it.total?fmt(it.total):'—'}</td></tr>`).join('')
       :'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:12px">Item details இல்ல</td></tr>';
-    return `<div class="ocard"><div class="ohd"><span class="on">${esc(o.order_no||'—')}</span>${_isEgp(o)?'<span class="sb" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${badge}</div>${supLine}${verifyStrip}<div class="meta">${meta}</div><div class="itbl"><div class="tablewrap"><table><thead><tr><th class="ctr">#</th><th>Item</th><th>Brand</th><th>Part No</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="oact"><button class="oedit" data-eo="${esc(o.id||o.order_no)}">✏️ இந்த order திருத்து / Edit</button></div></div>`;
+    return `<div class="ocard"><div class="ohd"><span class="on">${esc(o.order_no||'—')}</span>${_isEgp(o)?'<span class="sb" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${badge}</div>${supLine}${verifyStrip}<div class="meta">${meta}</div><div class="itbl"><div class="tablewrap"><table><thead><tr><th class="ctr">#</th><th>Item</th><th>Brand</th><th>Part No</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Total</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="oact"><button class="oedit" data-eo="${esc(o.id||o.order_no)}">✏️ இந்த order திருத்து / Edit</button>${(o.bill_no&&!o.paid)?`<button class="oedit" data-wapay="${esc(o.id||o.order_no)}" style="background:#128c7e;color:#fff;border-color:#128c7e">📲 Payment Reminder</button>`:''}</div></div>`;
   }
   function _chipState(q){const box=$('dashCustChips');if(box)box.querySelectorAll('.cchip').forEach(el=>el.classList.toggle('on',(el.dataset.c||'').toLowerCase()===q));}
   function _renderCustChips(){
@@ -3125,7 +3126,26 @@ buyer = the command/department at the top (e.g. Southern Naval Command - Captain
     const LIM=25,show=matches.slice(0,LIM);
     res.innerHTML=`<div class="cnt">🔍 ${matches.length} order · Rs ${fmt(tot)}${matches.length>LIM?' · top '+LIM+' காட்டுது':''}</div>`+show.map(_searchCard).join('');
     res.querySelectorAll('[data-eo]').forEach(b=>b.onclick=()=>_openOrderEdit(b.dataset.eo));
+    res.querySelectorAll('[data-wapay]').forEach(b=>b.onclick=()=>_waPayReminder(b.dataset.wapay));
     res.querySelectorAll('[data-verify]').forEach(b=>b.onclick=async()=>{const k=b.dataset.verify;const o=orders.find(x=>(x.id===k)||(x.order_no===k));if(!o)return;o.verified={by:(CURRENT&&(CURRENT.name||CURRENT.u))||'',at:Date.now()};try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderDashSearch();});
+  }
+  function _waPayReminder(key){
+    const o=orders.find(x=>(x.id===key)||(x.order_no===key));if(!o)return;
+    const comp=_companyOf(o);
+    const isP=comp==='Puspha Motors';
+    const phone=isP?'0779 338 696 / 0759 515 507':'011 244 9385 / 076 688 6526';
+    const days=o.bill_date?daysSince(o.bill_date):null;
+    const amt=can('value')?('Amount: Rs '+fmt(o.sell)+'\n'):'';
+    const msg=`🧾 ${comp}\n`+
+      `Order No: ${o.order_no||''}\n`+
+      (o.bill_no?`Invoice No: ${o.bill_no}\n`:'')+
+      (o.model?`Vehicle: ${o.model}${o.naha_no?' · '+o.naha_no:''}\n`:'')+
+      amt+
+      (o.bill_date?`Supplied/Billed: ${o.bill_date}\n`:'')+
+      (o.received_by?`Goods received by: ${o.received_by}\n`:'')+
+      `\nVanakkam bro 🙏 Indha order-ku payment innum varala`+(days&&days>0?` (${days} naal aachu)`:'')+`. Dhayavu senji arrange pannunga. Nandri.\n`+
+      `${comp} · ${phone}`;
+    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
   }
   function _openOrderEdit(key){
     _listFilter=null;
