@@ -144,8 +144,12 @@
   .no-del [data-del]{display:none!important}
   .no-users #tabUsers{display:none!important}
   .no-order #tabNew{display:none!important}
-  .no-report #tabDash,.no-report #tabRep{display:none!important}
-  .no-value #tabDash,.no-value #tabRep{display:none!important}
+  .no-report #tabDash{display:none!important}
+  .no-value #tabDash{display:none!important}
+  .no-report.no-billentry #tabRep{display:none!important}
+  .no-value:not(.bill-only) #tabRep{display:none!important}
+  .bill-only #rmReport,.bill-only #rmPending,.bill-only #rmDaily,.bill-only #rmCal,.bill-only #rmOut,.bill-only #rmComm,.bill-only #rmSum,.bill-only #rmSales,.bill-only #rmTender,.bill-only #rmBusy,.bill-only #rmReturn{display:none!important}
+  .bill-only #repNormal{display:none!important}
   .no-value .pf{display:none!important}
   .no-value .puSell{display:none!important}
   .no-value .puProfit{display:none!important}
@@ -1747,7 +1751,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('rmBusy').onclick=()=>{setRepMode('busy');renderBusy();};
     $('rmReturn').onclick=()=>{setRepMode('return');renderReturn();};
     $('rmBill').onclick=()=>{setRepMode('bill');renderBill();};
-    renderReport();
+    if(can('bill')&&!can('report')){setRepMode('bill');renderBill();}else{renderReport();}
   }
   var V3_DB='https://ngrd-motors-default-rtdb.firebaseio.com/ngrd';
   var _v3Cache=null;
@@ -2169,7 +2173,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     out.innerHTML=head+`<div class="dpanel" style="padding:9px 11px">
       <div style="font-weight:800;color:var(--navy)">✅ Order match: ${esc(o.order_no)}</div>
       <div style="font-size:11px;color:var(--muted);margin:2px 0 6px">${esc(_campOf(o))} · <b>${billed}/${total} supplied</b>${na?' · 🚫 '+na+' N/A':''}${pending>0?' · ⏳ '+pending+' pending':''}</div>
-      <div class="puProfit" style="font-size:11px;background:#eef4ff;border-radius:7px;padding:5px 9px;margin-bottom:6px">💵 Order Rs ${fmt(o.sell)} · <b style="color:#1a7f4b">Bill(payment) Rs ${fmt(_billedAmount(o))}</b>${na?' · 🚫 N/A Rs '+fmt(_naAmount(o)):''}</div>
+      <div class="puProfit" style="font-size:11px;background:#eef4ff;border-radius:7px;padding:5px 9px;margin-bottom:6px">${can('value')?'💵 Order Rs '+fmt(o.sell)+' · ':''}<b style="color:#1a7f4b">Bill(payment) Rs ${fmt(_billedAmount(o))}</b>${na?' · 🚫 N/A Rs '+fmt(_naAmount(o)):''}</div>
       ${done?'<div style="color:var(--green);font-weight:700;font-size:12px;margin-bottom:4px">🎉 Order முடிஞ்சது. மாத்தணும்னா கீழ ↺ (un-bill) / 🚫 N/A வெச்சு correct பண்ணு.</div>':'<div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Bill-ல வர்ற items-ஐ tick வெச்சு Bill போடு · market-ல இல்லாததை <b style="color:#b00">🚫 N/A</b> (letter கொடுத்தது)</div>'}
       <div class="tablewrap"><table><thead><tr><th>✓</th><th>Item</th><th class="num">Qty</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
       ${pending>0?`<div class="grid2" style="margin-top:8px"><div class="fld"><label>Bill No</label><input id="billNoIn" value="${esc(billNo)}" placeholder="RAG/0250 / 4253"></div><div class="fld"><label>Bill Date</label><input id="billDtIn" type="date" value="${esc(billDate)}"></div></div>
@@ -4016,6 +4020,8 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     b.classList.toggle('staff',isStaff());
     b.classList.toggle('no-order',!can('order'));
     b.classList.toggle('no-report',!can('report'));
+    b.classList.toggle('no-billentry',!can('bill'));
+    b.classList.toggle('bill-only',can('bill')&&!can('report'));
     b.classList.toggle('no-value',!can('value'));
     b.classList.toggle('no-payment',!can('payment'));
     b.classList.toggle('no-del',!can('del'));
@@ -4042,7 +4048,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       else{localStorage.removeItem('ngrd_user');location.reload();}}catch(e){}
   }else setTimeout(()=>$('gateUser').focus(),100);}catch(e){setTimeout(()=>$('gateUser').focus(),100);}})();
 
-  const PERM_DEFS=[['order','புது Order (AI)'],['purchase','Purchasing add'],['supply','Supply mark'],['payment','Payment add'],['value','Value/Profit பாக்க'],['report','Dashboard/Report'],['del','Delete']];
+  const PERM_DEFS=[['order','புது Order (AI)'],['purchase','Purchasing add'],['supply','Supply mark'],['payment','Payment add'],['value','Value/Profit பாக்க'],['report','Dashboard/Report'],['bill','Bill Entry'],['del','Delete']];
   function permChecks(idprefix,perms){perms=perms||{};
     return PERM_DEFS.map(([k,lbl])=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;font-weight:600;color:var(--navy)"><input type="checkbox" class="${idprefix}" data-perm="${k}" ${perms[k]?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"> ${lbl}</label>`).join('');
   }
