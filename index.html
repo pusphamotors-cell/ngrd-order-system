@@ -2056,7 +2056,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <div style="font-size:11px;color:var(--navy);background:#f3f6fb;border-radius:8px;padding:6px 9px;margin-bottom:8px">🚗 <b>${esc(o.model||'—')}</b> · ${esc(_campOf(o))} · ${purItems.length} item purchase${naCount?' · 🚫 '+naCount+' N/A':''}${nolink?' · <span style="color:var(--amber)">'+nolink+' Busy link இல்ல (🔗 Match-ல link)</span>':''}</div>
       <div class="dpanel" style="padding:9px 11px;margin-bottom:8px">
         <div style="font-size:11px;color:var(--muted);margin-bottom:6px">✅ கீழ items <b>tick</b> பண்ணு → supplier + bill + date போடு → <b>"tick பண்ணதுக்கு apply"</b>. வேற bill-ku வேற items tick பண்ணி repeat பண்ணு. (ஒரு item தனியா சரி பண்ண row-லயே type பண்ணலாம்.)</div>
-        <div class="grid2"><div class="fld"><label>Supplier</label><input id="purSup" list="purSupDL" value="${esc(_purStickySup)}" placeholder="supplier (பேர்/alias)"></div><div class="fld"><label>Bill / Invoice No</label><input id="purInv" value="${esc(_purStickyBill)}" placeholder="supplier bill no"></div></div>
+        <div class="grid2"><div class="fld"><label>Supplier</label><div style="display:flex;gap:4px"><input id="purSup" list="purSupDL" value="${esc(_purStickySup)}" placeholder="supplier (பேர்/alias)" style="flex:1"><button class="btn" id="purSupStore" type="button" style="margin:0;width:auto;padding:8px 10px;background:#7a5a1a;font-size:11px">🏪 Store</button></div></div><div class="fld"><label>Bill / Invoice No</label><input id="purInv" value="${esc(_purStickyBill)}" placeholder="supplier bill no"></div></div>
         <div class="grid2"><div class="fld"><label>Bill Date</label><input id="purInvD" type="date" value="${esc(_purStickyDate)}"></div><div class="fld" style="display:flex;align-items:flex-end;gap:6px"><button class="btn" id="purApply" style="margin:0;background:#0b2a4a;flex:1">⬇️ Tick பண்ணதுக்கு apply</button><button class="btn" id="purClearSel" style="margin:0;background:#8a8f98;width:auto;padding:8px 12px">tick clear</button></div></div>
       </div>
       ${billsSummary}
@@ -2076,6 +2076,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}await save();_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=allItems[+inp.dataset.pusup];it.supplier=name;await save();_purRender();}));
     _supAC($('purSup'),null);
+    const pss=$('purSupStore');if(pss)pss.onclick=()=>{$('purSup').value='STORE';};
     const pf=(sel,key,re)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset[sel.replace('data-','')]];it[key]=(inp.value||'').trim();await save();if(key==='partno'||key==='brand'||key==='country')_learnPart(o,it);if(re)_purRender();}));
     pf('data-pupart','partno');pf('data-pubrand','brand');pf('data-puctry','country');
     pf('data-puinv','inv_no',true);pf('data-puinvd','inv_date',true);
@@ -2105,18 +2106,27 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   function _genInquiryPdf(o,items,supplier){
     const today=new Date().toLocaleDateString('en-GB');
-    const rows=items.map((it,i)=>`<tr style="background:${i%2?'#f4f7fb':'#fff'}"><td style="text-align:center;padding:6px;border:1px solid #ccc">${i+1}</td><td style="padding:6px;border:1px solid #ccc">${esc(it.description)}${it.partno?'<br><span style="color:#666;font-size:9.5px">Part No: '+esc(it.partno)+'</span>':''}${it.brand?' <span style="color:#666;font-size:9.5px">'+esc(it.brand)+'</span>':''}</td><td style="text-align:center;padding:6px;border:1px solid #ccc">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ccc">&nbsp;</td><td style="padding:6px;border:1px solid #ccc">&nbsp;</td></tr>`).join('');
+    const isStock=/^(shop|store|stock)$/i.test((supplier||'').trim());
+    const rows=isStock?
+      items.map((it,i)=>`<tr style="background:${i%2?'#f4f7fb':'#fff'}"><td style="text-align:center;padding:6px;border:1px solid #ccc">${i+1}</td><td style="padding:6px;border:1px solid #ccc">${esc(it.description)}${it.partno?'<br><span style="color:#666;font-size:9.5px">Part No: '+esc(it.partno)+'</span>':''}${it.brand?' <span style="color:#666;font-size:9.5px">'+esc(it.brand)+'</span>':''}</td><td style="text-align:center;padding:6px;border:1px solid #ccc">${esc(it.qty)}</td><td style="text-align:center;padding:6px;border:1px solid #ccc">☐</td></tr>`).join('')
+      :items.map((it,i)=>`<tr style="background:${i%2?'#f4f7fb':'#fff'}"><td style="text-align:center;padding:6px;border:1px solid #ccc">${i+1}</td><td style="padding:6px;border:1px solid #ccc">${esc(it.description)}${it.partno?'<br><span style="color:#666;font-size:9.5px">Part No: '+esc(it.partno)+'</span>':''}${it.brand?' <span style="color:#666;font-size:9.5px">'+esc(it.brand)+'</span>':''}</td><td style="text-align:center;padding:6px;border:1px solid #ccc">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ccc">&nbsp;</td><td style="padding:6px;border:1px solid #ccc">&nbsp;</td></tr>`).join('');
+    const title=isStock?'STORE — ITEMS READY பண்ணுங்க':'PURCHASE INQUIRY';
+    const thead=isStock?
+      `<tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a;width:30px">#</th><th style="padding:6px;border:1px solid #0b2a4a;text-align:left">Item Description</th><th style="padding:6px;border:1px solid #0b2a4a;width:50px">Qty</th><th style="padding:6px;border:1px solid #0b2a4a;width:60px">Ready ✓</th></tr>`
+      :`<tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a;width:30px">#</th><th style="padding:6px;border:1px solid #0b2a4a;text-align:left">Item Description</th><th style="padding:6px;border:1px solid #0b2a4a;width:50px">Qty</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Unit Price</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Total</th></tr>`;
+    const toLine=isStock?'<div style="margin-bottom:10px;font-size:11.5px"><b>To:</b> STORE</div>':(supplier?`<div style="margin-bottom:10px;font-size:11.5px"><b>To:</b> ${esc(supplier)}</div>`:'');
+    const footer=isStock?'தயவுசெய்து மேல items-ஐ ready பண்ணி வையுங்க. நன்றி.':'Kindly quote your best price &amp; availability. Thank you.';
     const page=`<div style="font-family:Arial,Helvetica,sans-serif;padding:18px;font-size:12px;color:#14213a">
-      <div style="text-align:center;margin-bottom:14px"><div style="font-size:16px;font-weight:800;color:#0b2a4a;letter-spacing:.5px">PURCHASE INQUIRY</div><div style="font-size:10.5px;color:#666;margin-top:2px">Date: ${esc(today)}</div></div>
-      ${supplier?`<div style="margin-bottom:10px;font-size:11.5px"><b>To:</b> ${esc(supplier)}</div>`:''}
+      <div style="text-align:center;margin-bottom:14px"><div style="font-size:16px;font-weight:800;color:#0b2a4a;letter-spacing:.5px">${title}</div><div style="font-size:10.5px;color:#666;margin-top:2px">Date: ${esc(today)}</div></div>
+      ${toLine}
       <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead><tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a;width:30px">#</th><th style="padding:6px;border:1px solid #0b2a4a;text-align:left">Item Description</th><th style="padding:6px;border:1px solid #0b2a4a;width:50px">Qty</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Unit Price</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Total</th></tr></thead>
+        <thead>${thead}</thead>
         <tbody>${rows}</tbody>
       </table>
-      <div style="margin-top:26px;font-size:10.5px;color:#666">Kindly quote your best price &amp; availability. Thank you.</div>
+      <div style="margin-top:26px;font-size:10.5px;color:#666">${footer}</div>
     </div>`;
     const w=window.open('','_blank');if(!w){alert('Popup blocked — allow popups panu bro');return;}
-    w.document.write('<html><head><title>Purchase Inquiry</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.write('<html><head><title>'+esc(title)+'</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
     w.document.close();
   }
   function _genOrderPurchase(o,items){
