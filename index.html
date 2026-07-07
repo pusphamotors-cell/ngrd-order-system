@@ -33,7 +33,8 @@
   .tabs{display:flex;gap:1px;background:linear-gradient(180deg,#ffffff,#fbfcfe);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;box-shadow:0 2px 7px rgba(20,39,74,.05)}
   .tabs::-webkit-scrollbar{display:none}
   .tab{flex:1 0 auto;min-width:76px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 11px 7px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:color .15s ease,background .15s ease;-webkit-tap-highlight-color:transparent}
-  .tab .ti{display:flex;align-items:center;justify-content:center}
+  .tab .ti{display:flex;align-items:center;justify-content:center;position:relative}
+  .tabBadge{position:absolute;top:-6px;right:-9px;background:var(--red);color:#fff;font-size:9.5px;font-weight:800;line-height:1;border-radius:9px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px}
   .tab .ti svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
   .tab .tl{font-size:10.5px;letter-spacing:.1px;line-height:1}
   .tab:hover{color:var(--navy2)}
@@ -354,7 +355,7 @@
     <div class="tab" id="tabNew"><span class="ti"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg></span><span class="tl">புது Order</span></div>
     <div class="tab" id="tabPur"><span class="ti"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></span><span class="tl">Purchasing</span></div>
     <div class="tab" id="tabList"><span class="ti"><svg viewBox="0 0 24 24"><path d="M19 21l-7-4.5L5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span><span class="tl">Saved</span></div>
-    <div class="tab" id="tabTasks"><span class="ti"><svg viewBox="0 0 24 24"><polyline points="9 11 11.5 13.5 16 8"/><path d="M20 13v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></span><span class="tl">வேலை</span></div>
+    <div class="tab" id="tabTasks"><span class="ti"><svg viewBox="0 0 24 24"><polyline points="9 11 11.5 13.5 16 8"/><path d="M20 13v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span id="tasksBadge" class="tabBadge hide">0</span></span><span class="tl">வேலை</span></div>
     <div class="tab" id="tabRep"><span class="ti"><svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="20"/><line x1="7" y1="20" x2="7" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="17" y1="20" x2="17" y2="11"/></svg></span><span class="tl">Report</span></div>
     <div class="tab" id="tabSettle"><span class="ti"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15v-5"/><path d="M19 11a2 2 0 0 0 0 5h3v-5z"/></svg></span><span class="tl">Settle</span></div>
     <div class="tab" id="tabUsers"><span class="ti"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="tl">Users</span></div>
@@ -1128,7 +1129,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
 
   async function loadOrders(){try{const res=await window.storage.list('order:');const keys=(res&&res.keys)||[];const arr=[];
     for(const k of keys){try{const r=await window.storage.get(k);if(r&&r.value)arr.push(JSON.parse(r.value));}catch(e){}}
-    arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;}catch(e){orders=[];}}
+    arr.sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));orders=arr;_updateTasksBadge();}catch(e){orders=[];}}
 
   function detailHtml(o){
     const st=!can('value');const showPay=can('payment');
@@ -1137,7 +1138,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
                      :'<th>#</th><th>Item</th><th class="num">Total</th><th class="num">Before</th><th class="num">Disc</th><th class="num">Net Cost</th><th>Country</th><th>Supplier</th><th>Brand</th><th>Part No</th><th>Invoice</th>';
     const itemRows=(o.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td>${st?'':'<td class="num">'+fmt(it.total)+'</td>'}<td class="num">${it.before?fmt(it.before):'—'}</td><td class="num">${it.discount?(fmt(it.discount)+(it.disc_type==='pct'?'%':'')):'—'}</td><td class="num">${it.cost?fmt(it.cost):'—'}</td><td>${esc(it.country||'—')}</td><td>${esc(it.supplier||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td>${esc(it.inv_no||'—')}${it.inv_date?'<br><small>'+esc(it.inv_date)+'</small>':''}</td></tr>`).join('');
     return `<div class="odetail">
-      ${o.assignee?`<div style="padding:8px 13px;background:#eef4ff;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy)">👷 ${esc(o.assignee_name||o.assignee)}${o.task_date?' · 📅 '+_fmtDk(o.task_date):''} · ${o.task_done?'<span style="color:var(--green)">✓ Ready ஆச்சு</span>':'<span style="color:var(--amber)">⏳ pending</span>'}</div>`:''}
+      ${o.assignee?`<div style="padding:8px 13px;background:#eef4ff;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--navy)">👷 ${esc(o.assignee_name||o.assignee)}${o.task_date?' · 📅 '+_fmtDk(o.task_date):''} · ${o.task_done?'<span style="color:var(--green)">✓ Ready ஆச்சு</span>':'<span style="color:var(--amber)">⏳ pending</span>'}${o.bill_assignee?' · 🧾 '+esc(o.bill_assignee_name||o.bill_assignee):''}</div>`:''}
       <div class="sec">📋 PO Details</div><div class="metarow">
         ${row('File No',o.file_no)}${row('NAHA',o.naha_no)}${row('Civil No',o.civil_no)}${row('Chassis No',o.chassis_no)}${row('Engine No',o.engine_no)}${row('Model',o.model)}
         ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}${_isEgp(o)?row('🏛️ eGP Ref',o.egp_ref||o.proc_ref)+row('🏛️ eGP Date',o.egp_date):''}</div>
@@ -2178,10 +2179,13 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <div class="tablewrap"><table><thead><tr><th>✓</th><th>Item</th><th class="num">Qty</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>
       ${pending>0?`<div class="grid2" style="margin-top:8px"><div class="fld"><label>Bill No</label><input id="billNoIn" value="${esc(billNo)}" placeholder="RAG/0250 / 4253"></div><div class="fld"><label>Bill Date</label><input id="billDtIn" type="date" value="${esc(billDate)}"></div></div>
       <button class="btn" id="billAssign" style="margin:6px 0 0;background:var(--green)">✅ Tick பண்ணதை Bill போடு</button>`:''}
+      ${can('supply')&&!o.supplied?'<button class="btn" id="billSupplyMark" style="margin:6px 0 0;background:#0b6b4a">📦 Supply Mark பண்ணு (முழு order)</button>':''}
+      ${o.supplied?'<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:6px">📦 Supply ஆச்சு ✓</div>':''}
       ${naBlock}
     </div>`;
     const _naBtn=out.querySelector('#naLetterBtn');if(_naBtn)_naBtn.onclick=async()=>{const rsn=(out.querySelector('#naReason').value||'').trim();o.na_reason=rsn;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_genNALetter(o,rsn);};
     const save=async(msg)=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail');return;}if(msg)showInfoModal('Saved',msg);_billRenderOrder(o,head,'','');};
+    const _sm=out.querySelector('#billSupplyMark');if(_sm)_sm.onclick=async()=>{if(!await showConfirm('📦 Supply Mark','இந்த order-ஐ முழுசா Supply ஆச்சு-னு mark பண்ணட்டா?'))return;o.supplied=true;o.supply_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';o.supply_at=Date.now();_updateTasksBadge();await save('📦 Supply Mark ஆச்சு ✓');};
     out.querySelectorAll('[data-bilna]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilna];if(!it)return;if(!await showConfirm('🚫 N/A mark','<b>'+esc(it.description)+'</b><br>market-ல இல்ல — N/A ஆ mark பண்ணட்டா?<br><span style="color:#999;font-size:11px">(Navy-க்கு letter கொடுத்திருக்கணும். தப்பானா ↺ போட்டு மாத்தலாம்.)</span>'))return;it.na=true;it.na_date=_todayKey?_todayKey():new Date().toISOString().slice(0,10);it.na_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone?true:o.supplied;o.partial=!allDone;await save('🚫 N/A mark ஆச்சு.');});
     out.querySelectorAll('[data-bilundo]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilundo];if(!it)return;delete it.na;delete it.na_date;delete it.na_by;o.partial=!its.every(x=>x.bill||x.na);await save('↺ N/A மாற்றிட்டேன்.');});
     out.querySelectorAll('[data-bilunbill]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilunbill];if(!it)return;if(!await showConfirm('↺ Un-bill','<b>'+esc(it.description)+'</b><br>bill-ல இருந்து எடுக்கட்டா?<br><span style="color:#999;font-size:11px">(அப்புறம் 🚫 N/A ஆ mark பண்ணலாம்)</span>'))return;delete it.bill;delete it.bill_date;it.supplied=false;const allDone=its.every(x=>x.bill||x.na);o.supplied=allDone;o.partial=!allDone;await save('↺ Bill-ல இருந்து எடுத்தாச்சு. இப்போ 🚫 N/A ஆக்கலாம்.');});
@@ -2192,6 +2196,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       if(!n){alert('குறைந்தது ஒரு item tick பண்ணு');return;}
       o.bill_no=o.bill_no||bn;if(bd)o.bill_date=o.bill_date||bd;o.bill_by=o.bill_by||_who;
       const allDone=its.every(it=>it.bill||it.na);o.supplied=allDone?true:(o.supplied||false);o.partial=!allDone;
+      _updateTasksBadge();
       await save('✅ '+n+' item — Bill '+bn+'-ல போட்டாச்சு.'+(allDone?' Order முடிஞ்சது! 🎉':' மீதி items அப்புறம்.'));
     };
   }
@@ -3892,6 +3897,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
   function _fmtDk(k){const d=new Date(k);return isNaN(d)?k:d.toLocaleDateString('en-GB');}
   function assignForm(o,users){
     const opts=Object.keys(users).map(u=>`<option value="${esc(u)}" ${o.assignee===u?'selected':''}>${esc(users[u].name||u)} (${esc(u)})</option>`).join('');
+    const billOpts=Object.keys(users).map(u=>`<option value="${esc(u)}" ${o.bill_assignee===u?'selected':''}>${esc(users[u].name||u)} (${esc(u)})</option>`).join('');
     return `<div class="odetail">
       <div class="sec">👷 Staff-க்கு Assign — "இந்த order ready பண்ணு"</div>
       <div class="grid2">
@@ -3899,6 +3905,11 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
         <div class="fld"><label>எந்த நாள் ready பண்ணணும்</label><input type="date" id="as_date" value="${o.task_date||_todayKey()}"></div>
       </div>
       <div style="padding:6px 13px;font-size:11.5px;color:var(--muted)">Assign பண்ணா — அந்த staff-ஓட "👷 வேலை" tab-ல இந்த order வரும்.</div>
+      <div class="sec" style="margin-top:4px">🧾 Bill/Supply Staff — "Ready ஆனதும் இவரு bill போடணும்"</div>
+      <div class="grid2">
+        <div class="fld"><label>எந்த Staff (Billing)</label><select id="as_billuser"><option value="">— sourcing staff ஆனாலும் ஓகே —</option>${billOpts}</select></div>
+      </div>
+      <div style="padding:0 13px 6px;font-size:11.5px;color:var(--muted)">தேர்வு பண்ணா — Order 🟢 Ready ஆனதும் அந்த staff-ஓட "👷 வேலை" tab-ல "🧾 Bill பண்ண வேண்டியது" section-ல வரும்.</div>
       <div style="padding:6px 13px 13px;display:flex;gap:10px">
         <button class="btn" id="as_cancel" style="margin-top:0;flex:1;background:#7a8295">Cancel</button>
         <button class="btn gold" id="as_save" style="margin-top:0;flex:2">💾 Assign பண்ணு</button>
@@ -3913,16 +3924,35 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       const users=await fbUsersGet();
       o.assignee=u;o.assignee_name=(users[u]&&users[u].name)||u;o.task_date=box.querySelector('#as_date').value||'';
       if(o.task_done===undefined)o.task_done=false;
+      const bu=box.querySelector('#as_billuser').value;
+      if(bu){o.bill_assignee=bu;o.bill_assignee_name=(users[bu]&&users[bu].name)||bu;}
+      else{delete o.bill_assignee;delete o.bill_assignee_name;}
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
       box.innerHTML=detailHtml(o);wireDetail(box,o);
     });
     const clr=box.querySelector('#as_clear');
-    if(clr)clr.addEventListener('click',async()=>{delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;
+    if(clr)clr.addEventListener('click',async()=>{delete o.assignee;delete o.assignee_name;delete o.task_date;delete o.task_done;delete o.bill_assignee;delete o.bill_assignee_name;
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}box.innerHTML=detailHtml(o);wireDetail(box,o);});
   }
   function _stageOf(o){if(o.bill_no||o.supplied)return 'supplied';return o.stage||(o.task_done?'ready':'new');}
   const _STG={new:['🔵','New','#1f5bb5'],sourcing:['🟡','Sourcing','#c98a00'],ready:['🟢','Ready','#1a7f4b'],supplied:['✅','Supplied','#5a3fb0']};
   async function _setStage(id,st){const o=orders.find(x=>x.id===id);if(!o)return;o.stage=st;o.stage_at=Date.now();o.stage_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';o.task_done=(st==='ready');try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}renderTasks();}
+  function _updateTasksBadge(){
+    const el=$('tasksBadge');if(!el)return;
+    if(!CURRENT||CURRENT.role==='admin'){el.classList.add('hide');return;}
+    const pending=orders.filter(o=>o.assignee===CURRENT.u&&!o.task_done).length;
+    const billQ=orders.filter(o=>o.bill_assignee===CURRENT.u&&_stageOf(o)==='ready').length;
+    const n=pending+billQ;
+    if(n>0){el.textContent=n>99?'99+':String(n);el.classList.remove('hide');}else{el.classList.add('hide');}
+  }
+  function billQueueRow(o){
+    return `<div class="brow"><div class="nm">${esc(o.order_no)} <span style="color:var(--muted);font-weight:500">· ${esc(_campOf(o))} · ${(o.items||[]).length} items</span>${o.delivery_date?'<div style="font-size:10.5px;color:var(--muted);margin-top:2px">📅 Delivery '+esc(o.delivery_date)+'</div>':''}</div><div><button class="btn gold" data-gobill="${esc(o.order_no)}" style="margin:0;padding:7px 12px;font-size:11.5px">🧾 Bill போடு</button></div></div>`;
+  }
+  function _goToBill(orderNo){
+    setTab('rep');initReport();
+    if(!(can('bill')&&!can('report'))){setRepMode('bill');renderBill();}
+    setTimeout(()=>{const inp=$('billOrdSearch'),btn=$('billOrdBtn');if(inp&&btn){inp.value=orderNo;btn.click();}},60);
+  }
   function taskRow(o,isAdmin){
     const cur=_stageOf(o);let right;
     if(cur==='supplied'){right='<span class="badge b-inv">✅ Supplied (bill '+esc(o.bill_no||'✓')+')</span>';}
@@ -3972,6 +4002,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       <div style="font-size:9.5px;color:var(--muted);margin-top:5px">ℹ️ Ready/Sourcing = கடைசி action-ஐ யாரு பண்ணாங்க. Bill count இன்றிலிருந்து track ஆகுது.</div>`;
   }
   function renderTasks(){
+    _updateTasksBadge();
     const box=$('taskList');const isAdmin=CURRENT&&CURRENT.role==='admin';
     $('taskHead').textContent=isAdmin?'👷 வேலை — யாருக்கு எந்த order assign ஆச்சு':'👷 என் வேலை — நான் ready பண்ண வேண்டிய orders';
     const assigned=orders.filter(o=>o.assignee);
@@ -3989,13 +4020,16 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       const _sa=$('staffActSearch');if(_sa)_sa.addEventListener('input',()=>{_staffActQ=_sa.value;_staffActRender();});
     } else {
       const arr=orders.filter(o=>o.assignee===CURRENT.u);
-      if(!arr.length){box.innerHTML='<div class="empty">இன்னைக்கு வேலை இல்ல 🎉<br>Admin assign பண்ணா இங்க வரும்</div>';return;}
+      const billQ=orders.filter(o=>o.bill_assignee===CURRENT.u&&_stageOf(o)==='ready');
+      const billQHtml=billQ.length?`<div class="sec" style="color:#0b6b4a">🧾 Bill/Supply பண்ண வேண்டியது (${billQ.length})</div><div class="dpanel" style="margin-bottom:10px">${billQ.map(billQueueRow).join('')}</div>`:'';
+      if(!arr.length&&!billQ.length){box.innerHTML='<div class="empty">இன்னைக்கு வேலை இல்ல 🎉<br>Admin assign பண்ணா இங்க வரும்</div>';return;}
       const today=_todayKey();const tmrw=_ymd(new Date(Date.now()+86400000));
       const g={overdue:[],today:[],tomorrow:[],later:[],nodate:[],done:[]};
       arr.forEach(o=>{if(o.task_done){g.done.push(o);return;}const d=o.task_date||'';if(!d)g.nodate.push(o);else if(d<today)g.overdue.push(o);else if(d===today)g.today.push(o);else if(d===tmrw)g.tomorrow.push(o);else g.later.push(o);});
       const sortd=a=>a.sort((x,y)=>(x.task_date||'').localeCompare(y.task_date||''));
       const sec=(t,a,cls)=>a.length?`<div class="sec" style="${cls||''}">${t} (${a.length})</div><div class="dpanel" style="margin-bottom:8px">${sortd(a).map(o=>taskRow(o,false)).join('')}</div>`:'';
       box.innerHTML=
+        billQHtml+
         sec('🔴 தாமதம் (Overdue)',g.overdue,'color:var(--red)')+
         sec('⭐ இன்னைக்கு',g.today,'')+
         sec('📅 நாளைக்கு',g.tomorrow,'')+
@@ -4003,6 +4037,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
         sec('📌 Date இல்ல',g.nodate,'')+
         (g.done.length?`<div class="sec" style="color:var(--green)">✓ முடிஞ்சது (${g.done.length})</div><div class="dpanel">${g.done.map(o=>taskRow(o,false)).join('')}</div>`:'');
     }
+    box.querySelectorAll('[data-gobill]').forEach(b=>b.addEventListener('click',()=>_goToBill(b.dataset.gobill)));
     box.querySelectorAll('[data-stage]').forEach(b=>b.addEventListener('click',()=>_setStage(b.dataset.stage,b.dataset.st)));
     box.querySelectorAll('[data-done]').forEach(b=>b.addEventListener('click',()=>_setStage(b.dataset.done,'ready')));
     box.querySelectorAll('[data-undone]').forEach(b=>b.addEventListener('click',()=>_setStage(b.dataset.undone,'new')));
@@ -4027,7 +4062,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     b.classList.toggle('no-del',!can('del'));
     b.classList.toggle('no-users',!CURRENT||CURRENT.role!=='admin');
   }
-  function enterApp(){$('loginGate').style.display='none';applyRole();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';
+  function enterApp(){$('loginGate').style.display='none';applyRole();_updateTasksBadge();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';
     if(can('report')&&can('value')){setTab('dash');renderDash();}else if(isStaff()){setTab('tasks');renderTasks();}else{setTab('list');renderList();}}
   async function doLogin(){
     const u=($('gateUser').value||'').trim().toLowerCase(),p=($('gatePass').value||'');
