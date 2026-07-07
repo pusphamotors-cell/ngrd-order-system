@@ -2067,6 +2067,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       </tbody></table></div>
       <div class="dpanel" style="padding:8px 11px;margin-top:8px;font-size:12px;font-weight:700">வாங்கல் Rs ${fmt(cost)}<span class="puProfit"> · விற்பனை Rs ${fmt(sell)}${cost>0?` · <span style="color:${(sell-cost)>=0?'var(--green)':'var(--red)'}">லாபம் Rs ${fmt(sell-cost)}</span>`:' · <span style="color:var(--muted)">லாபம் — (cost போடு)</span>'}</span></div>
       <button class="btn gold" id="purExcel" style="margin-top:8px">📥 Busy Purchase Excel (bill-வாரியா split)</button>
+      <button class="btn" id="purInquiry" style="margin-top:8px;background:#0b2a4a">🧾 Supplier Inquiry PDF (tick பண்ணதுக்கு)</button>
       <div style="margin-top:8px;font-size:11.5px;border-top:1px dashed var(--line);padding-top:8px">🧾 Busy import: ${done?('✅ <b>'+esc(o.busy_purchase.by)+'</b> · '+new Date(o.busy_purchase.at).toLocaleDateString('en-GB')):'⬜ இல்ல'} ${done?`<button class="copyprev" id="purUnmark" style="margin:0;padding:2px 7px;width:auto">↺ மாற்று</button>`:`<button class="btn" id="purMark" style="margin:0;width:auto;padding:5px 12px;background:var(--green)">✅ Purchase import ஆச்சு</button>`}</div>`;
     const save=async()=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}};
     // checkbox → maintain _purSelSet (survives re-render)
@@ -2092,8 +2093,31 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const pcs=$('purClearSel');if(pcs)pcs.onclick=()=>{_purSelSet=new Set();if(_purFocus)_purFocus=false;_purRender();};
     $('purBody').querySelectorAll('[data-puclr]').forEach(b=>b.addEventListener('click',async()=>{const it=allItems[+b.dataset.puclr];it.supplier='';await save();_purRender();}));
     $('purExcel').onclick=()=>_genOrderPurchase(o,purItems);
+    const pinq=$('purInquiry');if(pinq)pinq.onclick=()=>{
+      const tgt=[..._purSelSet].filter(i=>allItems[i]&&!allItems[i].na);
+      const list=(tgt.length?tgt:purItems.map(it=>allItems.indexOf(it))).map(i=>allItems[i]).filter(Boolean);
+      if(!list.length){alert('Items tick பண்ணு bro (இல்லனா எல்லா purchase items-உம் போகும்)');return;}
+      const sup=($('purSup').value||'').trim();
+      _genInquiryPdf(o,list,sup);
+    };
     const pm=$('purMark');if(pm)pm.onclick=async()=>{o.busy_purchase={done:true,by:(CURRENT&&(CURRENT.name||CURRENT.u))||'?',at:Date.now()};await save();_purRender();};
     const pu=$('purUnmark');if(pu)pu.onclick=async()=>{if(await showConfirm('↺ மாற்று','Purchase import mark மாற்றட்டா?')){o.busy_purchase=null;await save();_purRender();}};
+  }
+  function _genInquiryPdf(o,items,supplier){
+    const today=new Date().toLocaleDateString('en-GB');
+    const rows=items.map((it,i)=>`<tr style="background:${i%2?'#f4f7fb':'#fff'}"><td style="text-align:center;padding:6px;border:1px solid #ccc">${i+1}</td><td style="padding:6px;border:1px solid #ccc">${esc(it.description)}${it.partno?'<br><span style="color:#666;font-size:9.5px">Part No: '+esc(it.partno)+'</span>':''}${it.brand?' <span style="color:#666;font-size:9.5px">'+esc(it.brand)+'</span>':''}</td><td style="text-align:center;padding:6px;border:1px solid #ccc">${esc(it.qty)}</td><td style="padding:6px;border:1px solid #ccc">&nbsp;</td><td style="padding:6px;border:1px solid #ccc">&nbsp;</td></tr>`).join('');
+    const page=`<div style="font-family:Arial,Helvetica,sans-serif;padding:18px;font-size:12px;color:#14213a">
+      <div style="text-align:center;margin-bottom:14px"><div style="font-size:16px;font-weight:800;color:#0b2a4a;letter-spacing:.5px">PURCHASE INQUIRY</div><div style="font-size:10.5px;color:#666;margin-top:2px">Date: ${esc(today)}</div></div>
+      ${supplier?`<div style="margin-bottom:10px;font-size:11.5px"><b>To:</b> ${esc(supplier)}</div>`:''}
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a;width:30px">#</th><th style="padding:6px;border:1px solid #0b2a4a;text-align:left">Item Description</th><th style="padding:6px;border:1px solid #0b2a4a;width:50px">Qty</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Unit Price</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Total</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="margin-top:26px;font-size:10.5px;color:#666">Kindly quote your best price &amp; availability. Thank you.</div>
+    </div>`;
+    const w=window.open('','_blank');if(!w){alert('Popup blocked — allow popups panu bro');return;}
+    w.document.write('<html><head><title>Purchase Inquiry</title><style>@media print{@page{margin:12mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.close();
   }
   function _genOrderPurchase(o,items){
     if(!window.XLSX){alert('Excel library load ஆகல');return;}
