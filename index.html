@@ -2116,9 +2116,13 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       :`<tr style="background:#0b2a4a;color:#fff"><th style="padding:6px;border:1px solid #0b2a4a;width:30px">#</th><th style="padding:6px;border:1px solid #0b2a4a;text-align:left">Item Description</th><th style="padding:6px;border:1px solid #0b2a4a;width:50px">Qty</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Unit Price</th><th style="padding:6px;border:1px solid #0b2a4a;width:90px">Total</th></tr>`;
     const toLine=isStock?'<div style="margin-bottom:10px;font-size:11.5px"><b>To:</b> STORE</div>':(supplier?`<div style="margin-bottom:10px;font-size:11.5px"><b>To:</b> ${esc(supplier)}</div>`:'');
     const footer=isStock?'தயவுசெய்து மேல items-ஐ ready பண்ணி வையுங்க. நன்றி.':'Kindly quote your best price &amp; availability. Thank you.';
+    const mf=(lbl,val)=>val?`<div><span style="color:#888">${lbl}:</span> <b>${esc(val)}</b></div>`:'';
+    const metaLine=[mf('Order No',o.order_no),mf('PO/File No',o.file_no),mf('Vehicle Model',o.model),mf('NAHA No',o.naha_no),mf('Civil No',o.civil_no),mf('Buyer/Camp',_campOf(o))].filter(Boolean).join('');
+    const metaBlock=metaLine?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;font-size:11px;margin-bottom:10px;padding:8px 10px;background:#f3f6fb;border-radius:6px">${metaLine}</div>`:'';
     const page=`<div style="font-family:Arial,Helvetica,sans-serif;padding:18px;font-size:12px;color:#14213a">
       <div style="text-align:center;margin-bottom:14px"><div style="font-size:16px;font-weight:800;color:#0b2a4a;letter-spacing:.5px">${title}</div><div style="font-size:10.5px;color:#666;margin-top:2px">Date: ${esc(today)}</div></div>
       ${toLine}
+      ${metaBlock}
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead>${thead}</thead>
         <tbody>${rows}</tbody>
