@@ -3499,13 +3499,15 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   function _slFilter(){
     return orders.filter(o=>{
       if(!(o.supplied&&o.bill_no))return false; // real sales: supplied + bill issued
-      if(_companyOf(o)!==_slComp)return false;
+      if(_slComp!=='all'&&_companyOf(o)!==_slComp)return false;
       const d=_slBillDate(o);const mk=d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'';
       if(_slFrom&&(!mk||mk<_slFrom))return false;if(_slTo&&(!mk||mk>_slTo))return false;
       return true;
     }).sort((a,b)=>{const da=_slBillDate(a),db=_slBillDate(b);return (da?da.getTime():0)-(db?db.getTime():0);});
   }
-  function _compInfo(c){return c==='Puspha Motors'
+  function _compInfo(c){
+    if(c==='all')return{name:'NGRD MOTORS + PUSPHA MOTORS (COMBINED)',addr:'Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'011 244 9385 / 0779 338 696',mail:'ngrdmotors@gmail.com / pusphamotors@gmail.com'};
+    return c==='Puspha Motors'
     ?{name:'PUSPHA MOTORS',addr:'202/19A, Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'0779 338 696 / 0759 515 507',mail:'pusphamotors@gmail.com'}
     :{name:'N.G.R.D. MOTORS',addr:'202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'011 244 9385 / 076 688 6526',mail:'ngrdmotors@gmail.com'};}
   function renderSales(){
@@ -3514,8 +3516,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(!_slFrom||months.indexOf(_slFrom)<0)_slFrom=months[0];if(!_slTo||months.indexOf(_slTo)<0)_slTo=months[months.length-1];
     const list=_slFilter();let total=0;
     const rows=list.map((o,i)=>{const d=_slBillDate(o);const dt=d?d.toLocaleDateString('en-GB'):'—';total+=Number(o.sell)||0;
-      return `<tr><td class="num">${i+1}</td><td>${dt}</td><td>${esc(o.bill_no||'—')}</td><td>${esc(o.order_no)}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.model||'—')}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
-    const opt=(cur)=>['NGRD Motors','Puspha Motors'].map(x=>`<option value="${x}" ${cur===x?'selected':''}>${x}</option>`).join('');
+      return `<tr><td class="num">${i+1}</td><td>${dt}</td><td>${esc(o.bill_no||'—')}</td><td>${esc(o.order_no)}</td>${_slComp==='all'?`<td>${esc(_companyOf(o).replace(' Motors',''))}</td>`:''}<td>${esc(o.naha_no||'—')}</td><td>${esc(o.model||'—')}</td><td class="num">${fmt(o.sell)}</td></tr>`;}).join('');
+    const opt=(cur)=>['all','NGRD Motors','Puspha Motors'].map(x=>`<option value="${x}" ${cur===x?'selected':''}>${x==='all'?'🏢 Both (NGRD + Puspha)':x}</option>`).join('');
     const mopt=(cur)=>months.map(x=>`<option value="${esc(x)}" ${cur===x?'selected':''}>${_mLabel(x)}</option>`).join('');
     wrap.innerHTML=`
       <div class="dpanel" style="padding:10px 12px;margin-bottom:10px"><div class="grid2">
@@ -3524,13 +3526,13 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <div class="fld"><label>From</label><select id="slFrom">${mopt(_slFrom)}</select></div>
         <div class="fld"><label>To</label><select id="slTo">${mopt(_slTo)}</select></div>
       </div></div>
-      <div class="dsec">📋 ${esc(_slComp)} — Sales Register (${_mLabel(_slFrom)} → ${_mLabel(_slTo)})</div>
+      <div class="dsec">📋 ${_slComp==='all'?'NGRD + Puspha (Both)':esc(_slComp)} — Sales Register (${_mLabel(_slFrom)} → ${_mLabel(_slTo)})</div>
       <div class="dstat gold" style="margin-bottom:8px"><div class="k">மொத்த Sales · ${list.length} bills</div><div class="v">${fmt(total)}</div><div class="s">Rs</div></div>
       <div class="drow" style="margin-bottom:8px">
         <button class="btn" id="slPdf" style="margin-top:0;background:#0b2a4a">📄 PDF (audit)</button>
         <button class="btn gold" id="slExcel" style="margin-top:0">📥 Excel</button>
       </div>
-      ${list.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th class="num">#</th><th>Bill Date</th><th>Bill No</th><th>Order No</th><th>Vehicle No</th><th>Vehicle</th><th class="num">Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="6" style="text-align:right;font-weight:800">TOTAL (Rs)</td><td class="num" style="font-weight:800">${fmt(total)}</td></tr></tfoot></table></div></div>`:'<div class="empty">இந்த period-ல bill ஆன sales இல்ல</div>'}`;
+      ${list.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th class="num">#</th><th>Bill Date</th><th>Bill No</th><th>Order No</th>${_slComp==='all'?'<th>Company</th>':''}<th>Vehicle No</th><th>Vehicle</th><th class="num">Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="${_slComp==='all'?7:6}" style="text-align:right;font-weight:800">TOTAL (Rs)</td><td class="num" style="font-weight:800">${fmt(total)}</td></tr></tfoot></table></div></div>`:'<div class="empty">இந்த period-ல bill ஆன sales இல்ல</div>'}`;
     $('slComp').onchange=e=>{_slComp=e.target.value;renderSales();};
     $('slFrom').onchange=e=>{_slFrom=e.target.value;if(_slFrom>_slTo)_slTo=_slFrom;renderSales();};
     $('slTo').onchange=e=>{_slTo=e.target.value;if(_slTo<_slFrom)_slFrom=_slTo;renderSales();};
@@ -3539,10 +3541,11 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   }
   function salesPDF(list,total){
     const ci=_compInfo(_slComp);
+    const isAll=_slComp==='all';
     const period=_mLabel(_slFrom)+' to '+_mLabel(_slTo);
     const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:12px"><div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">${ci.name}</div><div style="font-size:11px;color:#333;line-height:1.5">${ci.addr}<br>Tel: ${ci.tel} &nbsp;&bull;&nbsp; ${ci.mail}</div></div>`;
     const rows=list.map((o,i)=>{const d=_slBillDate(o);const dt=d?d.toLocaleDateString('en-GB'):'-';
-      return `<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${i+1}</td><td style="border:1px solid #ccc;padding:5px">${dt}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(o.sell)}</td></tr>`;}).join('');
+      return `<tr><td style="text-align:center;border:1px solid #ccc;padding:5px">${i+1}</td><td style="border:1px solid #ccc;padding:5px">${dt}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td>${isAll?`<td style="border:1px solid #ccc;padding:5px">${esc(_companyOf(o).replace(' Motors',''))}</td>`:''}<td style="border:1px solid #ccc;padding:5px">${esc(o.naha_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.model||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(o.sell)}</td></tr>`;}).join('');
     const page=`<div style="padding:22px 26px;font-family:Arial,sans-serif;color:#111">${head}
       <div style="text-align:center;font-size:15px;font-weight:800;margin-bottom:2px">SALES REGISTER</div>
       <div style="text-align:center;font-size:12px;color:#555;margin-bottom:12px">Period: ${esc(period)} &nbsp;|&nbsp; Customer: Western Naval Command &nbsp;|&nbsp; ${list.length} bills</div>
@@ -3552,11 +3555,12 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
           <th style="padding:6px;border:1px solid #0b2a4a;width:74px">Bill Date</th>
           <th style="padding:6px;border:1px solid #0b2a4a">Bill No</th>
           <th style="padding:6px;border:1px solid #0b2a4a">Order No</th>
+          ${isAll?'<th style="padding:6px;border:1px solid #0b2a4a;width:60px">Company</th>':''}
           <th style="padding:6px;border:1px solid #0b2a4a;width:72px">Vehicle No</th>
           <th style="padding:6px;border:1px solid #0b2a4a">Vehicle</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:90px">Amount (Rs)</th>
         </tr></thead><tbody>${rows}</tbody>
-        <tfoot><tr><td colspan="6" style="border:1px solid #ccc;padding:7px;text-align:right;font-weight:800">TOTAL (Rs)</td><td style="border:1px solid #ccc;padding:7px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
+        <tfoot><tr><td colspan="${isAll?7:6}" style="border:1px solid #ccc;padding:7px;text-align:right;font-weight:800">TOTAL (Rs)</td><td style="border:1px solid #ccc;padding:7px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
       </table>
       <div style="margin-top:40px;display:flex;justify-content:space-between;font-size:12px">
         <div>__________________________<br>Prepared by</div>
@@ -3568,9 +3572,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     w.document.write('<html><head><title>Sales Register '+esc(_slComp)+'</title><style>@media print{@page{margin:11mm}}body{margin:0}</style></head><body>'+page+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');w.document.close();
   }
   function salesExcel(list,total){
-    const L=[[_compInfo(_slComp).name+' — SALES REGISTER'],['Period: '+_mLabel(_slFrom)+' to '+_mLabel(_slTo)],['Customer: Western Naval Command'],[],['#','Bill Date','Bill No','Order No','Vehicle No','Vehicle','Amount']];
-    list.forEach((o,i)=>{const d=_slBillDate(o);L.push([i+1,d?d.toLocaleDateString('en-GB'):'',o.bill_no||'',o.order_no,o.naha_no||'',o.model||'',Number(o.sell)||0]);});
-    L.push(['','','','','','TOTAL',total]);
+    const isAll=_slComp==='all';
+    const L=[[_compInfo(_slComp).name+' — SALES REGISTER'],['Period: '+_mLabel(_slFrom)+' to '+_mLabel(_slTo)],['Customer: Western Naval Command'],[],['#','Bill Date','Bill No','Order No'].concat(isAll?['Company']:[]).concat(['Vehicle No','Vehicle','Amount'])];
+    list.forEach((o,i)=>{const d=_slBillDate(o);const row=[i+1,d?d.toLocaleDateString('en-GB'):'',o.bill_no||'',o.order_no];if(isAll)row.push(_companyOf(o).replace(' Motors',''));row.push(o.naha_no||'',o.model||'',Number(o.sell)||0);L.push(row);});
+    L.push(['','','','',''].concat(isAll?['']:[]).concat(['TOTAL',total]));
     const ce=v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
     _dl('SalesRegister_'+_slComp.replace(/\s/g,'')+'_'+_stamp()+'.csv','\ufeff'+L.map(r=>r.map(ce).join(',')).join('\n'),'text/csv');
   }
