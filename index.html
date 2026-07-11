@@ -149,7 +149,7 @@
   .no-value #tabDash{display:none!important}
   .no-report.no-billentry #tabRep{display:none!important}
   .no-value:not(.bill-only) #tabRep{display:none!important}
-  .bill-only #rmReport,.bill-only #rmPending,.bill-only #rmDaily,.bill-only #rmCal,.bill-only #rmOut,.bill-only #rmComm,.bill-only #rmSum,.bill-only #rmSales,.bill-only #rmTender,.bill-only #rmBusy,.bill-only #rmReturn{display:none!important}
+  .bill-only #rmReport,.bill-only #rmPending,.bill-only #rmDaily,.bill-only #rmCal,.bill-only #rmOut,.bill-only #rmPay,.bill-only #rmComm,.bill-only #rmSum,.bill-only #rmSales,.bill-only #rmTender,.bill-only #rmBusy,.bill-only #rmReturn{display:none!important}
   .bill-only #repNormal{display:none!important}
   .no-value .pf{display:none!important}
   .no-value .puSell{display:none!important}
@@ -465,6 +465,7 @@
       <button class="mbtn" id="rmDaily" type="button">📅 Day-wise</button>
       <button class="mbtn" id="rmCal" type="button">📆 Calendar</button>
       <button class="mbtn" id="rmOut" type="button">💵 Outstanding</button>
+      <button class="mbtn" id="rmPay" type="button">🏪 Supplier Payables</button>
       <button class="mbtn" id="rmComm" type="button">🤝 Commission</button>
       <button class="mbtn" id="rmSum" type="button">📈 Summary</button>
       <button class="mbtn" id="rmSales" type="button">📋 Sales Register</button>
@@ -492,6 +493,7 @@
     <div id="repDailyWrap" class="hide"></div>
     <div id="repCalWrap" class="hide"></div>
     <div id="repOutWrap" class="hide"></div>
+    <div id="repPayWrap" class="hide"></div>
     <div id="repCommWrap" class="hide"></div>
     <div id="repSumWrap" class="hide"></div>
     <div id="repSalesWrap" class="hide"></div>
@@ -1830,6 +1832,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('rmDaily').onclick=()=>{setRepMode('daily');renderDaily();};
     $('rmCal').onclick=()=>{setRepMode('cal');renderCal();};
     $('rmOut').onclick=()=>{setRepMode('out');renderOutstanding();};
+    $('rmPay').onclick=()=>{setRepMode('pay');renderPayables();};
     $('rmComm').onclick=()=>{setRepMode('comm');renderCommission();};
     $('rmSum').onclick=()=>{setRepMode('sum');renderSummary();};
     $('rmSales').onclick=()=>{setRepMode('sales');renderSales();};
@@ -2162,10 +2165,18 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const done=o.busy_purchase&&o.busy_purchase.done;
     const isStock=s=>/^(shop|store|stock)$/i.test((s||'').trim());
     const groups={};
-    purItems.forEach(it=>{const s=(it.supplier||'').trim();if(!s||isStock(s))return;const key=s.toLowerCase()+'|'+(it.inv_no||'').trim().toLowerCase();(groups[key]=groups[key]||{sup:s,inv:it.inv_no||'',dt:it.inv_date||'',items:[]}).items.push(it);});
+    purItems.forEach(it=>{const s=(it.supplier||'').trim();if(!s||isStock(s))return;const key=s.toLowerCase()+'|'+(it.inv_no||'').trim().toLowerCase();(groups[key]=groups[key]||{key,sup:s,inv:it.inv_no||'',dt:it.inv_date||'',items:[]}).items.push(it);});
     const gList=Object.values(groups);
     const noBill=purItems.filter(it=>{const s=(it.supplier||'').trim();return s&&!isStock(s)&&!(it.inv_no||'').trim();}).length;
-    const billsSummary=gList.length?`<div class="dpanel" style="padding:8px 11px;margin-bottom:8px;font-size:11.5px"><b>🧾 இந்த order-la ${gList.length} bill:</b>${gList.map(g=>`<div style="margin-top:4px;padding:4px 7px;background:#f3f6fb;border-radius:6px">• <b>${esc(g.sup)}</b> · Bill ${esc(g.inv||'⚠️ இல்ல')}${g.dt?' · '+esc(g.dt):''} · ${g.items.length} item · Rs ${fmt(g.items.reduce((a,it)=>a+(Number(it.cost)||0)*(Number(it.qty)||1),0))}</div>`).join('')}${noBill?`<div style="margin-top:4px;color:var(--amber);font-size:11px">⚠️ ${noBill} item-ku bill no இல்ல — export-ல auto ref போடும்.</div>`:''}</div>`:'';
+    if(!o.sup_pay)o.sup_pay={};
+    const billsSummary=gList.length?`<div class="dpanel" style="padding:8px 11px;margin-bottom:8px;font-size:11.5px"><b>🧾 இந்த order-la ${gList.length} bill:</b>${gList.map(g=>{
+      const amt=g.items.reduce((a,it)=>a+(Number(it.cost)||0)*(Number(it.qty)||1),0);
+      const pay=o.sup_pay[g.key]||{};
+      return `<div style="margin-top:4px;padding:4px 7px;background:${pay.paid?'#eef9f2':'#f3f6fb'};border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <div>• <b>${esc(g.sup)}</b> · Bill ${esc(g.inv||'⚠️ இல்ல')}${g.dt?' · '+esc(g.dt):''} · ${g.items.length} item · Rs ${fmt(amt)}</div>
+        <label style="display:flex;align-items:center;gap:4px;font-size:10.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" data-suppaid="${esc(g.key)}" ${pay.paid?'checked':''}> ${pay.paid?('✅ Paid'+(pay.date?(' '+esc(pay.date)):'')):'⬜ Supplier-க்கு Paid ஆச்சா?'}</label>
+      </div>`;
+    }).join('')}${noBill?`<div style="margin-top:4px;color:var(--amber);font-size:11px">⚠️ ${noBill} item-ku bill no இல்ல — export-ல auto ref போடும்.</div>`:''}</div>`:'';
     // build view rows (keep original index), apply hide-NA + focus filters
     let view=allItems.map((it,ix)=>({it,ix}));
     if(_purHideNA)view=view.filter(r=>!r.it.na);
@@ -2206,6 +2217,11 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       return hit;
     };
     $('purBody').querySelectorAll('[data-pucmp]').forEach(el=>el.addEventListener('click',()=>{const ix=+el.dataset.pucmp;_supCompareModal(o,allItems[ix],ix,_purRender);}));
+    $('purBody').querySelectorAll('[data-suppaid]').forEach(cb=>cb.addEventListener('change',async()=>{
+      const key=cb.dataset.suppaid;if(!o.sup_pay)o.sup_pay={};
+      o.sup_pay[key]=cb.checked?{paid:true,date:_todayKey(),by:(CURRENT&&(CURRENT.name||CURRENT.u))||''}:{paid:false};
+      await save();_purRender();
+    }));
     // checkbox → maintain _purSelSet (survives re-render)
     $('purBody').querySelectorAll('.purSel').forEach(cb=>cb.addEventListener('change',()=>{const ix=+cb.dataset.pusel;if(cb.checked)_purSelSet.add(ix);else _purSelSet.delete(ix);}));
     $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_learnPart(o,it);if(it.supplier)saveSupPart(it.supplier,o.model,it.description,it.partno,it.brand,it.country,it.cost);_purRender();}));
@@ -2727,10 +2743,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const rb=$('tRetry2');if(rb)rb.onclick=()=>renderTender(true);
   }
   function setRepMode(m){
-    ['Report','Pending','Daily','Cal','Out','Comm','Sum','Sales','Tender','Busy','Return','Bill'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
-    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy',return:'Return',bill:'Bill'};
+    ['Report','Pending','Daily','Cal','Out','Pay','Comm','Sum','Sales','Tender','Busy','Return','Bill'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
+    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',pay:'Pay',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy',return:'Return',bill:'Bill'};
     const b=$('rm'+(map[m]||'Report'));if(b)b.classList.add('on');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');$('repReturnWrap').classList.toggle('hide',m!=='return');$('repBillWrap').classList.toggle('hide',m!=='bill');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repPayWrap').classList.toggle('hide',m!=='pay');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');$('repReturnWrap').classList.toggle('hide',m!=='return');$('repBillWrap').classList.toggle('hide',m!=='bill');
   }
   let _dailyBasis='bill';
   function renderDaily(){
@@ -2828,7 +2844,65 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${grp('🟠 31–45 நாள்',buckets.b2,'')}
       ${grp('🟢 0–30 நாள்',buckets.b1,'')}`;
   }
-  let _commCamp='all';let _commEgp='all';let _commPaid='all';let _commPayAgent='apo';let _commPayStaged=null;let _commPayFileObj=null;
+  function _allSupplierBills(){
+    // rebuild supplier bill-groups across ALL orders (same grouping key logic as Purchasing tab)
+    const isStock=s=>/^(shop|store|stock)$/i.test((s||'').trim());
+    const bills=[];
+    orders.forEach(o=>{
+      const purItems=(o.items||[]).filter(it=>it.description&&!it.na);
+      const groups={};
+      purItems.forEach(it=>{const s=(it.supplier||'').trim();if(!s||isStock(s))return;const key=s.toLowerCase()+'|'+(it.inv_no||'').trim().toLowerCase();(groups[key]=groups[key]||{key,sup:s,inv:it.inv_no||'',dt:it.inv_date||'',items:[]}).items.push(it);});
+      Object.values(groups).forEach(g=>{
+        const amt=g.items.reduce((a,it)=>a+(Number(it.cost)||0)*(Number(it.qty)||1),0);
+        if(amt<=0)return;
+        const pay=(o.sup_pay&&o.sup_pay[g.key])||{};
+        bills.push({o,sup:g.sup,inv:g.inv,dt:g.dt,amt,paid:!!pay.paid,paidDate:pay.date||''});
+      });
+    });
+    return bills;
+  }
+  function renderPayables(){
+    const wrap=$('repPayWrap');
+    const bills=_allSupplierBills();
+    const unpaid=bills.filter(b=>!b.paid);
+    if(!bills.length){wrap.innerHTML='<div class="empty">இன்னும் supplier bill இல்ல.<br>Purchasing tab-ல supplier + cost + bill no போட்டா இங்க தெரியும்.</div>';return;}
+    if(!unpaid.length){wrap.innerHTML=`<div class="empty">🎉 எல்லா supplier bills-உம் Paid!<br><span style="font-size:11px">மொத்தம் ${bills.length} bill · Rs ${fmt(bills.reduce((a,b)=>a+b.amt,0))}</span></div>`;return;}
+    const buckets={b1:[],b2:[],b3:[],b4:[]}; // 0-30, 31-60, 61-90, 90+
+    unpaid.forEach(b=>{const days=daysSince(b.dt)||0;b._days=days;
+      if(days<=30)buckets.b1.push(b);else if(days<=60)buckets.b2.push(b);else if(days<=90)buckets.b3.push(b);else buckets.b4.push(b);});
+    const sum=arr=>arr.reduce((a,b)=>a+b.amt,0);
+    const total=sum(unpaid);
+    // by-supplier summary
+    const bySup={};
+    unpaid.forEach(b=>{(bySup[b.sup]=bySup[b.sup]||{sup:b.sup,amt:0,n:0}).amt+=b.amt;bySup[b.sup].n++;});
+    const supRows=Object.values(bySup).sort((a,b)=>b.amt-a.amt);
+    const grp=(title,arr,cls)=>{if(!arr.length)return '';
+      arr.sort((a,b)=>b._days-a._days);
+      return `<div class="sec ${cls}" style="margin-top:8px">${title} — ${arr.length} bill · Rs ${fmt(sum(arr))}</div><div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Supplier</th><th>Bill No</th><th>Order No</th><th>Bill Date</th><th class="num">நாள்</th><th class="num">Rs</th><th></th></tr></thead><tbody>${arr.map(b=>`<tr><td>${esc(b.sup)}</td><td>${esc(b.inv||'—')}</td><td>${esc(b.o.order_no)}</td><td>${esc(b.dt||'—')}</td><td class="num">${b._days}</td><td class="num">${fmt(b.amt)}</td><td><button class="copyprev" data-paynow="${esc(b.sup.toLowerCase()+'|'+(b.inv||'').trim().toLowerCase())}" data-payord="${esc(b.o.id)}" style="margin:0;padding:2px 8px;width:auto">✅ Paid mark</button></td></tr>`).join('')}</tbody></table></div></div>`;};
+    wrap.innerHTML=`
+      <div class="dstat gold" style="margin-bottom:10px"><div class="k">🏪 மொத்தம் Supplier-க்கு கொடுக்க வேண்டியது</div><div class="v">${fmt(total)}</div><div class="s">Rs · ${unpaid.length} bill</div></div>
+      <div class="drow">
+        <div class="dstat g"><div class="k">🟢 0–30 நாள்</div><div class="v">${fmt(sum(buckets.b1))}</div><div class="s">${buckets.b1.length} bill</div></div>
+        <div class="dstat w"><div class="k">🟠 31–60 நாள்</div><div class="v">${fmt(sum(buckets.b2))}</div><div class="s">${buckets.b2.length} bill</div></div>
+      </div>
+      <div class="drow" style="margin-top:8px">
+        <div class="dstat r"><div class="k">🔴 61–90 நாள்</div><div class="v">${fmt(sum(buckets.b3))}</div><div class="s">${buckets.b3.length} bill</div></div>
+        <div class="dstat r" style="background:#7a1a1a"><div class="k" style="color:#fff">⚠️ 90+ நாள் — Urgent!</div><div class="v" style="color:#fff">${fmt(sum(buckets.b4))}</div><div class="s" style="color:#fdd">${buckets.b4.length} bill</div></div>
+      </div>
+      ${supRows.length?`<div class="sec" style="margin-top:10px">🏪 Supplier-வாரியா (எவ்வளவு எத்தனை பேருக்கு)</div><div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Supplier</th><th class="num">Bills</th><th class="num">Rs வேண்டியது</th></tr></thead><tbody>${supRows.map(s=>`<tr><td>${esc(s.sup)}</td><td class="num">${s.n}</td><td class="num" style="font-weight:700">${fmt(s.amt)}</td></tr>`).join('')}</tbody></table></div></div>`:''}
+      ${grp('⚠️ 90+ நாள் (Urgent)',buckets.b4,'')}
+      ${grp('🔴 61–90 நாள்',buckets.b3,'')}
+      ${grp('🟠 31–60 நாள்',buckets.b2,'')}
+      ${grp('🟢 0–30 நாள்',buckets.b1,'')}`;
+    wrap.querySelectorAll('[data-paynow]').forEach(btn=>btn.addEventListener('click',async()=>{
+      const key=btn.dataset.paynow,oid=btn.dataset.payord;
+      const o=orders.find(x=>x.id===oid);if(!o)return;
+      if(!o.sup_pay)o.sup_pay={};
+      o.sup_pay[key]={paid:true,date:_todayKey(),by:(CURRENT&&(CURRENT.name||CURRENT.u))||''};
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
+      renderPayables();
+    }));
+  }
   // ---- per-agent commission helpers ----
   function _agPct(o,ag){return ag==='apo'?(o.apo_pct||0):(o.clark_pct||0);}
   function _agComm(o,ag){return (Number(o.sell)||0)*_agPct(o,ag)/100;}
