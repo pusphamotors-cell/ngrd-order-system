@@ -3510,6 +3510,16 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     return c==='Puspha Motors'
     ?{name:'PUSPHA MOTORS',addr:'202/19A, Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'0779 338 696 / 0759 515 507',mail:'pusphamotors@gmail.com'}
     :{name:'N.G.R.D. MOTORS',addr:'202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'011 244 9385 / 076 688 6526',mail:'ngrdmotors@gmail.com'};}
+  function _slCampSummary(list){
+    const m={};
+    list.forEach(o=>{const c=_campOf(o).replace(/\s*\(.*\)/,'');(m[c]=m[c]||{camp:c,n:0,amt:0}).n++;m[c].amt+=Number(o.sell)||0;});
+    return Object.values(m).sort((a,b)=>b.amt-a.amt);
+  }
+  function _slCompSummary(list){
+    const m={};
+    list.forEach(o=>{const c=_companyOf(o).replace(' Motors','');(m[c]=m[c]||{comp:c,n:0,amt:0}).n++;m[c].amt+=Number(o.sell)||0;});
+    return Object.values(m).sort((a,b)=>b.amt-a.amt);
+  }
   function renderSales(){
     const wrap=$('repSalesWrap');const months=_monthsList();
     if(!months.length){wrap.innerHTML='<div class="empty">Order data இல்ல</div>';return;}
@@ -3528,6 +3538,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       </div></div>
       <div class="dsec">📋 ${_slComp==='all'?'NGRD + Puspha (Both)':esc(_slComp)} — Sales Register (${_mLabel(_slFrom)} → ${_mLabel(_slTo)})</div>
       <div class="dstat gold" style="margin-bottom:8px"><div class="k">மொத்த Sales · ${list.length} bills</div><div class="v">${fmt(total)}</div><div class="s">Rs</div></div>
+      ${(()=>{const cs=_slCampSummary(list);if(!cs.length)return'';const compRows=_slComp==='all'?_slCompSummary(list):null;
+        return `<div class="dpanel" style="margin-bottom:8px"><div style="padding:8px 11px;font-weight:800;font-size:11.5px;border-bottom:1px solid var(--line)">🏕️ Camp-வாரியா Summary</div><div class="tablewrap"><table><thead><tr><th>Camp</th><th class="num">Bills</th><th class="num">Amount (Rs)</th></tr></thead><tbody>${cs.map(c=>`<tr><td>${esc(c.camp)}</td><td class="num">${c.n}</td><td class="num">${fmt(c.amt)}</td></tr>`).join('')}</tbody><tfoot><tr><td style="font-weight:800">TOTAL</td><td class="num" style="font-weight:800">${list.length}</td><td class="num" style="font-weight:800">${fmt(total)}</td></tr></tfoot></table></div>
+        ${compRows?`<div style="padding:8px 11px;font-weight:800;font-size:11.5px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">🏢 Company-வாரியா Summary</div><div class="tablewrap"><table><thead><tr><th>Company</th><th class="num">Bills</th><th class="num">Amount (Rs)</th></tr></thead><tbody>${compRows.map(c=>`<tr><td>${esc(c.comp)}</td><td class="num">${c.n}</td><td class="num">${fmt(c.amt)}</td></tr>`).join('')}</tbody></table></div>`:''}
+        </div>`;})()}
       <div class="drow" style="margin-bottom:8px">
         <button class="btn" id="slPdf" style="margin-top:0;background:#0b2a4a">📄 PDF (audit)</button>
         <button class="btn gold" id="slExcel" style="margin-top:0">📥 Excel</button>
@@ -3549,6 +3563,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const page=`<div style="padding:22px 26px;font-family:Arial,sans-serif;color:#111">${head}
       <div style="text-align:center;font-size:15px;font-weight:800;margin-bottom:2px">SALES REGISTER</div>
       <div style="text-align:center;font-size:12px;color:#555;margin-bottom:12px">Period: ${esc(period)} &nbsp;|&nbsp; Customer: Western Naval Command &nbsp;|&nbsp; ${list.length} bills</div>
+      ${(()=>{const cs=_slCampSummary(list);if(!cs.length)return'';const compRows=isAll?_slCompSummary(list):null;
+        const t1=`<div style="font-size:12px;font-weight:800;margin:10px 0 4px">🏕️ Camp-வாரியா Summary</div><table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px"><thead><tr style="background:#f0f0f0"><th style="padding:5px;border:1px solid #ccc;text-align:left">Camp</th><th style="padding:5px;border:1px solid #ccc">Bills</th><th style="padding:5px;border:1px solid #ccc">Amount (Rs)</th></tr></thead><tbody>${cs.map(c=>`<tr><td style="padding:5px;border:1px solid #ccc">${esc(c.camp)}</td><td style="padding:5px;border:1px solid #ccc;text-align:center">${c.n}</td><td style="padding:5px;border:1px solid #ccc;text-align:right">${fmt(c.amt)}</td></tr>`).join('')}<tr style="font-weight:800"><td style="padding:5px;border:1px solid #ccc">TOTAL</td><td style="padding:5px;border:1px solid #ccc;text-align:center">${list.length}</td><td style="padding:5px;border:1px solid #ccc;text-align:right">${fmt(total)}</td></tr></tbody></table>`;
+        const t2=compRows?`<div style="font-size:12px;font-weight:800;margin:6px 0 4px">🏢 Company-வாரியா Summary</div><table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px"><thead><tr style="background:#f0f0f0"><th style="padding:5px;border:1px solid #ccc;text-align:left">Company</th><th style="padding:5px;border:1px solid #ccc">Bills</th><th style="padding:5px;border:1px solid #ccc">Amount (Rs)</th></tr></thead><tbody>${compRows.map(c=>`<tr><td style="padding:5px;border:1px solid #ccc">${esc(c.comp)}</td><td style="padding:5px;border:1px solid #ccc;text-align:center">${c.n}</td><td style="padding:5px;border:1px solid #ccc;text-align:right">${fmt(c.amt)}</td></tr>`).join('')}</tbody></table>`:'';
+        return t1+t2;})()}
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:#0b2a4a;color:#fff">
           <th style="padding:6px;border:1px solid #0b2a4a;width:30px">#</th>
@@ -3573,7 +3591,20 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   }
   function salesExcel(list,total){
     const isAll=_slComp==='all';
-    const L=[[_compInfo(_slComp).name+' — SALES REGISTER'],['Period: '+_mLabel(_slFrom)+' to '+_mLabel(_slTo)],['Customer: Western Naval Command'],[],['#','Bill Date','Bill No','Order No'].concat(isAll?['Company']:[]).concat(['Vehicle No','Vehicle','Amount'])];
+    const L=[[_compInfo(_slComp).name+' — SALES REGISTER'],['Period: '+_mLabel(_slFrom)+' to '+_mLabel(_slTo)],['Customer: Western Naval Command'],[]];
+    const cs=_slCampSummary(list);
+    if(cs.length){
+      L.push(['CAMP-WISE SUMMARY']);L.push(['Camp','Bills','Amount']);
+      cs.forEach(c=>L.push([c.camp,c.n,c.amt]));
+      L.push(['TOTAL',list.length,total]);L.push([]);
+      if(isAll){
+        const cp=_slCompSummary(list);
+        L.push(['COMPANY-WISE SUMMARY']);L.push(['Company','Bills','Amount']);
+        cp.forEach(c=>L.push([c.comp,c.n,c.amt]));
+        L.push([]);
+      }
+    }
+    L.push(['#','Bill Date','Bill No','Order No'].concat(isAll?['Company']:[]).concat(['Vehicle No','Vehicle','Amount']));
     list.forEach((o,i)=>{const d=_slBillDate(o);const row=[i+1,d?d.toLocaleDateString('en-GB'):'',o.bill_no||'',o.order_no];if(isAll)row.push(_companyOf(o).replace(' Motors',''));row.push(o.naha_no||'',o.model||'',Number(o.sell)||0);L.push(row);});
     L.push(['','','','',''].concat(isAll?['']:[]).concat(['TOTAL',total]));
     const ce=v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
