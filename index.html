@@ -407,6 +407,9 @@
     <div id="pastePreview" class="hide"></div>
     <button class="btn" id="go" disabled>படி 2 — Extract பண்ணு (AI)</button>
     <div class="note">AI: Order No, File No, NAHA, Civil No, Model, items + விலை தானா எடுக்கும்</div>
+    <div style="text-align:center;margin:10px 0;font-size:11px;color:var(--muted)">— illa —</div>
+    <button class="btn" id="manualOrderBtn" type="button" style="background:#7a5a1a">✍️ Manual Order Add (item இல்லாம)</button>
+    <div class="note">PO file இல்லாம, item breakdown இல்லாம — Order No + basic details மட்டும் போட்டு save பண்ணலாம். அப்புறம் Purchasing tab-ல items add பண்ணலாம்.</div>
     <div id="errbox"></div>
     <div id="result"></div>
   </div>
@@ -814,6 +817,38 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   $('go').addEventListener('click',extract);
 
+  function _manualOrderModal(){
+    const ov=document.createElement('div');ov.className='modal';
+    ov.innerHTML=`<div class="modalbox" style="max-width:480px;text-align:left">
+      <h3>✍️ Manual Order Add</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">PO file/AI இல்லாம நேரடியா Order details போடு. Items பிறகு Purchasing tab-ல add பண்ணலாம்.</div>
+      <div class="fld full"><label>🏢 Company</label><select id="mo_company"><option value="NGRD Motors">NGRD Motors</option><option value="Puspha Motors">Puspha Motors</option></select></div>
+      <div class="fld"><label>Order No *</label><input id="mo_order_no" placeholder="உதा: WNA/APOW/PO/2026/0949"></div>
+      <div class="fld"><label>File No</label><input id="mo_file_no" placeholder="உதा: WNA/APO/FO/MT/2026/0974"></div>
+      <div class="grid2"><div class="fld"><label>NAHA No</label><input id="mo_naha_no" placeholder="NAHA2175"></div><div class="fld"><label>Civil No</label><input id="mo_civil_no" placeholder="WP KQ-2647"></div></div>
+      <div class="fld"><label>Vehicle / Model</label><input id="mo_model" placeholder="உதा: SX4 ZXI Suzuki Car"></div>
+      <div class="fld"><label>Buyer / Command</label><input id="mo_buyer" placeholder="உதा: Southern Naval Command"></div>
+      <div class="grid2"><div class="fld"><label>Order Date</label><input type="date" id="mo_po_date"></div><div class="fld"><label>Delivery Date</label><input type="date" id="mo_delivery_date"></div></div>
+      <div class="fld full"><label>Navy விற்ற விலை (Rs) — தெரிஞ்சா</label><input type="number" id="mo_sell" inputmode="decimal" placeholder="0"></div>
+      <div id="mo_err"></div>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold moGo" style="flex:1;margin:0">➡️ தொடரு (Save-க்கு போ)</button><button class="btn moClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    ov.querySelector('.moClose').addEventListener('click',()=>ov.remove());
+    ov.querySelector('.moGo').addEventListener('click',()=>{
+      const order_no=(ov.querySelector('#mo_order_no').value||'').trim();
+      if(!order_no){ov.querySelector('#mo_err').innerHTML='<div class="err">⚠️ Order No போடு bro</div>';return;}
+      const g=id=>(ov.querySelector('#'+id).value||'').trim();
+      current={company:g('mo_company'),order_no,file_no:g('mo_file_no'),naha_no:g('mo_naha_no'),civil_no:g('mo_civil_no'),
+        chassis_no:'',engine_no:'',model:g('mo_model'),quotation_date:'',buyer:g('mo_buyer'),supplier:'',
+        po_date:g('mo_po_date'),delivery_date:g('mo_delivery_date'),
+        total_amount:Number(g('mo_sell'))||0,items:[]};
+      ov.remove();showForm();
+    });
+  }
+  const _moBtn=$('manualOrderBtn');if(_moBtn)_moBtn.addEventListener('click',_manualOrderModal);
+
   function plusOneMonth(d){ // d = yyyy-mm-dd -> +1 month
     if(!d)return'';const p=d.split('-');if(p.length!==3)return'';
     let y=+p[0],m=+p[1],day=+p[2];m++;if(m>12){m=1;y++;}
@@ -1081,7 +1116,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const sell=Number($('sellIn').value)||0,buy=currentBuy();
     const items=(window._costMode&&window._costMode()==='items')?readItemDetails($('costItems'),current.items):(current.items||[]);
     const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',proc_ref:current.proc_ref||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
-      chassis_no:current.chassis_no||'',engine_no:current.engine_no||'',
+      chassis_no:current.chassis_no||'',engine_no:current.engine_no||'',company:current.company||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
       items,sell,buy,profit:(buy>0?sell-buy:null),
       order_date:current.po_date||'',delivery_date:current.delivery_date||'',
