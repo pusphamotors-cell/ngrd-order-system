@@ -3510,6 +3510,32 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     return c==='Puspha Motors'
     ?{name:'PUSPHA MOTORS',addr:'202/19A, Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'0779 338 696 / 0759 515 507',mail:'pusphamotors@gmail.com'}
     :{name:'N.G.R.D. MOTORS',addr:'202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'011 244 9385 / 076 688 6526',mail:'ngrdmotors@gmail.com'};}
+  function _unclassifiedOrders(){return orders.filter(o=>_companyOf(o)==='Other');}
+  function _fixCompanyModal(){
+    const list=_unclassifiedOrders();
+    const ov=document.createElement('div');ov.className='modal';
+    const rows=list.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px">
+      <div style="flex:1;min-width:0;font-size:11.5px"><b>${esc(o.order_no)}</b><div style="color:var(--muted);font-size:10.5px">${esc(o.model||'—')} · Rs ${fmt(o.sell)}${o.supplier?' · sup: '+esc(o.supplier):''}</div></div>
+      <button class="btn" data-fixco="${esc(o.id)}" data-fixval="NGRD Motors" style="margin:0;width:auto;padding:5px 10px;font-size:10.5px;background:#0b2a4a">NGRD</button>
+      <button class="btn" data-fixco="${esc(o.id)}" data-fixval="Puspha Motors" style="margin:0;width:auto;padding:5px 10px;font-size:10.5px;background:#7a1a5a">Puspha</button>
+    </div>`).join('');
+    ov.innerHTML=`<div class="modalbox" style="max-width:440px;text-align:left">
+      <h3>🛠️ Company Fix — Unclassified Orders</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">இந்த orders-ku company (NGRD/Puspha) set ஆகல — ஒவ்வொன்னுக்கும் select பண்ணு. Select பண்ணின உடனே "Other" bucket-ல இருந்து நீங்கிடும்.</div>
+      ${rows||'<div class="empty">🎉 எல்லா orders-உம் classify ஆயிடுச்சு!</div>'}
+      <button class="btn mclose" style="margin-top:8px;background:#8a8f98">மூடு</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+    ov.querySelector('.mclose').addEventListener('click',()=>ov.remove());
+    ov.querySelectorAll('[data-fixco]').forEach(b=>b.addEventListener('click',async()=>{
+      const oid=b.dataset.fixco,val=b.dataset.fixval;
+      const o=orders.find(x=>x.id===oid);if(!o)return;
+      o.company=val;
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
+      ov.remove();_fixCompanyModal();renderSales();
+    }));
+  }
   function _slCampSummary(list){
     const m={};
     list.forEach(o=>{const c=_campOf(o).replace(/\s*\(.*\)/,'');(m[c]=m[c]||{camp:c,n:0,amt:0}).n++;m[c].amt+=Number(o.sell)||0;});
@@ -3540,7 +3566,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div class="dstat gold" style="margin-bottom:8px"><div class="k">மொத்த Sales · ${list.length} bills</div><div class="v">${fmt(total)}</div><div class="s">Rs</div></div>
       ${(()=>{const cs=_slCampSummary(list);if(!cs.length)return'';const compRows=_slComp==='all'?_slCompSummary(list):null;
         return `<div class="dpanel" style="margin-bottom:8px"><div style="padding:8px 11px;font-weight:800;font-size:11.5px;border-bottom:1px solid var(--line)">🏕️ Camp-வாரியா Summary</div><div class="tablewrap"><table><thead><tr><th>Camp</th><th class="num">Bills</th><th class="num">Amount (Rs)</th></tr></thead><tbody>${cs.map(c=>`<tr><td>${esc(c.camp)}</td><td class="num">${c.n}</td><td class="num">${fmt(c.amt)}</td></tr>`).join('')}</tbody><tfoot><tr><td style="font-weight:800">TOTAL</td><td class="num" style="font-weight:800">${list.length}</td><td class="num" style="font-weight:800">${fmt(total)}</td></tr></tfoot></table></div>
-        ${compRows?`<div style="padding:8px 11px;font-weight:800;font-size:11.5px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">🏢 Company-வாரியா Summary</div><div class="tablewrap"><table><thead><tr><th>Company</th><th class="num">Bills</th><th class="num">Amount (Rs)</th></tr></thead><tbody>${compRows.map(c=>`<tr><td>${esc(c.comp)}</td><td class="num">${c.n}</td><td class="num">${fmt(c.amt)}</td></tr>`).join('')}</tbody></table></div>`:''}
+        ${compRows?`<div style="padding:8px 11px;font-weight:800;font-size:11.5px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">🏢 Company-வாரியா Summary</div><div class="tablewrap"><table><thead><tr><th>Company</th><th class="num">Bills</th><th class="num">Amount (Rs)</th></tr></thead><tbody>${compRows.map(c=>`<tr><td>${esc(c.comp)}</td><td class="num">${c.n}</td><td class="num">${fmt(c.amt)}</td></tr>`).join('')}</tbody></table></div>${compRows.some(c=>c.comp==='Other')?`<div style="padding:6px 11px"><span id="fixCoBtn" style="cursor:pointer;color:#b00;font-size:11px;font-weight:700;text-decoration:underline">🛠️ "Other" orders-ஐ Fix பண்ணு (NGRD/Puspha assign பண்ணு)</span></div>`:''}`:''}
         </div>`;})()}
       <div class="drow" style="margin-bottom:8px">
         <button class="btn" id="slPdf" style="margin-top:0;background:#0b2a4a">📄 PDF (audit)</button>
@@ -3548,6 +3574,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       </div>
       ${list.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th class="num">#</th><th>Bill Date</th><th>Bill No</th><th>Order No</th>${_slComp==='all'?'<th>Company</th>':''}<th>Vehicle No</th><th>Vehicle</th><th class="num">Amount</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="${_slComp==='all'?7:6}" style="text-align:right;font-weight:800">TOTAL (Rs)</td><td class="num" style="font-weight:800">${fmt(total)}</td></tr></tfoot></table></div></div>`:'<div class="empty">இந்த period-ல bill ஆன sales இல்ல</div>'}`;
     $('slComp').onchange=e=>{_slComp=e.target.value;renderSales();};
+    const fcb=$('fixCoBtn');if(fcb)fcb.onclick=_fixCompanyModal;
     $('slFrom').onchange=e=>{_slFrom=e.target.value;if(_slFrom>_slTo)_slTo=_slFrom;renderSales();};
     $('slTo').onchange=e=>{_slTo=e.target.value;if(_slTo<_slFrom)_slFrom=_slTo;renderSales();};
     $('slPdf').onclick=()=>salesPDF(list,total);
