@@ -961,6 +961,37 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     try{localStorage.setItem('__parts_cache',JSON.stringify(_partsCache));}catch(e){}
     try{if(_fbOk)await firebase.database().ref('parts/'+k).set(rec);}catch(e){}
   }
+  // ---- Supplier Parts Memory (supplier + vehicle-group + item → part no, brand, country, cost) ----
+  // Rationale: the vehicle-level Parts Master above remembers ONE preferred part per vehicle+item
+  // globally. But in real sourcing, different suppliers stock different brands/part-numbers for the
+  // SAME item — so we ALSO remember per-supplier, and prefer that when a supplier is selected.
+  let _supPartsCache=null;
+  function _supPartKey(supplier,model,desc){return (_norm(supplier)+'|'+_vehGroup(model)+'|'+_norm(desc)).replace(/[.#$\[\]\/]/g,'_').slice(0,700);}
+  async function _loadSupParts(){
+    try{if(!_fbOk)throw 0;const s=await firebase.database().ref('supplierParts').once('value');_supPartsCache=s.val()||{};try{localStorage.setItem('__supparts_cache',JSON.stringify(_supPartsCache));}catch(e){}}
+    catch(e){try{_supPartsCache=JSON.parse(localStorage.getItem('__supparts_cache')||'{}');}catch(_){_supPartsCache={};}}
+    return _supPartsCache;
+  }
+  function lookupSupPart(supplier,model,desc){if(!_supPartsCache||!_norm(supplier))return null;return _supPartsCache[_supPartKey(supplier,model,desc)]||null;}
+  async function saveSupPart(supplier,model,desc,partno,brand,country,cost){
+    if(!_norm(desc)||!_norm(supplier))return;
+    const k=_supPartKey(supplier,model,desc);if(!_supPartsCache)_supPartsCache={};
+    const prev=_supPartsCache[k]||{};
+    const pick=(v,p)=>{v=(v==null?'':String(v)).trim();return v!==''?v:(p||'');};
+    const rec={
+      supplier:supplier||prev.supplier||'',
+      partno:pick(partno,prev.partno),
+      brand:pick(brand,prev.brand),
+      country:pick(country,prev.country),
+      cost:(cost!=null&&cost!==''&&Number(cost)>0)?Number(cost):(prev.cost||0),
+      model:model||prev.model||'',desc:desc||prev.desc||''
+    };
+    if(!rec.partno&&!rec.brand&&!rec.country&&!(rec.cost>0))return; // nothing to learn
+    _supPartsCache[k]=rec;
+    try{localStorage.setItem('__supparts_cache',JSON.stringify(_supPartsCache));}catch(e){}
+    try{if(_fbOk)await firebase.database().ref('supplierParts/'+k).set(rec);}catch(e){}
+  }
+  // ---- end Supplier Parts Memory ----
   function crossVehicleParts(partno,curModel){
     if(!_partsCache)return [];const pn=_norm(partno);if(!pn)return [];const cm=_norm(curModel);
     const out=[],seen={};
@@ -2118,14 +2149,24 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:4px"><input type="checkbox" id="purInquirySeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
       <div style="margin-top:8px;font-size:11.5px;border-top:1px dashed var(--line);padding-top:8px">🧾 Busy import: ${done?('✅ <b>'+esc(o.busy_purchase.by)+'</b> · '+new Date(o.busy_purchase.at).toLocaleDateString('en-GB')):'⬜ இல்ல'} ${done?`<button class="copyprev" id="purUnmark" style="margin:0;padding:2px 7px;width:auto">↺ மாற்று</button>`:`<button class="btn" id="purMark" style="margin:0;width:auto;padding:5px 12px;background:var(--green)">✅ Purchase import ஆச்சு</button>`}</div>`;
     const save=async()=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}};
+    const _supFill=(it)=>{ // when a supplier is set on an item, pull that supplier's remembered part no/brand/country/cost (if item's own fields are empty)
+      if(!it||!it.supplier)return false;
+      const sp=lookupSupPart(it.supplier,o.model,it.description);if(!sp)return false;
+      let hit=false;
+      if(!(it.partno||'').trim()&&sp.partno){it.partno=sp.partno;hit=true;}
+      if(!(it.brand||'').trim()&&sp.brand){it.brand=sp.brand;hit=true;}
+      if(!(it.country||'').trim()&&sp.country){it.country=sp.country;hit=true;}
+      if(!(Number(it.cost)>0)&&Number(sp.cost)>0){it.cost=Number(sp.cost);it.before=it.cost;it.discount=0;hit=true;}
+      return hit;
+    };
     // checkbox → maintain _purSelSet (survives re-render)
     $('purBody').querySelectorAll('.purSel').forEach(cb=>cb.addEventListener('change',()=>{const ix=+cb.dataset.pusel;if(cb.checked)_purSelSet.add(ix);else _purSelSet.delete(ix);}));
-    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_learnPart(o,it);_purRender();}));
-    $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}await save();_purRender();}));
-    $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=allItems[+inp.dataset.pusup];it.supplier=name;await save();_purRender();}));
+    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_learnPart(o,it);if(it.supplier)saveSupPart(it.supplier,o.model,it.description,it.partno,it.brand,it.country,it.cost);_purRender();}));
+    $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}_supFill(it);await save();_purRender();}));
+    $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=allItems[+inp.dataset.pusup];it.supplier=name;_supFill(it);await save();_purRender();}));
     _supAC($('purSup'),null);
     const pss=$('purSupStore');if(pss)pss.onclick=()=>{$('purSup').value='STORE';};
-    const pf=(sel,key,re)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset[sel.replace('data-','')]];it[key]=(inp.value||'').trim();await save();if(key==='partno'||key==='brand'||key==='country')_learnPart(o,it);if(re)_purRender();}));
+    const pf=(sel,key,re)=>$('purBody').querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset[sel.replace('data-','')]];it[key]=(inp.value||'').trim();await save();if(key==='partno'||key==='brand'||key==='country'){_learnPart(o,it);if(it.supplier)saveSupPart(it.supplier,o.model,it.description,it.partno,it.brand,it.country,it.cost);}if(re)_purRender();}));
     pf('data-pupart','partno');pf('data-pubrand','brand');pf('data-puctry','country');
     pf('data-puinv','inv_no',true);pf('data-puinvd','inv_date',true);
     const selAll=$('purSelAll');if(selAll)selAll.onclick=()=>{const on=selAll.checked;$('purBody').querySelectorAll('.purSel').forEach(c=>{if(c.disabled)return;c.checked=on;const ix=+c.dataset.pusel;if(on)_purSelSet.add(ix);else _purSelSet.delete(ix);});};
@@ -2136,7 +2177,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       const tgt=[..._purSelSet].filter(i=>allItems[i]&&!allItems[i].na);const all=tgt.length===0;
       if(!s&&!iv&&!dt){alert(tgt.length?('👆 மேல box-la முதல்ல Supplier / Bill No / Date போடு → அப்புறம் "apply" (இப்ப '+tgt.length+' item tick). இல்லனா row-லயே type பண்ணு.'):'முதல்ல: மேல Supplier/Bill/Date போடு → items tick பண்ணு → apply. (ஒரு item மட்டுமானா row-லயே type பண்ணு.)');return;}
       const list=all?purItems.map(it=>allItems.indexOf(it)):tgt;
-      list.forEach(i=>{const it=allItems[i];if(!it||it.na)return;if(s)it.supplier=s;if(iv)it.inv_no=iv;if(dt)it.inv_date=dt;});
+      list.forEach(i=>{const it=allItems[i];if(!it||it.na)return;if(s)it.supplier=s;if(iv)it.inv_no=iv;if(dt)it.inv_date=dt;if(s)_supFill(it);});
       if(s){const k=_supKey(s);if(k)_supCache[k]=s;}await save();_purRender();
       showInfoModal('Saved','✅ '+list.length+' item-ku apply ஆச்சு'+(all?' (எல்லாத்துக்கும் — tick பண்ணல)':' (tick பண்ணதுக்கு மட்டும்)')+'. வேற bill-ku வேற items tick பண்ணி repeat பண்ணு.');};
     const pcs=$('purClearSel');if(pcs)pcs.onclick=()=>{_purSelSet=new Set();if(_purFocus)_purFocus=false;_purRender();};
@@ -3963,6 +4004,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     };
   }
   _loadParts();
+  _loadSupParts();
   _loadSettlements();
   $('repDownload').addEventListener('click',downloadReport);
   $('searchBox').addEventListener('input',renderList);
