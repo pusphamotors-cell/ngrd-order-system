@@ -836,6 +836,14 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     document.body.appendChild(ov);
     ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
     ov.querySelector('.moClose').addEventListener('click',()=>ov.remove());
+    let _buyerTouched=false;
+    ov.querySelector('#mo_buyer').addEventListener('input',()=>{_buyerTouched=true;});
+    ov.querySelector('#mo_order_no').addEventListener('input',e=>{
+      if(_buyerTouched)return;
+      const camp=_campOf({order_no:e.target.value,file_no:''});
+      const bIn=ov.querySelector('#mo_buyer');
+      bIn.value=(camp&&camp!=='மற்றவை')?camp:'';
+    });
     ov.querySelector('.moGo').addEventListener('click',()=>{
       const order_no=(ov.querySelector('#mo_order_no').value||'').trim();
       if(!order_no){ov.querySelector('#mo_err').innerHTML='<div class="err">⚠️ Order No போடு bro</div>';return;}
