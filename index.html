@@ -3065,6 +3065,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     });
   }
   let _ledgerAgent='apo';
+  let _commCamp='all',_commEgp='all',_commPaid='all';
+  let _commPayAgent='apo',_commPayStaged=null;
   // ===== Commission Adjustments store (auto total stays safe; adj added on top) =====
   // entry: {id, ag:'apo'|'clark', camp, month:'YYYY-MM', kind:'paid'|'total', amt:Number(+/-), person, note, date}
   let _commAdj=[];
