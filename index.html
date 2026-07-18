@@ -4007,6 +4007,46 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     }
     return d;
   }
+  // Finance snapshot (outstanding/overdue-value/monthly revenue) — same definition as Report > Outstanding tab
+  function _aiFinanceSummary(){
+    const showVal=(typeof can!=='function')||can('value');
+    if(!showVal)return null;
+    const due=orders.filter(o=>(o.supplied||o.bill_no)&&!o.paid);
+    const outstanding=due.reduce((a,o)=>a+(Number(o.sell)||0),0);
+    const over45=due.filter(o=>{const d=daysSince(o.bill_date||o.delivery_date);return d!=null&&d>45;});
+    const over45Val=over45.reduce((a,o)=>a+(Number(o.sell)||0),0);
+    const monthKey=o=>String(o.bill_date||o.order_date||o.delivery_date||'').slice(0,7);
+    const thisM=_todayKey().slice(0,7);
+    const lastMD=new Date();lastMD.setMonth(lastMD.getMonth()-1);const lastM=_ymd(lastMD).slice(0,7);
+    const revByMonth={};
+    orders.forEach(o=>{if(!(o.supplied||o.bill_no||o.paid))return;const mk=monthKey(o);if(mk)revByMonth[mk]=(revByMonth[mk]||0)+(Number(o.sell)||0);});
+    return{outstanding_total:Math.round(outstanding),outstanding_orders:due.length,overdue_45plus_total:Math.round(over45Val),overdue_45plus_orders:over45.length,revenue_this_month:Math.round(revByMonth[thisM]||0),revenue_last_month:Math.round(revByMonth[lastM]||0)};
+  }
+  // Pending orders whose delivery date has already passed (not yet supplied) — for auto alerts
+  function _aiOverdueOrders(){
+    const list=orders.filter(o=>!(o.paid||o.bill_no||o.supplied)&&o.delivery_date);
+    const overdue=list.map(o=>({o,days:daysSince(o.delivery_date)})).filter(x=>x.days!=null&&x.days>0);
+    overdue.sort((a,b)=>b.days-a.days);
+    return overdue.slice(0,20).map(({o,days})=>({no:o.order_no,camp:_campOf(o),delivery:o.delivery_date,days_overdue:days,stage:_stageOf(o),staff:o.assignee_name||o.assignee||''}));
+  }
+  // Supplier/part price history — searches every order's item descriptions for keyword overlap with the question
+  function _aiPartHistory(q){
+    const showVal=(typeof can!=='function')||can('value');
+    if(!showVal||!q)return[];
+    const stop=new Set(['THE','AND','FOR','WITH','THIS','THAT','LAST','TIME','PART','ITEM','PRICE','WHAT','WHICH','SUPPLIER','FROM','WILL','WERE','HAVE','ORDER','BUYING','BOUGHT']);
+    const kw=(String(q).toUpperCase().match(/[A-Z]{3,}/g)||[]).filter(w=>!stop.has(w));
+    if(!kw.length)return[];
+    const hits=[];
+    orders.forEach(o=>{(o.items||[]).forEach(it=>{
+      const desc=String(it.description||'').toUpperCase();if(!desc)return;
+      const score=kw.filter(w=>desc.indexOf(w)>=0).length;
+      if(score>0)hits.push({desc:it.description,supplier:it.supplier||'',cost:Number(it.cost)||0,brand:it.brand||'',partno:it.partno||'',date:o.bill_date||o.order_date||'',order_no:o.order_no,score});
+    });});
+    hits.sort((a,b)=>b.score-a.score||(b.date||'').localeCompare(a.date||''));
+    const seen=new Set(),out=[];
+    for(const h of hits){const k=h.desc+'|'+h.supplier;if(seen.has(k))continue;seen.add(k);out.push(h);if(out.length>=8)break;}
+    return out;
+  }
   function _aiChatCtx(q){
     const showVal=(typeof can!=='function')||can('value');
     let pend=0,inv=0,paid=0;const camp={};const plist=[];
@@ -4015,9 +4055,12 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
         const r={no:o.order_no,camp:c,veh:o.model||'',items:(o.items||[]).length,delivery:o.delivery_date||'',stage:_stageOf(o),staff:o.assignee_name||o.assignee||''};if(showVal)r.value=Number(o.sell)||0;plist.push(r);}});
     plist.sort((a,b)=>(a.delivery||'zzz').localeCompare(b.delivery||'zzz'));
     const ctx={today:_todayKey(),total_orders:orders.length,pending:pend,invoiced:inv,paid,camp_pending:camp,pending_orders:plist.slice(0,80)};
+    const fin=_aiFinanceSummary();if(fin)ctx.finance_summary=fin;
+    const overdue=_aiOverdueOrders();if(overdue.length)ctx.overdue_alerts=overdue;
     // If Siva's question mentions a specific order number, attach its FULL item-level detail
     const matched=_aiFindOrders(q);
     if(matched.length)ctx.matched_orders=matched.map(_aiOrderDetail);
+    else{const ph=_aiPartHistory(q);if(ph.length)ctx.part_history=ph;}
     return JSON.stringify(ctx);
   }
   function _aiChatAdd(who,txt){
@@ -4028,22 +4071,68 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     box.appendChild(d);box.scrollTop=box.scrollHeight;return d.firstChild;
   }
   function _aiMd(t){let h=esc(t);h=h.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');h=h.replace(/^\s*[-*]\s+/gm,'• ');return h;}
+  let _aiLastCtx=null;
   async function _aiChatSend(){
     const inp=$('aiChatIn');if(!inp||_aiChatBusy)return;const q=inp.value.trim();if(!q)return;
     inp.value='';_aiChatAdd('me',esc(q));_aiChatBusy=true;
     const bub=_aiChatAdd('ai','<span class="spin"></span> யோசிக்கிறேன்…');
     const hist=_aiChatHist.slice(-5).map(h=>'Siva: '+h.q+'\nAI: '+h.a).join('\n');
-    const prompt='You are "NGRD AI", Siva\'s smart, loyal right-hand assistant INSIDE his NGRD Order System (admin assistant). Siva owns NGRD Motors & Puspha Motors (shops supplying vehicle spare parts to Sri Lanka Navy). You help him with EVERYTHING: answering questions about his orders/business data AND explaining how to use any part of the system (how-to, where a feature is, what a button does). Be warm, sharp, and helpful like a trusted senior partner "bro". Reply in TAMIL (Tanglish, short, clear). For business questions use ONLY the DATA. If the JSON has a "matched_orders" array, that is the FULL item-level detail (item names, qty, price, supplier, cost, brand, part no, invoice, profit) for the specific order(s) Siva is asking about — use it directly, never say item details are unavailable if matched_orders is present. For "how does the system work / how to do X" use the SYSTEM REFERENCE. If neither has the answer, say so honestly — never invent.\n\n=== SYSTEM REFERENCE ===\n'+_SYS_KB+'\n\n=== BUSINESS DATA (JSON) ===\n'+_aiChatCtx(q)+(hist?'\n\n=== RECENT CHAT ===\n'+hist:'')+'\n\nSiva\'s question: '+q;
+    const ctxStr=_aiChatCtx(q);
+    try{_aiLastCtx=JSON.parse(ctxStr);}catch(e){_aiLastCtx=null;}
+    const prompt='You are "NGRD AI", Siva\'s smart, loyal right-hand assistant INSIDE his NGRD Order System (admin assistant). Siva owns NGRD Motors & Puspha Motors (shops supplying vehicle spare parts to Sri Lanka Navy). You help him with EVERYTHING: answering questions about his orders/business data AND explaining how to use any part of the system (how-to, where a feature is, what a button does). Be warm, sharp, and helpful like a trusted senior partner "bro". Reply in TAMIL (Tanglish, short, clear). For business questions use ONLY the DATA. If the JSON has "matched_orders", that is the FULL item-level detail (item names, qty, price, supplier, cost, brand, part no, invoice, profit) for the specific order(s) Siva asked about — use it directly, never say item details are unavailable if matched_orders is present. If it has "finance_summary", use it for profit/revenue/outstanding-money questions (outstanding_total = total unpaid money due, overdue_45plus = money overdue past 45 days, revenue_this_month/revenue_last_month = billed value). If it has "overdue_alerts", those are pending orders whose delivery date has already passed without supply — proactively warn Siva about these when relevant, ordered most-overdue first. If it has "part_history", those are past orders where a similar item was bought — use it to answer "which supplier / what price last time" questions, and mention it is a best-effort text match, not guaranteed exact. For "how does the system work / how to do X" use the SYSTEM REFERENCE. If neither has the answer, say so honestly — never invent.\n\n=== SYSTEM REFERENCE ===\n'+_SYS_KB+'\n\n=== BUSINESS DATA (JSON) ===\n'+ctxStr+(hist?'\n\n=== RECENT CHAT ===\n'+hist:'')+'\n\nSiva\'s question: '+q;
     try{
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[{type:'text',text:prompt}]})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
       const data=await resp.json();
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n').trim()||'—';
-      if(bub)bub.innerHTML=_aiMd(text);
+      const hasExport=_aiLastCtx&&((_aiLastCtx.matched_orders&&_aiLastCtx.matched_orders.length)||(_aiLastCtx.overdue_alerts&&_aiLastCtx.overdue_alerts.length)||_aiLastCtx.finance_summary||(_aiLastCtx.part_history&&_aiLastCtx.part_history.length));
+      if(bub)bub.innerHTML=_aiMd(text)+(hasExport?'<div style="margin-top:8px"><button id="aiPdfBtn" type="button" style="border:0;background:#0b2a4a;color:#fff;border-radius:14px;padding:5px 12px;font-size:11.5px;cursor:pointer">📄 PDF ஆக்கு</button></div>':'');
+      if(hasExport){const pb=$('aiPdfBtn');if(pb)pb.onclick=_aiExportPDF;}
       _aiChatHist.push({q,a:text});
       if($('aiChatSpk')&&$('aiChatSpk').dataset.on==='1')_speak(text);
     }catch(e){if(bub)bub.innerHTML='<span style="color:#b00">⚠️ '+esc(e.message)+'</span>';}
     _aiChatBusy=false;
+  }
+  // Build a printable PDF from whatever AI context was last used (matched order items, overdue list, finance snapshot, or supplier history)
+  function _aiExportPDF(){
+    const c=_aiLastCtx;
+    if(!c){alert('முதல்ல ஏதாவது கேளுங்க bro, அப்புறம் PDF export பண்ணலாம்');return;}
+    let h='<h2 style="font-family:Arial">🤖 NGRD AI — Report</h2><div style="font-size:11px;color:#777;font-family:Arial;margin-bottom:6px">Generated '+esc(c.today||'')+'</div>';
+    if(c.matched_orders&&c.matched_orders.length){
+      c.matched_orders.forEach(o=>{
+        h+='<h3 style="font-family:Arial;margin-top:14px">'+esc(o.order_no)+' · '+esc(o.camp||'')+'</h3>';
+        h+='<div style="font-size:12px;font-family:Arial">Vehicle: '+esc(o.vehicle||'—')+' · Delivery: '+esc(o.delivery||'—')+' · Status: '+esc(o.status||'—')+(o.sell?(' · Value: Rs '+fmt(o.sell)):'')+(o.profit!=null?(' · Profit: Rs '+fmt(o.profit)):'')+'</div>';
+        if(o.items&&o.items.length){
+          const showCost=o.items[0].supplier!=null;
+          h+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Arial;margin-top:6px"><thead><tr><th style="border:1px solid #ccc;padding:4px">#</th><th style="border:1px solid #ccc;padding:4px;text-align:left">Item</th><th style="border:1px solid #ccc;padding:4px">Qty</th><th style="border:1px solid #ccc;padding:4px">Price</th>'+(showCost?'<th style="border:1px solid #ccc;padding:4px">Supplier</th><th style="border:1px solid #ccc;padding:4px">Cost</th>':'')+'</tr></thead><tbody>';
+          o.items.forEach(it=>{h+='<tr><td style="border:1px solid #ccc;padding:4px;text-align:center">'+esc(it.sn||'')+'</td><td style="border:1px solid #ccc;padding:4px">'+esc(it.name||'')+'</td><td style="border:1px solid #ccc;padding:4px;text-align:center">'+esc(it.qty||'')+'</td><td style="border:1px solid #ccc;padding:4px;text-align:right">'+fmt(it.unit_price||0)+'</td>'+(showCost?'<td style="border:1px solid #ccc;padding:4px">'+esc(it.supplier||'')+'</td><td style="border:1px solid #ccc;padding:4px;text-align:right">'+fmt(it.cost||0)+'</td>':'')+'</tr>';});
+          h+='</tbody></table>';
+        }
+      });
+    }
+    if(c.overdue_alerts&&c.overdue_alerts.length){
+      h+='<h3 style="font-family:Arial;margin-top:14px">🔴 Overdue Deliveries</h3><table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Arial"><thead><tr><th style="border:1px solid #ccc;padding:4px">Order No</th><th style="border:1px solid #ccc;padding:4px">Camp</th><th style="border:1px solid #ccc;padding:4px">Delivery</th><th style="border:1px solid #ccc;padding:4px">நாள் தாமதம்</th><th style="border:1px solid #ccc;padding:4px">Staff</th></tr></thead><tbody>';
+      c.overdue_alerts.forEach(o=>{h+='<tr><td style="border:1px solid #ccc;padding:4px">'+esc(o.no)+'</td><td style="border:1px solid #ccc;padding:4px">'+esc(o.camp)+'</td><td style="border:1px solid #ccc;padding:4px">'+esc(o.delivery)+'</td><td style="border:1px solid #ccc;padding:4px;text-align:center;color:#c0392b;font-weight:700">'+esc(o.days_overdue)+'</td><td style="border:1px solid #ccc;padding:4px">'+esc(o.staff||'—')+'</td></tr>';});
+      h+='</tbody></table>';
+    }
+    if(c.finance_summary){
+      const f=c.finance_summary;
+      h+='<h3 style="font-family:Arial;margin-top:14px">💰 Finance Snapshot</h3><table style="font-size:12px;font-family:Arial;border-collapse:collapse">'+
+        '<tr><td style="padding:3px 10px 3px 0">Outstanding (unpaid)</td><td style="font-weight:700">Rs '+fmt(f.outstanding_total)+' ('+f.outstanding_orders+' orders)</td></tr>'+
+        '<tr><td style="padding:3px 10px 3px 0">Overdue 45+ நாள்</td><td style="font-weight:700;color:#c0392b">Rs '+fmt(f.overdue_45plus_total)+' ('+f.overdue_45plus_orders+' orders)</td></tr>'+
+        '<tr><td style="padding:3px 10px 3px 0">Revenue — இந்த மாசம்</td><td style="font-weight:700">Rs '+fmt(f.revenue_this_month)+'</td></tr>'+
+        '<tr><td style="padding:3px 10px 3px 0">Revenue — கடந்த மாசம்</td><td style="font-weight:700">Rs '+fmt(f.revenue_last_month)+'</td></tr>'+
+        '</table>';
+    }
+    if(c.part_history&&c.part_history.length){
+      h+='<h3 style="font-family:Arial;margin-top:14px">🧠 Supplier History</h3><table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Arial"><thead><tr><th style="border:1px solid #ccc;padding:4px;text-align:left">Item</th><th style="border:1px solid #ccc;padding:4px">Supplier</th><th style="border:1px solid #ccc;padding:4px">Cost</th><th style="border:1px solid #ccc;padding:4px">Order</th></tr></thead><tbody>';
+      c.part_history.forEach(p=>{h+='<tr><td style="border:1px solid #ccc;padding:4px">'+esc(p.desc)+'</td><td style="border:1px solid #ccc;padding:4px">'+esc(p.supplier||'—')+'</td><td style="border:1px solid #ccc;padding:4px;text-align:right">'+fmt(p.cost||0)+'</td><td style="border:1px solid #ccc;padding:4px">'+esc(p.order_no)+'</td></tr>';});
+      h+='</tbody></table>';
+    }
+    const w=window.open('','_blank');
+    if(!w){alert('Popup blocked bro — browser popup allow பண்ணுங்க');return;}
+    w.document.write('<html><head><title>NGRD AI Report</title><style>@media print{@page{margin:12mm}}body{margin:0;padding:16px}</style></head><body>'+h+'<scr'+'ipt>window.onload=function(){setTimeout(function(){window.print();},350);}</scr'+'ipt></body></html>');
+    w.document.close();
   }
   function _aiChatVoice(){
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
