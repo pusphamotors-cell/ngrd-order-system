@@ -3966,14 +3966,59 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     else{speechSynthesis.onvoiceschanged=say;setTimeout(say,250);}
   }
   let _aiChatHist=[],_aiChatBusy=false;
-  function _aiChatCtx(){
+  // Find orders whose order_no/naha_no loosely matches the user's question text
+  // (handles spacing/case/slash differences like "sna apo po 2026 0808" vs "SNA/APO/PO/2026/0808")
+  function _aiFindOrders(q){
+    if(!q)return[];
+    const norm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const nq=norm(q);
+    if(nq.length<4)return[];
+    // 1) whole order number (any spacing/case/slashes) appears in the question, or vice versa
+    let hits=orders.filter(o=>{
+      const a=norm(o.order_no),b=norm(o.naha_no);
+      return (a&&a.length>=6&&(nq.indexOf(a)>=0||a.indexOf(nq)>=0))||(b&&b.length>=6&&(nq.indexOf(b)>=0||b.indexOf(nq)>=0));
+    });
+    if(hits.length)return hits.slice(0,5);
+    // 2) fallback: just the trailing number segment (e.g. "0808") mentioned as a standalone word
+    const qWords=String(q).toUpperCase().match(/[A-Z0-9]+/g)||[];
+    if(!qWords.length)return[];
+    hits=orders.filter(o=>{
+      const segs=String(o.order_no||'').toUpperCase().match(/[A-Z0-9]+/g)||[];
+      const lastNum=segs.slice().reverse().find(s=>/^\d{3,}$/.test(s));
+      return lastNum&&qWords.indexOf(lastNum)>=0;
+    });
+    return hits.slice(0,5);
+  }
+  // Full detail (items + supplier/cost/invoice/profit) for a single order — used when Siva asks about a specific order
+  function _aiOrderDetail(o){
+    const showVal=(typeof can!=='function')||can('value');
+    const items=(o.items||[]).map(it=>{
+      const row={sn:it.sn,name:it.description||'',qty:it.qty||'',unit_price:it.unit_price||it.total||''};
+      if(showVal){row.cost=it.cost||'';row.supplier=it.supplier||'';row.brand=it.brand||'';row.country=it.country||'';row.partno=it.partno||'';row.inv_no=it.inv_no||'';row.inv_date=it.inv_date||'';}
+      return row;
+    });
+    const d={order_no:o.order_no,camp:_campOf(o),vehicle:o.model||'',delivery:o.delivery_date||'',stage:_stageOf(o),staff:o.assignee_name||o.assignee||'',status:o.paid?'Paid':(o.supplied||o.bill_no)?'Invoiced':'Pending',items};
+    if(showVal){
+      d.sell=Number(o.sell)||0;
+      const totalCost=items.reduce((s,it)=>s+(Number(it.cost)||0)*(Number(it.qty)||1),0);
+      if(totalCost>0)d.profit=Math.round(d.sell-totalCost);
+      if(o.bill_no)d.bill_no=o.bill_no;
+      if(o.paid){d.paid_amt=o.paid_amt||'';d.paid_date=o.paid_date||'';}
+    }
+    return d;
+  }
+  function _aiChatCtx(q){
     const showVal=(typeof can!=='function')||can('value');
     let pend=0,inv=0,paid=0;const camp={};const plist=[];
     orders.forEach(o=>{if(o.paid)paid++;else if(o.supplied||o.bill_no)inv++;else pend++;
       if(!(o.paid||o.bill_no||o.supplied)){const c=_campOf(o);camp[c]=(camp[c]||0)+1;
         const r={no:o.order_no,camp:c,veh:o.model||'',items:(o.items||[]).length,delivery:o.delivery_date||'',stage:_stageOf(o),staff:o.assignee_name||o.assignee||''};if(showVal)r.value=Number(o.sell)||0;plist.push(r);}});
     plist.sort((a,b)=>(a.delivery||'zzz').localeCompare(b.delivery||'zzz'));
-    return JSON.stringify({today:_todayKey(),total_orders:orders.length,pending:pend,invoiced:inv,paid,camp_pending:camp,pending_orders:plist.slice(0,80)});
+    const ctx={today:_todayKey(),total_orders:orders.length,pending:pend,invoiced:inv,paid,camp_pending:camp,pending_orders:plist.slice(0,80)};
+    // If Siva's question mentions a specific order number, attach its FULL item-level detail
+    const matched=_aiFindOrders(q);
+    if(matched.length)ctx.matched_orders=matched.map(_aiOrderDetail);
+    return JSON.stringify(ctx);
   }
   function _aiChatAdd(who,txt){
     const box=$('aiChatBody');if(!box)return null;
@@ -3988,7 +4033,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     inp.value='';_aiChatAdd('me',esc(q));_aiChatBusy=true;
     const bub=_aiChatAdd('ai','<span class="spin"></span> யோசிக்கிறேன்…');
     const hist=_aiChatHist.slice(-5).map(h=>'Siva: '+h.q+'\nAI: '+h.a).join('\n');
-    const prompt='You are "NGRD AI", Siva\'s smart, loyal right-hand assistant INSIDE his NGRD Order System (admin assistant). Siva owns NGRD Motors & Puspha Motors (shops supplying vehicle spare parts to Sri Lanka Navy). You help him with EVERYTHING: answering questions about his orders/business data AND explaining how to use any part of the system (how-to, where a feature is, what a button does). Be warm, sharp, and helpful like a trusted senior partner "bro". Reply in TAMIL (Tanglish, short, clear). For business questions use ONLY the DATA. For "how does the system work / how to do X" use the SYSTEM REFERENCE. If neither has the answer, say so honestly — never invent.\n\n=== SYSTEM REFERENCE ===\n'+_SYS_KB+'\n\n=== BUSINESS DATA (JSON) ===\n'+_aiChatCtx()+(hist?'\n\n=== RECENT CHAT ===\n'+hist:'')+'\n\nSiva\'s question: '+q;
+    const prompt='You are "NGRD AI", Siva\'s smart, loyal right-hand assistant INSIDE his NGRD Order System (admin assistant). Siva owns NGRD Motors & Puspha Motors (shops supplying vehicle spare parts to Sri Lanka Navy). You help him with EVERYTHING: answering questions about his orders/business data AND explaining how to use any part of the system (how-to, where a feature is, what a button does). Be warm, sharp, and helpful like a trusted senior partner "bro". Reply in TAMIL (Tanglish, short, clear). For business questions use ONLY the DATA. If the JSON has a "matched_orders" array, that is the FULL item-level detail (item names, qty, price, supplier, cost, brand, part no, invoice, profit) for the specific order(s) Siva is asking about — use it directly, never say item details are unavailable if matched_orders is present. For "how does the system work / how to do X" use the SYSTEM REFERENCE. If neither has the answer, say so honestly — never invent.\n\n=== SYSTEM REFERENCE ===\n'+_SYS_KB+'\n\n=== BUSINESS DATA (JSON) ===\n'+_aiChatCtx(q)+(hist?'\n\n=== RECENT CHAT ===\n'+hist:'')+'\n\nSiva\'s question: '+q;
     try{
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[{type:'text',text:prompt}]})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
