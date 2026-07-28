@@ -1512,13 +1512,15 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     {code:'SNA',name:'Boossa (Southern)'},
     {code:'SEC',name:'Pothuvil (South Eastern)'},
     {code:'NNA',name:'KKS (Northern)'},
-    {code:'NWC',name:'Puttalam (North Western)'}
+    {code:'NWC',name:'Puttalam (North Western)'},
+    {code:'CG',name:'Coast Guard'}
   ];
   function _campOf(o){
     const s=((o.order_no||'')+' '+(o.file_no||'')).toUpperCase().replace(/\s+/g,'');
-    for(const c of _CAMPS){if(s.indexOf(c.code+'/')>=0||s.indexOf(c.code+'/APO')>=0)return c.name;}
-    // fallback: first token before /APO
+    // 1) leading code wins (safest — CG/ORD/876 => Coast Guard, not a mid-string accident)
     const m=s.match(/^([A-Z]{2,4})\//);if(m){const f=_CAMPS.find(c=>c.code===m[1]);if(f)return f.name;}
+    // 2) fallback: code appears anywhere (file_no வேற format-ல இருந்தா)
+    for(const c of _CAMPS){if(c.code.length>=3&&s.indexOf(c.code+'/')>=0)return c.name;}
     return 'மற்றவை';
   }
   function _isEgp(o){return !!(o.egp||(o.egp_ref&&String(o.egp_ref).trim())||/E-?GP/i.test((o.remark||'')));}
