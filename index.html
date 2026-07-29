@@ -487,6 +487,7 @@
         </select></div>
       </div>
       <button class="btn gold" id="repDownload">📥 Excel download</button>
+      <div id="estCostWrap"></div>
       <div id="repResult"></div>
     </div>
     <div id="repPendingWrap" class="hide"></div>
@@ -655,6 +656,8 @@
     throw new Error('AI படிச்சது சரியில்ல — மறுபடி try பண்ணு');
   }
   function hasCost(o){return (Number(o.buy)||0)>0;}
+  function _clearEst(o){if(!o||!o.buy_est)return;const b=(o.items||[]).reduce((a,it)=>a+(Number(it.cost)||0),0);if(b>0){o.buy=Math.round(b);o.profit=(Number(o.sell)||0)-o.buy;delete o.buy_est;}}
+  function _estTag(o){return o&&o.buy_est?' <span title="estimate — '+o.buy_est+'% of sell" style="color:#9a6b00;font-size:9.5px;font-weight:800">~est</span>':'';}
   function profitVal(o){return hasCost(o)?((Number(o.sell)||0)-(Number(o.buy)||0)):null;}
   function profitTxt(o){const p=profitVal(o);return p===null?'—':('Rs '+fmt(p));}
   let chosen=null,current=null,orders=[],mode='file',pastedImgs=[];
@@ -1231,7 +1234,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         ${row('Quotation Date',o.quotation_date)}${row('Order Date',o.order_date)}${row('Delivery',o.delivery_date)}${row('Buyer',o.buyer)}${_isEgp(o)?row('🏛️ eGP Ref',o.egp_ref||o.proc_ref)+row('🏛️ eGP Date',o.egp_date):''}</div>
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
       <div class="tablewrap"><table><thead><tr>${itemHead}</tr></thead><tbody>${itemRows}</tbody></table></div>
-      ${st?'':`<div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?fmt(o.buy):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>`}
+      ${st?'':`<div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?(fmt(o.buy)+_estTag(o)):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>`}
       <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row('Bill Amount',fmt(o.bill_amt))}</div>
       ${showPay?`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
@@ -1477,7 +1480,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       if(hasPur){let buy=0;
         if(eMode==='items'){o.items=readItemDetails(box.querySelector('#e_costItems'),o.items);buy=o.items.reduce((a,it)=>a+(Number(it.cost)||0),0);}
         else{buy=Number(box.querySelector('#e_buy').value)||0;}
-        o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;}
+        o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;if(buy>0)delete o.buy_est;}
       const _sup=box.querySelector('#e_supplied');if(_sup){o.supplied=_sup.checked;o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';const _rb=box.querySelector('#e_recvBy');if(_rb)o.received_by=_rb.value||'';}
       const _ba=box.querySelector('#e_billAmt');if(_ba)o.bill_amt=Number(_ba.value)||0;
       const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
@@ -2040,7 +2043,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         </tbody></table></div>
         ${noSup?'<div class="note" style="text-align:left;font-size:10.5px;margin-top:4px">⬆️ Supplier + Cost போட்டா, அந்த supplier group-க்கு நகரும் · profit தெரியும்</div>':`<button class="btn" data-purexp="${esc(sup)}" style="margin:6px 0 0;background:#0b2a4a">📥 Busy Purchase Excel</button>`}
       </div>`;}).join('');
-    pw.querySelectorAll('[data-pcost]').forEach(inp=>inp.addEventListener('change',async()=>{const a=inp.dataset.pcost.split('|');const o=orders.find(x=>x.id===a[0]);if(!o)return;const it=(o.items||[])[+a[1]];if(!it)return;it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_renderPurchase();}));
+    pw.querySelectorAll('[data-pcost]').forEach(inp=>inp.addEventListener('change',async()=>{const a=inp.dataset.pcost.split('|');const o=orders.find(x=>x.id===a[0]);if(!o)return;const it=(o.items||[])[+a[1]];if(!it)return;it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;_clearEst(o);try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_renderPurchase();}));
     pw.querySelectorAll('[data-psup]').forEach(inp=>inp.addEventListener('change',async()=>{const a=inp.dataset.psup.split('|');const o=orders.find(x=>x.id===a[0]);if(!o)return;const it=(o.items||[])[+a[1]];if(!it)return;it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_renderPurchase();}));
     pw.querySelectorAll('[data-purexp]').forEach(b=>b.addEventListener('click',()=>{const sup=b.dataset.purexp;const g=_purchaseGroups();if(g[sup])_genPurchaseSupplier(sup,g[sup]);}));
     const _pfield=(sel,key)=>pw.querySelectorAll('['+sel+']').forEach(inp=>inp.addEventListener('change',async()=>{const a=inp.dataset[sel.replace('data-','').replace(/-/g,'')].split('|');const o=orders.find(x=>x.id===a[0]);if(!o)return;const it=(o.items||[])[+a[1]];if(!it)return;it[key]=inp.value.trim();try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}}));
@@ -2226,7 +2229,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     }));
     // checkbox → maintain _purSelSet (survives re-render)
     $('purBody').querySelectorAll('.purSel').forEach(cb=>cb.addEventListener('change',()=>{const ix=+cb.dataset.pusel;if(cb.checked)_purSelSet.add(ix);else _purSelSet.delete(ix);}));
-    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;await save();_learnPart(o,it);if(it.supplier)saveSupPart(it.supplier,o.model,it.description,it.partno,it.brand,it.country,it.cost);_purRender();}));
+    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;_clearEst(o);await save();_learnPart(o,it);if(it.supplier)saveSupPart(it.supplier,o.model,it.description,it.partno,it.brand,it.country,it.cost);_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}_supFill(it);await save();_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=allItems[+inp.dataset.pusup];it.supplier=name;_supFill(it);await save();_purRender();}));
     _supAC($('purSup'),null);
@@ -3694,7 +3697,92 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div class="sec" style="margin-top:10px">💵 Payment வராத Orders (${payPend.length})</div>
       ${payPend.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Order No</th><th>Buyer</th><th>Bill/Del Date</th><th>Alert</th><th class="num">Value</th></tr></thead><tbody>${payRows}</tbody></table></div></div>`:'<div class="empty">Payment எல்லாம் வந்துடுச்சு 🎉</div>'}`;
   }
+  // ---- Estimated cost (cost போடாத invoiced orders) ----
+  function _hasRealCost(o){
+    if(Number(o.buy)>0&&!o.buy_est)return true;
+    return (o.items||[]).some(it=>Number(it.cost)>0);
+  }
+  function _estTargets(scope,before){
+    return orders.filter(o=>{
+      if(!(Number(o.sell)>0))return false;
+      if(scope==='invoiced'&&!(o.bill_no&&String(o.bill_no).trim()))return false;
+      if(scope==='supplied'&&!o.supplied)return false;
+      if(before){const d=parseDate(o.bill_date)||parseDate(o.delivery_date)||parseDate(o.order_date);if(!d||d>=new Date(before+'T00:00:00'))return false;}
+      return !_hasRealCost(o);
+    });
+  }
+  function _estCostHtml(){
+    const inv=_estTargets('invoiced',''),sup=_estTargets('supplied','');
+    const done=orders.filter(o=>o.buy_est);
+    const amt=l=>l.reduce((a,o)=>a+(Number(o.sell)||0),0);
+    return `<details class="egpbulk" style="margin-top:12px"><summary>💰 Cost போடாத orders — estimate cost போடு</summary>
+      <div class="note" style="text-align:left;padding:6px 13px">Purchasing entry இல்லாத orders-க்கு லாபம் <b>—</b> ஆ வருது. அதுக்கு sell-ல ஒரு % cost-ஆ போட்டு தோராயமான லாபம் காட்டலாம்.<br>⚠️ இது <b>estimate</b> மட்டும். போட்ட எல்லா order-லயும் <b>~est</b> mark இருக்கும், எப்பவேணா undo பண்ணலாம்.</div>
+      <div class="grid2" style="padding:0 13px 4px">
+        <div class="fld"><label>எந்த orders?</label><select id="estScope">
+          <option value="invoiced">🧾 Invoiced மட்டும் — ${inv.length} order (Rs ${fmt(amt(inv))})</option>
+          <option value="supplied">📦 Supplied எல்லாம் — ${sup.length} order (Rs ${fmt(amt(sup))})</option>
+        </select></div>
+        <div class="fld gold"><label>Cost = Sell-ல எத்தனை %?</label><input type="number" inputmode="decimal" id="estPct" value="80" min="1" max="99"></div>
+      </div>
+      <div class="fld" style="padding:0 13px 4px"><label>📅 இந்த date-க்கு <b>முன்னாடி</b> உள்ள orders மட்டும் (பழைய record backfill)</label><input type="date" id="estBefore" value=""></div>
+      <div id="estPreview" class="note" style="text-align:left;padding:2px 13px 6px"></div>
+      <button class="btn gold" id="estApplyBtn" style="margin:6px 13px">✓ Estimate cost போடு</button>
+      ${done.length?`<button class="btn" id="estUndoBtn" style="margin:6px 13px;background:#fdf0f0;color:#b00;border-color:#e6b8b8">↩️ Undo — ${done.length} estimate அழி</button>`:''}
+      <div id="estResult" class="note" style="text-align:left;padding:4px 13px 12px"></div>
+    </details>`;
+  }
+  function _estPreview(){
+    const el=$('estPreview');if(!el)return;
+    const list=_estTargets($('estScope').value,$('estBefore').value),pct=Number($('estPct').value)||80;
+    const sell=list.reduce((a,o)=>a+(Number(o.sell)||0),0);
+    const buy=Math.round(sell*pct/100);
+    el.innerHTML=list.length?`👉 <b>${list.length}</b> order · Sell Rs <b>${fmt(sell)}</b> → Cost Rs ${fmt(buy)} · <b style="color:#1a7f4b">தோராய லாபம் Rs ${fmt(sell-buy)}</b>`:'✅ இந்த scope-ல cost இல்லாத order இல்ல';
+  }
+  function _wireEstCost(force){
+    const w=$('estCostWrap');if(!w)return;
+    if(!force&&w.firstChild){_estPreview();return;}
+    w.innerHTML=_estCostHtml();
+    const sc=$('estScope'),pc=$('estPct'),bf=$('estBefore');
+    if(sc)sc.onchange=_estPreview;
+    if(pc)pc.oninput=_estPreview;
+    if(bf)bf.onchange=_estPreview;
+    _estPreview();
+    const ab=$('estApplyBtn');
+    if(ab)ab.onclick=async()=>{
+      const pct=Number($('estPct').value)||0;
+      if(pct<1||pct>99){alert('% 1–99 range-ல இருக்கணும்');return;}
+      const list=_estTargets($('estScope').value,$('estBefore').value);
+      if(!list.length){alert('போட order இல்ல');return;}
+      if(!confirm(list.length+' order-க்கு cost = sell-ல '+pct+'% போடலாமா?\n\n(எப்பவேணா Undo பண்ணலாம்)'))return;
+      ab.disabled=true;ab.textContent='போடுறேன்…';
+      let n=0;
+      for(const o of list){
+        const sell=Number(o.sell)||0;
+        o.buy=Math.round(sell*pct/100);
+        o.profit=sell-o.buy;
+        o.buy_est=pct;
+        try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}
+      }
+      $('estResult').innerHTML=`✅ <b>${n}</b> order-க்கு ${pct}% estimate cost போட்டாச்சு`;
+      ab.disabled=false;ab.textContent='✓ Estimate cost போடு';
+      setTimeout(()=>{renderReport();_wireEstCost(true);},1000);
+    };
+    const ub=$('estUndoBtn');
+    if(ub)ub.onclick=async()=>{
+      const list=orders.filter(o=>o.buy_est);
+      if(!confirm(list.length+' order-ல இருந்து estimate cost-ஐ அழிக்கவா?\n\n(நீ கையால போட்ட நிஜ cost தொடாது)'))return;
+      ub.disabled=true;ub.textContent='அழிக்குறேன்…';
+      let n=0;
+      for(const o of list){
+        o.buy=0;o.profit=null;delete o.buy_est;
+        try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}
+      }
+      $('estResult').innerHTML=`↩️ <b>${n}</b> order-ல estimate அழிஞ்சது`;
+      setTimeout(()=>{renderReport();_wireEstCost(true);},1000);
+    };
+  }
   function renderReport(){
+    _wireEstCost();
     const camp=$('repCamp').value,status=$('repStatus').value;
     repFiltered=orders.filter(o=>{
       if(camp!=='all'&&_campOf(o)!==camp)return false;
@@ -3706,7 +3794,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(!repFiltered.length){rr.innerHTML='<div class="empty">இந்த filter-க்கு order இல்ல</div>';return;}
     let val=0,prof=0;repFiltered.forEach(o=>{val+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null)prof+=pv;});
     const rows=repFiltered.map(o=>{const sk=statusKey(o);const lbl=sk==='paid'?'Paid':sk==='invoiced'?'Invoiced':'Pending';
-      return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.delivery_date||'—')}</td><td>${lbl}</td><td class="num">${fmt(o.sell)}</td><td class="num">${profitVal(o)===null?'—':fmt(profitVal(o))}</td></tr>`;}).join('');
+      return `<tr><td>${esc(o.order_no)}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.delivery_date||'—')}</td><td>${lbl}</td><td class="num">${fmt(o.sell)}</td><td class="num">${profitVal(o)===null?'—':(fmt(profitVal(o))+_estTag(o))}</td></tr>`;}).join('');
     rr.innerHTML=`
       <div class="drow" style="margin-top:14px">
         <div class="dstat"><div class="k">Orders</div><div class="v">${repFiltered.length}</div></div>
