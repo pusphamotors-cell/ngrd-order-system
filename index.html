@@ -416,6 +416,10 @@
 
   <div class="wrap hide" id="viewPur">
     <div class="step">🛒 Purchasing / Return</div>
+    <details class="egpbulk" id="beDetails" style="margin-bottom:10px"><summary>🧾 Bill Entry — ஒரு supplier bill → பல order (வேகம்) ⭐</summary>
+      <div style="padding:10px 13px" id="beWrap"></div>
+    </details>
+    <div class="note" style="text-align:left;margin-bottom:6px">👆 கடை bill கையில இருந்தா <b>மேல</b> · ஒரு order-ஐ மட்டும் பாக்கணும்னா <b>கீழ</b></div>
     <div class="modetoggle"><button class="mbtn on" id="purModeBuy">📦 Purchase (வாங்கு)</button><button class="mbtn" id="purModeRet">↩️ Return (திருப்பம்)</button></div>
     <div class="fld"><label>Order தேர்ந்தெடு (Order No — last 4 digit தேடலாம்)</label><input id="purSearch" list="purOrdList" placeholder="உதा: 0431 / SEC/APOSE/PO/2026/0431" autocomplete="off"></div>
     <button class="btn gold" id="purLoad" style="margin-top:0">🔄 Order load பண்ணு</button>
@@ -2289,6 +2293,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   function _learnPart(o,it){if(!o||!it)return;savePart(o.model,it.description,it.partno,it.brand,it.country,it.cost);}
   async function renderPurchasing(){
+    _beRender();
     let dlEl=document.getElementById('purOrdList');
     if(!dlEl){dlEl=document.createElement('datalist');dlEl.id='purOrdList';document.body.appendChild(dlEl);}
     dlEl.innerHTML=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('');
@@ -2804,9 +2809,6 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <div id="busyExpBody" style="margin-top:8px"></div>
       </div>
     </details>
-    <details class="egpbulk" id="beDetails"><summary>🧾 Supplier Bill Entry — ஒரு bill → பல order (வேகம்)</summary>
-      <div style="padding:10px 13px" id="beWrap"></div>
-    </details>
     <details class="egpbulk"><summary>🛒 Supplier Purchase list → Busy (பல order → ஒரு supplier)</summary>
       <div style="padding:10px 13px" id="busyPurWrap"></div>
     </details>
@@ -2917,7 +2919,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       await _saveBusyCfg();showInfoModal('Saved','✅ Busy export settings save ஆச்சு.');renderBusy();
     };
     // supplier-wise purchase list
-    _renderPurchase();_beRender();
+    _renderPurchase();
   }
   async function renderTender(force){
     const wrap=$('repTenderWrap');if(!wrap)return;
