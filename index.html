@@ -419,6 +419,9 @@
     <details class="egpbulk" id="beDetails" style="margin-bottom:10px"><summary>🧾 Bill Entry — ஒரு supplier bill → பல order (வேகம்) ⭐</summary>
       <div style="padding:10px 13px" id="beWrap"></div>
     </details>
+    <details class="egpbulk" id="pmDetails" style="margin-bottom:10px"><summary>📚 Parts Master — வாகனம்வாரியா விலை / brand / country வரலாறு</summary>
+      <div style="padding:10px 13px" id="pmWrap"></div>
+    </details>
     <div class="note" style="text-align:left;margin-bottom:6px">👆 கடை bill கையில இருந்தா <b>மேல</b> · ஒரு order-ஐ மட்டும் பாக்கணும்னா <b>கீழ</b></div>
     <div class="modetoggle"><button class="mbtn on" id="purModeBuy">📦 Purchase (வாங்கு)</button><button class="mbtn" id="purModeRet">↩️ Return (திருப்பம்)</button></div>
     <div class="fld"><label>Order தேர்ந்தெடு (Order No — last 4 digit தேடலாம்)</label><input id="purSearch" list="purOrdList" placeholder="உதा: 0431 / SEC/APOSE/PO/2026/0431" autocomplete="off"></div>
@@ -2092,6 +2095,106 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       (o.items||[]).forEach((it,ix)=>{if(!it.description)return;const sup=((it.supplier||'').trim())||'— supplier போடல —';(g[sup]=g[sup]||[]).push({o,it,ix});});});
     return g;
   }
+  // ===== 📚 Parts Master — வாகனம் தேர்ந்தெடு → விலை / brand / country வரலாறு =====
+  let _pmModel='',_pmSearch='';
+  function _pmModelList(){
+    const m={};
+    orders.forEach(o=>{const k=(o.model||'').trim();if(k)m[k]=(m[k]||0)+1;});
+    return Object.keys(m).sort((a,b)=>m[b]-m[a]||a.localeCompare(b)).map(k=>({model:k,n:m[k]}));
+  }
+  // orders-ல இருக்கற cost + buys_raw log — ரெண்டையும் சேர்த்து ஒரே வரலாறு
+  function _pmEvents(model){
+    const mk=_norm(model),out=[];
+    orders.forEach(o=>{
+      if(mk&&_norm(o.model)!==mk)return;
+      (o.items||[]).forEach(it=>{
+        const c=Number(it.cost)||0;if(!(c>0)||!it.description)return;
+        out.push({d:it.inv_date||o.bill_date||o.order_date||'',desc:it.description,pn:it.partno||'',
+                  br:it.brand||'',ctry:it.country||'',sup:it.supplier||'',cost:c,qty:Number(it.qty)||1,
+                  bill:it.inv_no||'',ord:o.order_no||'',model:o.model||'',src:'order'});
+      });
+    });
+    _buysLoad().forEach(r=>{
+      if(mk&&_norm(r.model)!==mk)return;
+      out.push(Object.assign({},r,{src:'log'}));
+    });
+    return out;
+  }
+  function _pmGroups(model,q){
+    const ev=_pmEvents(model),g={};
+    ev.forEach(r=>{
+      const k=_pk(r.pn)||_norm(r.desc);   // part no இருந்தா அதுவே key, இல்லனா item பேர்
+      const G=(g[k]=g[k]||{key:k,desc:r.desc,pn:r.pn||'',rows:[]});
+      if(!G.pn&&r.pn)G.pn=r.pn;
+      if((r.desc||'').length>(G.desc||'').length)G.desc=r.desc;
+      G.rows.push(r);
+    });
+    let list=Object.values(g).map(G=>{
+      G.rows.sort((a,b)=>String(b.d).localeCompare(String(a.d)));
+      const cs=G.rows.map(r=>Number(r.cost)||0).filter(c=>c>0);
+      const brs={},cts={},sps={};
+      G.rows.forEach(r=>{if(r.br)brs[r.br]=(brs[r.br]||0)+1;if(r.ctry)cts[r.ctry]=(cts[r.ctry]||0)+1;if(r.sup)sps[r.sup]=(sps[r.sup]||0)+1;});
+      const top=o=>Object.keys(o).sort((a,b)=>o[b]-o[a]);
+      return Object.assign(G,{n:G.rows.length,last:G.rows[0],
+        lo:Math.min.apply(null,cs),hi:Math.max.apply(null,cs),
+        avg:Math.round(cs.reduce((a,b)=>a+b,0)/cs.length),
+        brands:top(brs),countries:top(cts),sups:top(sps)});
+    });
+    if(q){const s=q.toLowerCase();list=list.filter(G=>((G.desc||'')+' '+(G.pn||'')+' '+G.brands.join(' ')).toLowerCase().indexOf(s)>=0);}
+    return list.sort((a,b)=>(a.desc||'').localeCompare(b.desc||''));
+  }
+  function _pmRender(){
+    const w=$('pmWrap');if(!w)return;
+    const models=_pmModelList();
+    const list=_pmModel?_pmGroups(_pmModel,_pmSearch):[];
+    w.innerHTML=`
+      <div class="grid2">
+        <div class="fld gold"><label>🚗 வாகனம்</label><select id="pmModel"><option value="">— தேர்ந்தெடு —</option>${models.map(m=>`<option value="${esc(m.model)}" ${_pmModel===m.model?'selected':''}>${esc(m.model)} (${m.n})</option>`).join('')}</select></div>
+        <div class="fld"><label>🔍 item / part no / brand</label><input id="pmSearch" value="${esc(_pmSearch)}" placeholder="brake / MB151332 / FEBEST" autocomplete="off"></div>
+      </div>
+      ${!_pmModel?'<div class="empty">மேல ஒரு வாகனம் தேர்ந்தெடு bro</div>':(
+        list.length?`<div style="font-size:11px;color:var(--muted);margin-bottom:6px"><b>${list.length}</b> item · cost போட்ட record-ல இருந்து</div>
+        <div class="tablewrap"><table><thead><tr>
+          <th>Item</th><th>Part No</th><th>Brand</th><th>Country</th><th class="num">கடைசி</th><th class="num">வரம்பு</th><th class="num">×</th>
+        </tr></thead><tbody>${list.map(G=>`<tr data-pmg="${esc(G.key)}" style="cursor:pointer">
+          <td style="font-size:11.5px;font-weight:600">${esc(G.desc)}</td>
+          <td style="font-size:10.5px;color:var(--navy);font-weight:700">${esc(G.pn||'—')}</td>
+          <td style="font-size:10.5px">${esc(G.brands[0]||'—')}${G.brands.length>1?` <span style="color:var(--muted)">+${G.brands.length-1}</span>`:''}</td>
+          <td style="font-size:10.5px">${esc(G.countries[0]||'—')}${G.countries.length>1?` <span style="color:var(--muted)">+${G.countries.length-1}</span>`:''}</td>
+          <td class="num" style="font-weight:700">${fmt(G.last.cost)}</td>
+          <td class="num" style="font-size:10.5px;color:var(--muted)">${G.n>1?(fmt(G.lo)+'–'+fmt(G.hi)):'—'}</td>
+          <td class="num" style="font-size:10.5px">${G.n}</td>
+        </tr>`).join('')}</tbody></table></div>
+        <div class="note" style="text-align:left;padding:5px 0;font-size:10.5px">👆 ஒரு row click பண்ணா முழு வரலாறு</div>`
+        :'<div class="empty">இந்த வாகனத்துக்கு cost போட்ட item இல்ல</div>')}`;
+    const ms=$('pmModel');if(ms)ms.onchange=e=>{_pmModel=e.target.value;_pmRender();};
+    const ss=$('pmSearch');
+    if(ss){let t=null;ss.addEventListener('input',e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{_pmSearch=v;_pmRender();const nn=$('pmSearch');if(nn){nn.focus();nn.setSelectionRange(v.length,v.length);}},350);});}
+    w.querySelectorAll('[data-pmg]').forEach(tr=>tr.addEventListener('click',()=>{
+      const G=list.find(x=>x.key===tr.dataset.pmg);if(G)_pmShow(G);
+    }));
+  }
+  function _pmShow(G){
+    const rows=G.rows.slice(0,40).map(r=>`<tr>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.d||'—')}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.sup||'—')}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.br||'—')}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.ctry||'—')}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px;text-align:right;font-weight:700;color:${r.cost<=G.lo?'#1a7f4b':(r.cost>=G.hi?'#b00':'#14213a')}">${fmt(r.cost)}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:10px;color:#777">${esc(r.bill||'—')}<br>${esc(r.ord||'')}</td></tr>`).join('');
+    showInfoModal('📊 '+esc(G.desc),`
+      <div style="font-size:12px;margin-bottom:8px">
+        ${G.pn?`Part No: <b style="color:#14213a">${esc(G.pn)}</b><br>`:''}
+        <b>${G.n}</b> record · மலிவு <b style="color:#1a7f4b">Rs ${fmt(G.lo)}</b> · விலை <b style="color:#b00">Rs ${fmt(G.hi)}</b> · சராசரி <b>Rs ${fmt(G.avg)}</b>
+        ${G.brands.length?`<br>Brand: ${esc(G.brands.join(', '))}`:''}
+        ${G.countries.length?`<br>Country: ${esc(G.countries.join(', '))}`:''}
+        ${G.sups.length?`<br>Supplier: ${esc(G.sups.slice(0,4).join(', '))}`:''}
+      </div>
+      <div style="max-height:300px;overflow:auto"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f3f6fb"><th style="padding:4px 6px;font-size:10.5px;text-align:left">தேதி</th><th style="padding:4px 6px;font-size:10.5px;text-align:left">Supplier</th><th style="padding:4px 6px;font-size:10.5px;text-align:left">Brand</th><th style="padding:4px 6px;font-size:10.5px;text-align:left">Country</th><th style="padding:4px 6px;font-size:10.5px;text-align:right">Cost</th><th style="padding:4px 6px;font-size:10.5px;text-align:left">Bill / Order</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      ${G.rows.length>40?'<div style="font-size:10.5px;color:#777;margin-top:6px">கடைசி 40 மட்டும்</div>':''}`);
+  }
   // ===== 🧾 Supplier Bill Entry — cross-order, ERP style (header once → many lines) =====
   let _beSup='',_beInv='',_beDate='',_beTotal='',_beSearch='',_beIncBilled=true;
   let _beCost={};            // "orderId|itemIdx" -> typed cost (saved ஆகல)
@@ -2463,7 +2566,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   function _learnPart(o,it){if(!o||!it)return;savePart(o.model,it.description,it.partno,it.brand,it.country,it.cost);}
   async function renderPurchasing(){
-    _beRender();
+    _beRender();_pmRender();
     let dlEl=document.getElementById('purOrdList');
     if(!dlEl){dlEl=document.createElement('datalist');dlEl.id='purOrdList';document.body.appendChild(dlEl);}
     dlEl.innerHTML=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||'')).slice(0,400).map(o=>`<option value="${esc(o.order_no)}">`).join('');
