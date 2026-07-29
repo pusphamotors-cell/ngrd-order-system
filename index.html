@@ -1926,7 +1926,16 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     document.body.appendChild(_supACBox);
     document.addEventListener('click',e=>{if(e.target!==_supACInp&&_supACBox&&!_supACBox.contains(e.target))_supACHide();});
     window.addEventListener('scroll',()=>_supACHide(),true);}
-  function _supACHide(){if(_supACBox)_supACBox.style.display='none';}
+  let _supACSel=-1;
+  function _supACHide(){if(_supACBox)_supACBox.style.display='none';_supACSel=-1;}
+  function _supACRows(){return _supACBox?[..._supACBox.querySelectorAll('[data-aci],[data-acnew]')]:[];}
+  function _supACPaint(){const rows=_supACRows();rows.forEach((el,i)=>{const on=i===_supACSel;
+    el.style.background=on?'#fff4d1':(el.dataset.acnew?'#eef9f0':'#fff');
+    if(on&&el.scrollIntoView)el.scrollIntoView({block:'nearest'});});}
+  function _supACMove(d){const rows=_supACRows();if(!rows.length)return;
+    _supACSel=(_supACSel+d+rows.length+1)%(rows.length+1);
+    if(_supACSel===rows.length)_supACSel=d>0?0:rows.length-1;
+    _supACPaint();}
   function _supACChoose(name,isNew){const inp=_supACInp,pick=_supACPick;if(!inp)return;inp.value=name;if(isNew&&name){const k=_supKey(name);if(k)_supCache[k]=name;}_supACHide();if(pick)pick(name);}
   function _supACRender(){const inp=_supACInp;if(!inp)return;const q=(inp.value||'').trim().toLowerCase();const all=_supList();
     let m=q?all.filter(s=>s.n.toLowerCase().includes(q)||(s.a&&s.a.toLowerCase().includes(q))):all.slice();
@@ -1938,12 +1947,27 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(!html){_supACHide();return;}
     _supACBox.innerHTML=html;const r=inp.getBoundingClientRect();
     _supACBox.style.left=r.left+'px';_supACBox.style.top=(r.bottom+2)+'px';_supACBox.style.minWidth=Math.max(190,r.width)+'px';_supACBox.style.display='block';
+    _supACSel=-1;
     _supACBox.querySelectorAll('[data-aci]').forEach(el=>el.addEventListener('mousedown',e=>{e.preventDefault();_supACChoose(_supACData[+el.dataset.aci].n);}));
+    _supACBox.querySelectorAll('[data-aci],[data-acnew]').forEach((el,i)=>el.addEventListener('mouseenter',()=>{_supACSel=i;_supACPaint();}));
     const nw=_supACBox.querySelector('[data-acnew]');if(nw)nw.addEventListener('mousedown',e=>{e.preventDefault();_supACChoose(inp.value.trim(),true);});}
   function _supAC(inp,onPick){if(!inp)return;_supACEnsure();inp.setAttribute('autocomplete','off');
     inp.addEventListener('focus',()=>{_supACInp=inp;_supACPick=onPick;_supACRender();});
     inp.addEventListener('input',()=>{_supACInp=inp;_supACPick=onPick;_supACRender();});
-    inp.addEventListener('keydown',e=>{if(e.key==='Escape')_supACHide();});}
+    inp.addEventListener('keydown',e=>{
+      const open=_supACBox&&_supACBox.style.display==='block'&&_supACInp===inp;
+      if(e.key==='Escape'){_supACHide();return;}
+      if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+        if(!open){_supACInp=inp;_supACPick=onPick;_supACRender();}
+        e.preventDefault();_supACMove(e.key==='ArrowDown'?1:-1);return;}
+      if((e.key==='Enter'||e.key==='Tab')&&open&&_supACSel>=0){
+        const rows=_supACRows(),el=rows[_supACSel];if(!el)return;
+        e.preventDefault();
+        if(el.dataset.acnew!=null)_supACChoose(inp.value.trim(),true);
+        else _supACChoose(_supACData[+el.dataset.aci].n);
+        return;}
+      if(e.key==='Enter'&&open&&_supACSel<0)_supACHide();
+    });}
   function _supOptions(){ // combine Busy master + used suppliers, alias as label
     const seen={},out=[];
     _busySup.forEach(s=>{const n=(s.n||s.name||'').trim();if(!n)return;const k=n.toLowerCase();if(seen[k])return;seen[k]=1;out.push(`<option value="${esc(n)}">${esc(s.a||s.alias||'')}</option>`);});
@@ -2091,6 +2115,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         <button class="btn" id="beRead" style="margin:0;width:auto;padding:6px 12px;font-size:11.5px" disabled>📸 Bill படி (AI)</button>
       </div>
       <datalist id="beCtryDL">${_countryOptions()}</datalist>
+      <div class="note" style="text-align:left;padding:0 0 4px;font-size:10.5px">⌨️ <b>Enter</b> அடுத்த line · <b>Shift+Enter</b> முன்னாடி · <b>Tab</b> part/brand/country · <b>Ctrl+Enter</b> bill save · <b>↓↑</b> supplier list</div>
       <div id="beMsg" class="note" style="text-align:left;padding:0 0 6px"></div>
       ${shown.length?`<div class="tablewrap"><table><thead><tr>
         <th>Item</th><th class="num">Qty</th><th class="num">விற்பனை</th><th>Order</th><th class="num" style="width:82px">Cost (Rs)</th><th style="width:88px">Part No</th><th style="width:78px">Brand</th><th style="width:80px">Country</th>
@@ -2142,9 +2167,12 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       });
       inp.addEventListener('keydown',e=>{
         if(e.key!=='Enter')return;
+        if(e.ctrlKey||e.metaKey){e.preventDefault();_beSave();return;}
         e.preventDefault();
-        const nx=boxes[(+inp.dataset.beix)+1];
-        if(nx){nx.focus();nx.select();}else{const sv=$('beSave');if(sv)sv.focus();}
+        const i=+inp.dataset.beix;
+        const nx=boxes[e.shiftKey?i-1:i+1];
+        if(nx){nx.focus();nx.select();}
+        else if(!e.shiftKey){const sv=$('beSave');if(sv)sv.focus();}
       });
     });
     [...document.querySelectorAll('[data-bemeta]')].forEach(inp=>{
@@ -2153,6 +2181,20 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         (_beMeta[k]=_beMeta[k]||{})[f]=inp.value.trim();
         inp.style.background='';
       });
+    });
+    const _beFirstCost=()=>document.querySelector('[data-becost]');
+    ['beSup','beInv','beDate','beTotal','beSearch'].forEach(id=>{
+      const el=$(id);if(!el)return;
+      el.addEventListener('keydown',e=>{
+        if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();_beSave();return;}
+        if(e.key!=='Enter')return;
+        if(id==='beSup'&&_supACBox&&_supACBox.style.display==='block'&&_supACSel>=0)return; // supplier list-ku vidu
+        e.preventDefault();
+        const c=_beFirstCost();if(c){c.focus();c.select();}
+      });
+    });
+    [...document.querySelectorAll('[data-bemeta]')].forEach(inp=>{
+      inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();_beSave();}});
     });
     const bf=$('beFile');
     if(bf)bf.addEventListener('change',e=>{_beFileObj=e.target.files&&e.target.files[0];const b=$('beRead');if(b)b.disabled=!_beFileObj;});
