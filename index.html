@@ -2105,6 +2105,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   function _beIsGuess(r,f){return !(_beMeta[r.key]&&_beMeta[r.key][f])&&!r.it[f]&&!!_beVal(r,f);}
   let _beFileObj=null,_beDefBr='',_beDefCtry='';
+  let _beSel={};   // தேர்ந்தெடுத்த row
   const _beKey=(o,ix)=>o.id+'|'+ix;
   function _beNorm(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(t=>t.length>2);}
   function _beMine(it){return !!(_beInv&&String(it.inv_no||'').trim().toLowerCase()===_beInv.trim().toLowerCase());}
@@ -2151,7 +2152,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       </div>
       <datalist id="beCtryDL">${_countryOptions()}</datalist>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;background:#f3f6fb;padding:7px 9px;border-radius:8px;margin:2px 0 6px">
-        <div style="font-size:10.5px;font-weight:800;color:var(--navy);width:100%">⬇️ எல்லா row-க்கும் ஒரே brand / country</div>
+        <div style="font-size:10.5px;font-weight:800;color:var(--navy);width:100%">⬇️ Brand / Country — <b>tick பண்ண row-க்கு</b> (tick பண்ணலைன்னா திரையில தெரியற எல்லாத்துக்கும்)</div>
         <input id="beDefBr" value="${esc(_beDefBr)}" placeholder="brand" style="width:110px;font-size:11.5px;padding:5px 7px;border:1px solid var(--line);border-radius:6px">
         <input id="beDefCtry" list="beCtryDL" value="${esc(_beDefCtry)}" placeholder="country" style="width:110px;font-size:11.5px;padding:5px 7px;border:1px solid var(--line);border-radius:6px">
         <button class="btn" id="beApplyAll" style="margin:0;width:auto;padding:5px 12px;font-size:11.5px">எல்லாத்துக்கும் போடு</button>
@@ -2160,10 +2161,11 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <div class="note" style="text-align:left;padding:0 0 4px;font-size:10.5px">⌨️ <b>Enter</b> அடுத்த line · <b>Shift+Enter</b> முன்னாடி · <b>Tab</b> part/brand/country · <b>Ctrl+Enter</b> bill save · <b>↓↑</b> supplier list</div>
       <div id="beMsg" class="note" style="text-align:left;padding:0 0 6px"></div>
       ${shown.length?`<div class="tablewrap"><table><thead><tr>
-        <th>Item</th><th class="num">Qty</th><th class="num">விற்பனை</th><th>Order</th><th class="num" style="width:82px">Cost (Rs)</th><th style="width:88px">Part No</th><th style="width:78px">Brand</th><th style="width:80px">Country</th>
+        <th style="width:26px"><input type="checkbox" id="beSelAll" title="எல்லாம்"></th><th>Item</th><th class="num">Qty</th><th class="num">விற்பனை</th><th>Order</th><th class="num" style="width:82px">Cost (Rs)</th><th style="width:88px">Part No</th><th style="width:78px">Brand</th><th style="width:80px">Country</th>
       </tr></thead><tbody>${shown.map((r,i)=>{
         const cur=_beCost[r.key]!=null?_beCost[r.key]:(r.mine?(r.it.cost||''):'');
-        return `<tr${r.mine?' style="background:#f2f8f4"':''}>
+        return `<tr${_beSel[r.key]?' style="background:#fff8e6"':(r.mine?' style="background:#f2f8f4"':'')}>
+          <td style="text-align:center"><input type="checkbox" class="beSelCb" data-besel="${esc(r.key)}" ${_beSel[r.key]?'checked':''}></td>
           <td style="font-size:11.5px;font-weight:600">${esc(r.it.description)}${r.mine?' <span style="color:#1a7f4b;font-size:9px;font-weight:800">இந்த bill</span>':''}${r.o.bill_no?' <span style="color:#9a6b00;font-size:9px">🧾</span>':''}${(()=>{const h=buySummary(r.it.partno||_beVal(r,'partno'),r.it.description,r.o.model);if(!h)return '';
             return `<br><span data-behist="${esc(r.key)}" style="font-size:9.5px;font-weight:600;color:#1f5bb5;cursor:pointer;text-decoration:underline" title="முழு வரலாறு">📊 கடைசி Rs ${fmt(h.last.cost)}${h.last.sup?' · '+esc(h.last.sup.slice(0,14)):''} · ${h.n>1?('வரம்பு '+fmt(h.lo)+'–'+fmt(h.hi)):'1 தடவை'}</span>`;})()}</td>
           <td class="num">${esc(r.it.qty||1)}</td>
@@ -2248,8 +2250,11 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       const over=($('beDefOver')||{}).checked;
       if(!br.trim()&&!ct.trim()){alert('முதல்ல brand illa country போடு bro');return;}
       _beDefBr=br.trim();_beDefCtry=ct.trim();
+      const picked=_beIndex().filter(r=>_beSel[r.key]);
+      const target=picked.length?picked:_beIndex();
+      if(!picked.length&&target.length>8&&!confirm('⚠️ எந்த row-ம் tick பண்ணல.\n\nதிரையில தெரியற எல்லா '+target.length+' row-க்கும் போடவா?\n\n(வேற வாகனம் / வேற brand கலந்திருந்தா tick பண்ணி போடு)'))return;
       let cnt=0;
-      _beIndex().forEach(r=>{
+      target.forEach(r=>{
         const m=(_beMeta[r.key]=_beMeta[r.key]||{});
         let did=false;
         if(_beDefBr&&(over||!(m.brand||r.it.brand))){m.brand=_beDefBr;did=true;}
@@ -2257,15 +2262,25 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         if(did)cnt++;
       });
       _beRender();
-      const el=$('beResult');if(el)el.innerHTML=`⬇️ <b>${cnt}</b> row-க்கு போட்டாச்சு — வித்தியாசமான ${cnt?'சில':''} row-ஐ மட்டும் கையால மாத்து`;
+      const el=$('beResult');if(el)el.innerHTML=`⬇️ <b>${cnt}</b> row-க்கு போட்டாச்சு${picked.length?' (tick பண்ணது மட்டும்)':' (திரையில தெரிஞ்ச எல்லாம்)'}`;
     };
+    [...document.querySelectorAll('.beSelCb')].forEach(cb=>cb.addEventListener('change',()=>{
+      if(cb.checked)_beSel[cb.dataset.besel]=1;else delete _beSel[cb.dataset.besel];
+      const tr=cb.closest('tr');if(tr)tr.style.background=cb.checked?'#fff8e6':'';
+      const sa=$('beSelAll');if(sa){const all=[...document.querySelectorAll('.beSelCb')];sa.checked=all.length&&all.every(x=>x.checked);}
+    }));
+    const sa=$('beSelAll');if(sa)sa.addEventListener('change',()=>{
+      [...document.querySelectorAll('.beSelCb')].forEach(cb=>{cb.checked=sa.checked;
+        if(sa.checked)_beSel[cb.dataset.besel]=1;else delete _beSel[cb.dataset.besel];
+        const tr=cb.closest('tr');if(tr)tr.style.background=sa.checked?'#fff8e6':'';});
+    });
     const ba=$('beApplyAll');if(ba)ba.addEventListener('click',_beApplyDefaults);
     ['beDefBr','beDefCtry'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_beApplyDefaults();}});});
     const bf=$('beFile');
     if(bf)bf.addEventListener('change',e=>{_beFileObj=e.target.files&&e.target.files[0];const b=$('beRead');if(b)b.disabled=!_beFileObj;});
     const br=$('beRead');if(br)br.addEventListener('click',_beReadPhoto);
     const bsv=$('beSave');if(bsv)bsv.addEventListener('click',_beSave);
-    const bc=$('beClear');if(bc)bc.addEventListener('click',()=>{if(confirm('type பண்ண cost எல்லாத்தையும் அழிக்கவா? (save ஆகல)')){_beCost={};_beMeta={};_beRender();}});
+    const bc=$('beClear');if(bc)bc.addEventListener('click',()=>{if(confirm('type பண்ண cost எல்லாத்தையும் அழிக்கவா? (save ஆகல)')){_beCost={};_beMeta={};_beSel={};_beRender();}});
   }
   // running total மட்டும் update — முழு re-render இல்ல (typing focus போகக்கூடாது)
   function _beTotalsOnly(){
@@ -2384,7 +2399,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       ? `<span style="color:#b00">⚠️ ${ok}/${ids.length} order save ஆச்சு. <b>தோல்வி:</b> ${esc(fail.join(', '))} — internet check பண்ணி மறுபடி save அடி (type பண்ணது அழியல)</span>`
       : `✅ <b>${keys.length}</b> item · <b>${ok}</b> order save ஆச்சு · Bill ${esc(_beInv||'—')} · Rs ${fmt(run)}`;
     if(!fail.length){
-      _beCost={};_beMeta={};_beTotal='';_beFileObj=null;
+      _beCost={};_beMeta={};_beSel={};_beTotal='';_beFileObj=null;
       setTimeout(()=>{_beRender();$('beResult').innerHTML=`✅ Bill ${esc(_beInv||'')} முடிஞ்சது. அடுத்த bill-க்கு மேல Bill No மாத்து.`;},900);
     }else{sv.disabled=false;sv.textContent='💾 மறுபடி save';}
   }
