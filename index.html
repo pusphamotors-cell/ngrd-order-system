@@ -2029,6 +2029,206 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       (o.items||[]).forEach((it,ix)=>{if(!it.description)return;const sup=((it.supplier||'').trim())||'— supplier போடல —';(g[sup]=g[sup]||[]).push({o,it,ix});});});
     return g;
   }
+  // ===== 🧾 Supplier Bill Entry — cross-order, ERP style (header once → many lines) =====
+  let _beSup='',_beInv='',_beDate='',_beTotal='',_beSearch='',_beIncBilled=false;
+  let _beCost={};            // "orderId|itemIdx" -> typed cost (saved ஆகல)
+  let _beFileObj=null;
+  const _beKey=(o,ix)=>o.id+'|'+ix;
+  function _beNorm(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(t=>t.length>2);}
+  function _beMine(it){return !!(_beInv&&String(it.inv_no||'').trim().toLowerCase()===_beInv.trim().toLowerCase());}
+  function _beIndex(){
+    const out=[];
+    orders.forEach(o=>{
+      (o.items||[]).forEach((it,ix)=>{
+        if(!it.description||it.na)return;
+        const mine=_beMine(it);
+        if(Number(it.cost)>0&&!mine)return;                    // வேற bill-ல cost போட்டாச்சு
+        if(!_beIncBilled&&(o.bill_no||o.paid)&&!mine)return;    // default: bill ஆகாத orders
+        out.push({o,it,ix,key:_beKey(o,ix),mine});
+      });
+    });
+    if(_beSearch){
+      const q=_beSearch.toLowerCase();
+      return out.filter(r=>((r.it.description||'')+' '+(r.o.order_no||'')+' '+(r.o.model||'')).toLowerCase().indexOf(q)>=0);
+    }
+    return out;
+  }
+  function _beRunning(){
+    let t=0;Object.keys(_beCost).forEach(k=>{t+=Number(_beCost[k])||0;});return t;
+  }
+  function _beRender(){
+    const w=$('beWrap');if(!w)return;
+    const rows=_beIndex();
+    const shown=rows.slice(0,300);
+    const run=_beRunning(),bt=Number(_beTotal)||0;
+    const diff=bt>0?(run-bt):0;
+    const okAmt=bt>0&&Math.abs(diff)<1;
+    const nTyped=Object.keys(_beCost).filter(k=>Number(_beCost[k])>0).length;
+    w.innerHTML=`
+      <datalist id="beSupDL">${_supOptions()}</datalist>
+      <div class="grid2" style="margin-bottom:2px">
+        <div class="fld gold"><label>🏪 Supplier</label><input id="beSup" list="beSupDL" value="${esc(_beSup)}" placeholder="கடை பேர்"></div>
+        <div class="fld gold"><label>🧾 Bill No</label><input id="beInv" value="${esc(_beInv)}" placeholder="7789"></div>
+        <div class="fld"><label>📅 Bill Date</label><input type="date" id="beDate" value="${esc(_beDate)}"></div>
+        <div class="fld gold"><label>💰 Bill Total (Rs) — bill-ல இருக்கறது</label><input type="number" inputmode="decimal" id="beTotal" value="${esc(_beTotal)}" placeholder="24500"></div>
+      </div>
+      <label class="toggle" style="margin:2px 0 6px"><input type="checkbox" id="beIncBilled" ${_beIncBilled?'checked':''}><span>Bill ஆன / paid orders-ஐயும் காட்டு (பழைய record நிரப்ப)</span></label>
+      <div class="fld"><label>🔍 Item / Order No / Vehicle தேடு</label><input id="beSearch" value="${esc(_beSearch)}" placeholder="brake pad / 0808 / L200" autocomplete="off"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0 8px">
+        <input type="file" id="beFile" accept="image/*,application/pdf" style="font-size:11px;flex:1;min-width:150px">
+        <button class="btn" id="beRead" style="margin:0;width:auto;padding:6px 12px;font-size:11.5px" disabled>📸 Bill படி (AI)</button>
+      </div>
+      <div id="beMsg" class="note" style="text-align:left;padding:0 0 6px"></div>
+      ${shown.length?`<div class="tablewrap"><table><thead><tr>
+        <th>Item</th><th class="num">Qty</th><th class="num">விற்பனை</th><th>Order</th><th class="num" style="width:82px">Cost (Rs)</th>
+      </tr></thead><tbody>${shown.map((r,i)=>{
+        const cur=_beCost[r.key]!=null?_beCost[r.key]:(r.mine?(r.it.cost||''):'');
+        return `<tr${r.mine?' style="background:#f2f8f4"':''}>
+          <td style="font-size:11.5px;font-weight:600">${esc(r.it.description)}${r.mine?' <span style="color:#1a7f4b;font-size:9px;font-weight:800">இந்த bill</span>':''}${r.o.bill_no?' <span style="color:#9a6b00;font-size:9px">🧾</span>':''}</td>
+          <td class="num">${esc(r.it.qty||1)}</td>
+          <td class="num" style="color:#1a7f4b">${fmt(r.it.total||0)}</td>
+          <td style="font-size:10px;color:var(--muted)">${esc(r.o.order_no)}<br>${esc((r.o.model||'').slice(0,18))}</td>
+          <td class="num"><input data-becost="${esc(r.key)}" data-beix="${i}" type="number" inputmode="decimal" value="${esc(cur)}" placeholder="0" style="width:74px;font-size:11.5px;padding:4px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td>
+        </tr>`;}).join('')}</tbody></table></div>
+        ${rows.length>300?`<div class="note" style="text-align:left;padding:4px 0">⚠️ ${rows.length} item — முதல் 300 மட்டும். மேல தேடு box use பண்ணு.</div>`:''}`
+        :'<div class="empty">Item இல்ல — search-ஐ மாத்து illa "bill ஆனதையும் காட்டு" tick பண்ணு</div>'}
+      <div class="dpanel" style="margin-top:8px;padding:8px 10px;background:${bt>0?(okAmt?'#f0f9f4':'#fdf5ee'):'#f7f9fc'}">
+        <div style="font-size:12.5px;font-weight:800;color:var(--navy)">
+          நீ போட்டது: Rs ${fmt(run)} <span style="font-weight:500;color:var(--muted)">(${nTyped} item)</span>
+          ${bt>0?`<br>Bill total: Rs ${fmt(bt)} → ${okAmt?'<span style="color:#1a7f4b">✅ சரியா match</span>':`<span style="color:#b00">⚠️ வித்தியாசம் Rs ${fmt(Math.abs(diff))} ${diff>0?'(அதிகம்)':'(குறைவு)'}</span>`}`:'<br><span style="font-weight:500;color:var(--muted)">Bill total போட்டா தானா check பண்ணுவேன்</span>'}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <button class="btn gold" id="beSave" style="margin:0;flex:1;min-width:150px">💾 Bill save பண்ணு${nTyped?' ('+nTyped+' item)':''}</button>
+        ${nTyped?`<button class="btn" id="beClear" style="margin:0;width:auto;padding:9px 14px;background:#fdf0f0;color:#b00;border-color:#e6b8b8">✕ அழி</button>`:''}
+      </div>
+      <div id="beResult" class="note" style="text-align:left;padding:6px 0 0"></div>`;
+    _beWire();
+  }
+  function _beWire(){
+    const bind=(id,fn,ev)=>{const el=$(id);if(el)el.addEventListener(ev||'change',fn);};
+    bind('beSup',e=>{_beSup=e.target.value.trim();});
+    bind('beInv',e=>{_beInv=e.target.value.trim();_beRender();});
+    bind('beDate',e=>{_beDate=e.target.value;});
+    bind('beTotal',e=>{_beTotal=e.target.value;_beRender();},'input');
+    bind('beIncBilled',e=>{_beIncBilled=e.target.checked;_beRender();});
+    const bs=$('beSearch');
+    if(bs){let t=null;bs.addEventListener('input',e=>{clearTimeout(t);const v=e.target.value;t=setTimeout(()=>{_beSearch=v;_beRender();const n=$('beSearch');if(n){n.focus();n.setSelectionRange(v.length,v.length);}},350);});}
+    // cost inputs — Enter → அடுத்த line
+    const boxes=[...document.querySelectorAll('[data-becost]')];
+    boxes.forEach(inp=>{
+      inp.addEventListener('input',()=>{
+        const v=inp.value.trim();
+        if(v===''||!(Number(v)>0))delete _beCost[inp.dataset.becost];
+        else _beCost[inp.dataset.becost]=Number(v);
+        _beTotalsOnly();
+      });
+      inp.addEventListener('keydown',e=>{
+        if(e.key!=='Enter')return;
+        e.preventDefault();
+        const nx=boxes[(+inp.dataset.beix)+1];
+        if(nx){nx.focus();nx.select();}else{const sv=$('beSave');if(sv)sv.focus();}
+      });
+    });
+    const bf=$('beFile');
+    if(bf)bf.addEventListener('change',e=>{_beFileObj=e.target.files&&e.target.files[0];const b=$('beRead');if(b)b.disabled=!_beFileObj;});
+    const br=$('beRead');if(br)br.addEventListener('click',_beReadPhoto);
+    const bsv=$('beSave');if(bsv)bsv.addEventListener('click',_beSave);
+    const bc=$('beClear');if(bc)bc.addEventListener('click',()=>{if(confirm('type பண்ண cost எல்லாத்தையும் அழிக்கவா? (save ஆகல)')){_beCost={};_beRender();}});
+  }
+  // running total மட்டும் update — முழு re-render இல்ல (typing focus போகக்கூடாது)
+  function _beTotalsOnly(){
+    const run=_beRunning(),bt=Number(_beTotal)||0,diff=run-bt,ok=bt>0&&Math.abs(diff)<1;
+    const n=Object.keys(_beCost).filter(k=>Number(_beCost[k])>0).length;
+    const box=$('beWrap')&&$('beWrap').querySelector('.dpanel');
+    if(box)box.innerHTML=`<div style="font-size:12.5px;font-weight:800;color:var(--navy)">நீ போட்டது: Rs ${fmt(run)} <span style="font-weight:500;color:var(--muted)">(${n} item)</span>${bt>0?`<br>Bill total: Rs ${fmt(bt)} → ${ok?'<span style="color:#1a7f4b">✅ சரியா match</span>':`<span style="color:#b00">⚠️ வித்தியாசம் Rs ${fmt(Math.abs(diff))} ${diff>0?'(அதிகம்)':'(குறைவு)'}</span>`}`:''}</div>`;
+    if(box)box.style.background=bt>0?(ok?'#f0f9f4':'#fdf5ee'):'#f7f9fc';
+    const sv=$('beSave');if(sv)sv.textContent='💾 Bill save பண்ணு'+(n?' ('+n+' item)':'');
+  }
+  async function _beReadPhoto(){
+    if(!_beFileObj)return;
+    const b=$('beRead');b.disabled=true;b.innerHTML='<span class="spin"></span>படிக்கிறேன்...';
+    const msg=$('beMsg');msg.innerHTML='';
+    try{
+      const f=_beFileObj,b64=await toB64(f);
+      const isPdf=f.type==='application/pdf'||(f.name||'').toLowerCase().endsWith('.pdf');
+      const block=isPdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}}:{type:'image',source:{type:'base64',media_type:(f.type||'image/jpeg'),data:b64}};
+      const P='This is a Sri Lanka auto-parts supplier invoice/bill. Extract the supplier name, bill number, bill date and every line item. Return ONLY JSON, no markdown: {"supplier":"","bill_no":"","date":"yyyy-mm-dd","lines":[{"desc":"BRAKE PAD SET","qty":2,"amount":4500}]}. amount = the LINE TOTAL for that row (numeric only, no commas). If only a unit rate is printed, multiply by qty. Ignore subtotal/VAT/grand-total rows. Read exactly as printed, never invent.';
+      const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:[block,{type:'text',text:P}]})});
+      if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+      const data=await resp.json();
+      const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
+      const rec=_parseAIjson(text);
+      if(!rec||!rec.lines||!rec.lines.length)throw new Error('Line எதுவும் படிக்க முடியல');
+      if(rec.supplier&&!_beSup)_beSup=String(rec.supplier).trim();
+      if(rec.bill_no&&!_beInv)_beInv=String(rec.bill_no).trim();
+      if(rec.date&&!_beDate&&/^\d{4}-\d{2}-\d{2}$/.test(rec.date))_beDate=rec.date;
+      if(!_beTotal){const s=rec.lines.reduce((a,l)=>a+(Number(l.amount)||0),0);if(s>0)_beTotal=String(Math.round(s));}
+      // fuzzy match: AI line ↔ screen item
+      const pool=_beIndex();
+      let hit=0;const miss=[];
+      rec.lines.forEach(l=>{
+        const amt=Number(l.amount)||0;if(!(amt>0))return;
+        const q=_beNorm(l.desc);if(!q.length){miss.push(l.desc);return;}
+        let best=null,bs=0;
+        pool.forEach(r=>{
+          if(_beCost[r.key]!=null)return;
+          const t=_beNorm(r.it.description);if(!t.length)return;
+          let inter=0;q.forEach(x=>{if(t.indexOf(x)>=0)inter++;});
+          const sc=2*inter/(q.length+t.length);
+          if(sc>bs){bs=sc;best=r;}
+        });
+        if(best&&bs>=0.4){_beCost[best.key]=amt;hit++;}
+        else miss.push(l.desc);
+      });
+      _beRender();
+      $('beMsg').innerHTML=`✅ <b>${hit}</b> line match ஆச்சு${miss.length?` · <span style="color:#b00">${miss.length} match ஆகல:</span> ${esc(miss.slice(0,5).join(', '))}`:''}<br>⚠️ <b>AI படிச்சது — ஒவ்வொரு number-ஐயும் கண்ணால check பண்ணு</b>`;
+    }catch(e){
+      $('beMsg').innerHTML='<span style="color:#b00">❌ '+esc(e.message||'படிக்க முடியல')+'</span>';
+    }
+    const b2=$('beRead');if(b2){b2.disabled=false;b2.textContent='📸 Bill படி (AI)';}
+  }
+  async function _beSave(){
+    const keys=Object.keys(_beCost).filter(k=>Number(_beCost[k])>0);
+    if(!keys.length){alert('எந்த item-க்கும் cost போடல bro');return;}
+    if(!_beSup){alert('Supplier பேர் போடு');return;}
+    const run=_beRunning(),bt=Number(_beTotal)||0;
+    if(bt>0&&Math.abs(run-bt)>=1){
+      if(!confirm('⚠️ Bill total Rs '+fmt(bt)+' — நீ போட்டது Rs '+fmt(run)+'\nவித்தியாசம் Rs '+fmt(Math.abs(run-bt))+'\n\nஇப்படியே save பண்ணவா?'))return;
+    }
+    const sv=$('beSave');sv.disabled=true;sv.innerHTML='<span class="spin"></span>save பண்றேன்...';
+    // 1) memory-ல மாத்து, எந்த order தொட்டோம்னு சேகரி (batched — order-க்கு ஒரே write)
+    const dirty={},touched=[];
+    keys.forEach(k=>{
+      const a=k.split('|'),o=orders.find(x=>x.id===a[0]);if(!o)return;
+      const it=(o.items||[])[+a[1]];if(!it)return;
+      const c=Number(_beCost[k])||0;
+      it.cost=c;it.before=c;it.discount=0;
+      it.supplier=_beSup;
+      if(_beInv)it.inv_no=_beInv;
+      if(_beDate)it.inv_date=_beDate;
+      _clearEst(o);
+      dirty[o.id]=o;touched.push({o,it});
+    });
+    // 2) ஒரே flush
+    const ids=Object.keys(dirty);let ok=0;const fail=[];
+    for(const id of ids){
+      try{await window.storage.set(id,JSON.stringify(dirty[id]));ok++;}
+      catch(e){fail.push(dirty[id].order_no||id);}
+    }
+    // 3) parts memory கத்துக்கட்டும் (save ஆனதுக்கு மட்டும்)
+    if(!fail.length){
+      touched.forEach(({o,it})=>{try{_learnPart(o,it);saveSupPart(_beSup,o.model,it.description,it.partno,it.brand,it.country,it.cost);}catch(e){}});
+      const k=_supKey(_beSup);if(k)_supCache[k]=_beSup;
+    }
+    $('beResult').innerHTML=fail.length
+      ? `<span style="color:#b00">⚠️ ${ok}/${ids.length} order save ஆச்சு. <b>தோல்வி:</b> ${esc(fail.join(', '))} — internet check பண்ணி மறுபடி save அடி (type பண்ணது அழியல)</span>`
+      : `✅ <b>${keys.length}</b> item · <b>${ok}</b> order save ஆச்சு · Bill ${esc(_beInv||'—')} · Rs ${fmt(run)}`;
+    if(!fail.length){
+      _beCost={};_beTotal='';_beFileObj=null;
+      setTimeout(()=>{_beRender();$('beResult').innerHTML=`✅ Bill ${esc(_beInv||'')} முடிஞ்சது. அடுத்த bill-க்கு மேல Bill No மாத்து.`;},900);
+    }else{sv.disabled=false;sv.textContent='💾 மறுபடி save';}
+  }
   function _renderPurchase(){
     const pw=$('busyPurWrap');if(!pw)return;
     const pg=_purchaseGroups();const pk=Object.keys(pg).sort((a,b)=>a==='— supplier போடல —'?-1:b==='— supplier போடல —'?1:a.localeCompare(b));
@@ -2604,6 +2804,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <div id="busyExpBody" style="margin-top:8px"></div>
       </div>
     </details>
+    <details class="egpbulk" id="beDetails"><summary>🧾 Supplier Bill Entry — ஒரு bill → பல order (வேகம்)</summary>
+      <div style="padding:10px 13px" id="beWrap"></div>
+    </details>
     <details class="egpbulk"><summary>🛒 Supplier Purchase list → Busy (பல order → ஒரு supplier)</summary>
       <div style="padding:10px 13px" id="busyPurWrap"></div>
     </details>
@@ -2714,7 +2917,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       await _saveBusyCfg();showInfoModal('Saved','✅ Busy export settings save ஆச்சு.');renderBusy();
     };
     // supplier-wise purchase list
-    _renderPurchase();
+    _renderPurchase();_beRender();
   }
   async function renderTender(force){
     const wrap=$('repTenderWrap');if(!wrap)return;
