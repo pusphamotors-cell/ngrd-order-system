@@ -2097,30 +2097,51 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   // ===== 📚 Parts Master — வாகனம் தேர்ந்தெடு → விலை / brand / country வரலாறு =====
   let _pmModel='',_pmSearch='';
+  // ஒரே வண்டி பல பேர்ல எழுதியிருக்கு — குடும்பமா சேர்க்குறோம்
+  var _PM_FAM=[
+    ['L200','MITSUBISHI L200'],['L 200','MITSUBISHI L200'],['DOUBLE CAB L200','MITSUBISHI L200'],
+    ['L300','MITSUBISHI L300'],['L 300','MITSUBISHI L300'],
+    ['PAJERO','MITSUBISHI PAJERO'],['CANTER','MITSUBISHI CANTER'],['MONTERO','MITSUBISHI MONTERO'],
+    ['BOLERO','MAHINDRA BOLERO'],['MAXI TRUCK','MAHINDRA MAXI TRUCK'],['MAXITRUCK','MAHINDRA MAXI TRUCK'],
+    ['SCORPIO','MAHINDRA SCORPIO'],['MAHINDRA TRACTOR','MAHINDRA TRACTOR'],['575','MAHINDRA TRACTOR 575'],
+    ['SX4','SUZUKI SX4'],['ALTO','SUZUKI ALTO'],['WAGON R','SUZUKI WAGON R'],['SWIFT','SUZUKI SWIFT'],
+    ['HIACE','TOYOTA HIACE'],['HILUX','TOYOTA HILUX'],['DYNA','TOYOTA DYNA'],['LAND CRUISER','TOYOTA LAND CRUISER'],['COASTER','TOYOTA COASTER'],['PRADO','TOYOTA PRADO'],
+    ['SUPER ACE','TATA SUPER ACE'],['TATA','TATA'],
+    ['THREE WHEEL','THREE WHEELER'],['3 WHEEL','THREE WHEELER'],['THREEWHEEL','THREE WHEELER'],
+    ['FZ','YAMAHA FZ'],['YAMAHA','YAMAHA'],['HONDA','HONDA'],['BAJAJ','BAJAJ'],
+    ['ISUZU','ISUZU'],['NISSAN','NISSAN'],['DEFENDER','LAND ROVER DEFENDER'],['LAND ROVER','LAND ROVER'],
+    ['TRACTOR','TRACTOR'],['TRAILER','TRAILER'],['BUS','BUS'],['BOAT','BOAT'],['GENERATOR','GENERATOR']
+  ];
+  function _pmFamily(model){
+    const u=String(model||'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    if(!u)return '';
+    for(let i=0;i<_PM_FAM.length;i++){if(u.indexOf(_PM_FAM[i][0])>=0)return _PM_FAM[i][1];}
+    return u.split(' ').slice(0,2).join(' ');   // தெரியலைன்னா முதல் 2 வார்த்தை
+  }
   function _pmModelList(){
     const m={};
     (orders||[]).forEach(o=>{
-      const k=(o.model||'').trim();if(!k)return;
+      const f=_pmFamily(o.model);if(!f)return;
       let c=0;(o.items||[]).forEach(it=>{if(Number(it.cost)>0)c++;});
-      const e=(m[k]=m[k]||{n:0,c:0});e.n++;e.c+=c;
+      const e=(m[f]=m[f]||{n:0,c:0,names:{}});e.n++;e.c+=c;e.names[(o.model||'').trim()]=1;
     });
     return Object.keys(m).sort((a,b)=>m[b].c-m[a].c||m[b].n-m[a].n||a.localeCompare(b))
-      .map(k=>({model:k,n:m[k].n,c:m[k].c}));
+      .map(k=>({model:k,n:m[k].n,c:m[k].c,vars:Object.keys(m[k].names).length}));
   }
   // orders-ல இருக்கற cost + buys_raw log — ரெண்டையும் சேர்த்து ஒரே வரலாறு
   function _pmEvents(model){
-    const mk=_norm(model),out=[];
+    const mk=String(model||'').trim(),out=[];
     orders.forEach(o=>{
-      if(mk&&_norm(o.model)!==mk)return;
+      if(mk&&_pmFamily(o.model)!==mk)return;
       (o.items||[]).forEach(it=>{
         const c=Number(it.cost)||0;if(!(c>0)||!it.description)return;
-        out.push({d:it.inv_date||o.bill_date||o.order_date||'',desc:it.description,pn:it.partno||'',
+        out.push({d:it.inv_date||o.bill_date||o.order_date||'',desc:it.description,pn:it.partno||'',vmodel:o.model||'',
                   br:it.brand||'',ctry:it.country||'',sup:it.supplier||'',cost:c,qty:Number(it.qty)||1,
                   bill:it.inv_no||'',ord:o.order_no||'',model:o.model||'',src:'order'});
       });
     });
     _buysLoad().forEach(r=>{
-      if(mk&&_norm(r.model)!==mk)return;
+      if(mk&&_pmFamily(r.model)!==mk)return;
       out.push(Object.assign({},r,{src:'log'}));
     });
     return out;
@@ -2154,7 +2175,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const list=_pmModel?_pmGroups(_pmModel,_pmSearch):[];
     w.innerHTML=`
       <div class="grid2">
-        <div class="fld gold"><label>🚗 வாகனம்</label><select id="pmModel"><option value="">— தேர்ந்தெடு —</option>${models.map(m=>`<option value="${esc(m.model)}" ${_pmModel===m.model?'selected':''}>${esc(m.model)} — ${m.n} order${m.c?' · '+m.c+' cost':''}</option>`).join('')}</select></div>
+        <div class="fld gold"><label>🚗 வாகனம்</label><select id="pmModel"><option value="">— தேர்ந்தெடு —</option>${models.map(m=>`<option value="${esc(m.model)}" ${_pmModel===m.model?'selected':''}>${esc(m.model)} — ${m.n} order${m.c?' · '+m.c+' cost':''}${m.vars>1?' ('+m.vars+' பேர்)':''}</option>`).join('')}</select></div>
         <div class="fld"><label>🔍 item / part no / brand</label><input id="pmSearch" value="${esc(_pmSearch)}" placeholder="brake / MB151332 / FEBEST" autocomplete="off"></div>
       </div>
       ${!models.length?'<div class="empty">Orders இன்னும் load ஆகல — ஒரு நொடி கழிச்சு இந்த panel-ஐ மூடி திற</div>':(!_pmModel?'<div class="empty">மேல ஒரு வாகனம் தேர்ந்தெடு bro ('+models.length+' வாகனம் இருக்கு)</div>':(
@@ -2186,7 +2207,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.br||'—')}</td>
       <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.ctry||'—')}</td>
       <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px;text-align:right;font-weight:700;color:${r.cost<=G.lo?'#1a7f4b':(r.cost>=G.hi?'#b00':'#14213a')}">${fmt(r.cost)}</td>
-      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:10px;color:#777">${esc(r.bill||'—')}<br>${esc(r.ord||'')}</td></tr>`).join('');
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:10px;color:#777">${esc(r.bill||'—')}<br>${esc(r.ord||'')}${r.vmodel||r.model?'<br><span style="color:#9a6b00">'+esc((r.vmodel||r.model||'').slice(0,22))+'</span>':''}</td></tr>`).join('');
     showInfoModal('📊 '+esc(G.desc),`
       <div style="font-size:12px;margin-bottom:8px">
         ${G.pn?`Part No: <b style="color:#14213a">${esc(G.pn)}</b><br>`:''}
