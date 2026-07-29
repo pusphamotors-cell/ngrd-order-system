@@ -953,6 +953,41 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     return _partsCache;
   }
   function lookupPart(model,desc){if(!_partsCache)return null;return _partsCache[partKey(model,desc)]||_partsCache[partKeyRaw(model,desc)]||null;}
+  // ===== 📜 விலை வரலாறு (buys_raw) — எதையும் அழிக்காது, சேர்த்துட்டே போகும் =====
+  const _pk=v=>String(v==null?'':v).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  let _buysLocal=null;
+  function _buysLoad(){if(_buysLocal)return _buysLocal;
+    try{_buysLocal=JSON.parse(localStorage.getItem('__buys_raw')||'[]');}catch(e){_buysLocal=[];}
+    return _buysLocal;}
+  // ஒரு வாங்கல் = ஒரு event. update கிடையாது, push மட்டும்.
+  async function logBuy(ev){
+    if(!ev||!(Number(ev.cost)>0)||!ev.desc)return;
+    const rec={
+      d:ev.d||new Date().toISOString().slice(0,10),
+      pn:_pk(ev.pn), desc:String(ev.desc||'').trim(), model:String(ev.model||'').trim(),
+      sup:String(ev.sup||'').trim(), br:String(ev.br||'').trim(), ctry:String(ev.ctry||'').trim(),
+      qty:Number(ev.qty)||1, cost:Number(ev.cost)||0,
+      bill:String(ev.bill||'').trim(), ord:String(ev.ord||'').trim(),
+      at:Date.now(), by:(typeof CURRENT!=='undefined'&&CURRENT&&(CURRENT.name||CURRENT.u))||''
+    };
+    const L=_buysLoad();L.push(rec);
+    if(L.length>4000)L.splice(0,L.length-4000);   // localStorage-ல கடைசி 4000 மட்டும் (cloud-ல எல்லாம்)
+    try{localStorage.setItem('__buys_raw',JSON.stringify(L));}catch(e){}
+    try{if(_fbOk)await firebase.database().ref('buys_raw').push(rec);}catch(e){}
+  }
+  // ஒரு item-ஓட விலை வரலாறு — part no முதல்ல, இல்லனா description+vehicle
+  function buyHistory(partno,desc,model){
+    const L=_buysLoad(),k=_pk(partno),dk=_norm(desc),mk=_norm(model);
+    return L.filter(r=>(k&&r.pn===k)||(dk&&_norm(r.desc)===dk&&(!mk||_norm(r.model)===mk)))
+            .sort((a,b)=>String(b.d).localeCompare(String(a.d)));
+  }
+  function buySummary(partno,desc,model){
+    const h=buyHistory(partno,desc,model);
+    if(!h.length)return null;
+    const cs=h.map(r=>Number(r.cost)||0).filter(c=>c>0);
+    return {n:h.length,last:h[0],lo:Math.min.apply(null,cs),hi:Math.max.apply(null,cs),
+            avg:Math.round(cs.reduce((a,b)=>a+b,0)/cs.length),rows:h};
+  }
   async function savePart(model,desc,partno,brand,country,cost){
     if(!_norm(desc))return;
     const k=partKey(model,desc);if(!_partsCache)_partsCache={};
@@ -2122,7 +2157,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       </tr></thead><tbody>${shown.map((r,i)=>{
         const cur=_beCost[r.key]!=null?_beCost[r.key]:(r.mine?(r.it.cost||''):'');
         return `<tr${r.mine?' style="background:#f2f8f4"':''}>
-          <td style="font-size:11.5px;font-weight:600">${esc(r.it.description)}${r.mine?' <span style="color:#1a7f4b;font-size:9px;font-weight:800">இந்த bill</span>':''}${r.o.bill_no?' <span style="color:#9a6b00;font-size:9px">🧾</span>':''}</td>
+          <td style="font-size:11.5px;font-weight:600">${esc(r.it.description)}${r.mine?' <span style="color:#1a7f4b;font-size:9px;font-weight:800">இந்த bill</span>':''}${r.o.bill_no?' <span style="color:#9a6b00;font-size:9px">🧾</span>':''}${(()=>{const h=buySummary(r.it.partno||_beVal(r,'partno'),r.it.description,r.o.model);if(!h)return '';
+            return `<br><span data-behist="${esc(r.key)}" style="font-size:9.5px;font-weight:600;color:#1f5bb5;cursor:pointer;text-decoration:underline" title="முழு வரலாறு">📊 கடைசி Rs ${fmt(h.last.cost)}${h.last.sup?' · '+esc(h.last.sup.slice(0,14)):''} · ${h.n>1?('வரம்பு '+fmt(h.lo)+'–'+fmt(h.hi)):'1 தடவை'}</span>`;})()}</td>
           <td class="num">${esc(r.it.qty||1)}</td>
           <td class="num" style="color:#1a7f4b">${fmt(r.it.total||0)}</td>
           <td style="font-size:10px;color:var(--muted)">${esc(r.o.order_no)}<br>${esc((r.o.model||'').slice(0,18))}</td>
@@ -2196,6 +2232,10 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     [...document.querySelectorAll('[data-bemeta]')].forEach(inp=>{
       inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();_beSave();}});
     });
+    [...document.querySelectorAll('[data-behist]')].forEach(el=>el.addEventListener('click',()=>{
+      const a=el.dataset.behist.split('|'),o=orders.find(x=>x.id===a[0]);if(!o)return;
+      const it=(o.items||[])[+a[1]];if(!it)return;_beShowHist(it,o);
+    }));
     const bf=$('beFile');
     if(bf)bf.addEventListener('change',e=>{_beFileObj=e.target.files&&e.target.files[0];const b=$('beRead');if(b)b.disabled=!_beFileObj;});
     const br=$('beRead');if(br)br.addEventListener('click',_beReadPhoto);
@@ -2210,6 +2250,24 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(box)box.innerHTML=`<div style="font-size:12.5px;font-weight:800;color:var(--navy)">நீ போட்டது: Rs ${fmt(run)} <span style="font-weight:500;color:var(--muted)">(${n} item)</span>${bt>0?`<br>Bill total: Rs ${fmt(bt)} → ${ok?'<span style="color:#1a7f4b">✅ சரியா match</span>':`<span style="color:#b00">⚠️ வித்தியாசம் Rs ${fmt(Math.abs(diff))} ${diff>0?'(அதிகம்)':'(குறைவு)'}</span>`}`:''}</div>`;
     if(box)box.style.background=bt>0?(ok?'#f0f9f4':'#fdf5ee'):'#f7f9fc';
     const sv=$('beSave');if(sv)sv.textContent='💾 Bill save பண்ணு'+(n?' ('+n+' item)':'');
+  }
+  function _beShowHist(it,o){
+    const h=buySummary(it.partno,it.description,o.model);
+    if(!h){showInfoModal('விலை வரலாறு','இந்த item-க்கு இன்னும் வரலாறு இல்ல bro. இன்னிக்கு போட்டா, அடுத்த தடவை இங்க தெரியும்.');return;}
+    const rows=h.rows.slice(0,30).map(r=>`<tr>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.d||'—')}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.sup||'—')}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px">${esc(r.br||'—')}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:11px;text-align:right;font-weight:700;color:${r.cost<=h.lo?'#1a7f4b':(r.cost>=h.hi?'#b00':'#14213a')}">${fmt(r.cost)}</td>
+      <td style="border-bottom:1px solid #eee;padding:4px 6px;font-size:10px;color:#777">${esc(r.bill||'—')}</td></tr>`).join('');
+    showInfoModal('📊 '+esc(it.description),`
+      <div style="font-size:12px;margin-bottom:8px">
+        <b>${h.n}</b> தடவை வாங்கியிருக்க · மலிவு <b style="color:#1a7f4b">Rs ${fmt(h.lo)}</b> · விலை <b style="color:#b00">Rs ${fmt(h.hi)}</b> · சராசரி <b>Rs ${fmt(h.avg)}</b>
+      </div>
+      <div style="max-height:300px;overflow:auto"><table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f3f6fb"><th style="padding:4px 6px;font-size:10.5px;text-align:left">தேதி</th><th style="padding:4px 6px;font-size:10.5px;text-align:left">Supplier</th><th style="padding:4px 6px;font-size:10.5px;text-align:left">Brand</th><th style="padding:4px 6px;font-size:10.5px;text-align:right">Cost</th><th style="padding:4px 6px;font-size:10.5px;text-align:left">Bill</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      ${h.rows.length>30?'<div style="font-size:10.5px;color:#777;margin-top:6px">கடைசி 30 மட்டும் காட்டுறேன்</div>':''}`);
   }
   async function _beReadPhoto(){
     if(!_beFileObj)return;
@@ -2294,6 +2352,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     // 3) parts memory கத்துக்கட்டும் (save ஆனதுக்கு மட்டும்)
     if(!fail.length){
       touched.forEach(({o,it})=>{try{_learnPart(o,it);saveSupPart(_beSup,o.model,it.description,it.partno,it.brand,it.country,it.cost);}catch(e){}});
+      touched.forEach(({o,it})=>{try{logBuy({d:_beDate,pn:it.partno,desc:it.description,model:o.model,sup:_beSup,br:it.brand,ctry:it.country,qty:it.qty,cost:it.cost,bill:_beInv,ord:o.order_no});}catch(e){}});
       const k=_supKey(_beSup);if(k)_supCache[k]=_beSup;
     }
     $('beResult').innerHTML=fail.length
@@ -2505,7 +2564,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     }));
     // checkbox → maintain _purSelSet (survives re-render)
     $('purBody').querySelectorAll('.purSel').forEach(cb=>cb.addEventListener('change',()=>{const ix=+cb.dataset.pusel;if(cb.checked)_purSelSet.add(ix);else _purSelSet.delete(ix);}));
-    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;_clearEst(o);await save();_learnPart(o,it);if(it.supplier)saveSupPart(it.supplier,o.model,it.description,it.partno,it.brand,it.country,it.cost);_purRender();}));
+    $('purBody').querySelectorAll('[data-pucost]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pucost];it.cost=Number(inp.value)||0;it.before=it.cost;it.discount=0;_clearEst(o);await save();_learnPart(o,it);try{logBuy({d:it.inv_date,pn:it.partno,desc:it.description,model:o.model,sup:it.supplier,br:it.brand,ctry:it.country,qty:it.qty,cost:it.cost,bill:it.inv_no,ord:o.order_no});}catch(e){}if(it.supplier)saveSupPart(it.supplier,o.model,it.description,it.partno,it.brand,it.country,it.cost);_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>inp.addEventListener('change',async()=>{const it=allItems[+inp.dataset.pusup];it.supplier=inp.value.trim();if(it.supplier){const k=_supKey(it.supplier);if(k)_supCache[k]=it.supplier;}_supFill(it);await save();_purRender();}));
     $('purBody').querySelectorAll('[data-pusup]').forEach(inp=>_supAC(inp,async(name)=>{const it=allItems[+inp.dataset.pusup];it.supplier=name;_supFill(it);await save();_purRender();}));
     _supAC($('purSup'),null);
