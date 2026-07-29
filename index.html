@@ -2104,7 +2104,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     return (pm&&pm[f])||'';
   }
   function _beIsGuess(r,f){return !(_beMeta[r.key]&&_beMeta[r.key][f])&&!r.it[f]&&!!_beVal(r,f);}
-  let _beFileObj=null;
+  let _beFileObj=null,_beDefBr='',_beDefCtry='';
   const _beKey=(o,ix)=>o.id+'|'+ix;
   function _beNorm(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').split(/\s+/).filter(t=>t.length>2);}
   function _beMine(it){return !!(_beInv&&String(it.inv_no||'').trim().toLowerCase()===_beInv.trim().toLowerCase());}
@@ -2150,6 +2150,13 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         <button class="btn" id="beRead" style="margin:0;width:auto;padding:6px 12px;font-size:11.5px" disabled>📸 Bill படி (AI)</button>
       </div>
       <datalist id="beCtryDL">${_countryOptions()}</datalist>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;background:#f3f6fb;padding:7px 9px;border-radius:8px;margin:2px 0 6px">
+        <div style="font-size:10.5px;font-weight:800;color:var(--navy);width:100%">⬇️ எல்லா row-க்கும் ஒரே brand / country</div>
+        <input id="beDefBr" value="${esc(_beDefBr)}" placeholder="brand" style="width:110px;font-size:11.5px;padding:5px 7px;border:1px solid var(--line);border-radius:6px">
+        <input id="beDefCtry" list="beCtryDL" value="${esc(_beDefCtry)}" placeholder="country" style="width:110px;font-size:11.5px;padding:5px 7px;border:1px solid var(--line);border-radius:6px">
+        <button class="btn" id="beApplyAll" style="margin:0;width:auto;padding:5px 12px;font-size:11.5px">எல்லாத்துக்கும் போடு</button>
+        <label class="toggle" style="margin:0;font-size:10.5px"><input type="checkbox" id="beDefOver"><span>ஏற்கனவே இருந்தாலும் மாத்து</span></label>
+      </div>
       <div class="note" style="text-align:left;padding:0 0 4px;font-size:10.5px">⌨️ <b>Enter</b> அடுத்த line · <b>Shift+Enter</b> முன்னாடி · <b>Tab</b> part/brand/country · <b>Ctrl+Enter</b> bill save · <b>↓↑</b> supplier list</div>
       <div id="beMsg" class="note" style="text-align:left;padding:0 0 6px"></div>
       ${shown.length?`<div class="tablewrap"><table><thead><tr>
@@ -2236,6 +2243,24 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       const a=el.dataset.behist.split('|'),o=orders.find(x=>x.id===a[0]);if(!o)return;
       const it=(o.items||[])[+a[1]];if(!it)return;_beShowHist(it,o);
     }));
+    const _beApplyDefaults=()=>{
+      const br=($('beDefBr')||{}).value||'',ct=($('beDefCtry')||{}).value||'';
+      const over=($('beDefOver')||{}).checked;
+      if(!br.trim()&&!ct.trim()){alert('முதல்ல brand illa country போடு bro');return;}
+      _beDefBr=br.trim();_beDefCtry=ct.trim();
+      let cnt=0;
+      _beIndex().forEach(r=>{
+        const m=(_beMeta[r.key]=_beMeta[r.key]||{});
+        let did=false;
+        if(_beDefBr&&(over||!(m.brand||r.it.brand))){m.brand=_beDefBr;did=true;}
+        if(_beDefCtry&&(over||!(m.country||r.it.country))){m.country=_beDefCtry;did=true;}
+        if(did)cnt++;
+      });
+      _beRender();
+      const el=$('beResult');if(el)el.innerHTML=`⬇️ <b>${cnt}</b> row-க்கு போட்டாச்சு — வித்தியாசமான ${cnt?'சில':''} row-ஐ மட்டும் கையால மாத்து`;
+    };
+    const ba=$('beApplyAll');if(ba)ba.addEventListener('click',_beApplyDefaults);
+    ['beDefBr','beDefCtry'].forEach(id=>{const el=$(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_beApplyDefaults();}});});
     const bf=$('beFile');
     if(bf)bf.addEventListener('change',e=>{_beFileObj=e.target.files&&e.target.files[0];const b=$('beRead');if(b)b.disabled=!_beFileObj;});
     const br=$('beRead');if(br)br.addEventListener('click',_beReadPhoto);
