@@ -2034,7 +2034,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     return g;
   }
   // ===== 🧾 Supplier Bill Entry — cross-order, ERP style (header once → many lines) =====
-  let _beSup='',_beInv='',_beDate='',_beTotal='',_beSearch='',_beIncBilled=false;
+  let _beSup='',_beInv='',_beDate='',_beTotal='',_beSearch='',_beIncBilled=true;
   let _beCost={};            // "orderId|itemIdx" -> typed cost (saved ஆகல)
   let _beFileObj=null;
   const _beKey=(o,ix)=>o.id+'|'+ix;
@@ -2069,9 +2069,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const okAmt=bt>0&&Math.abs(diff)<1;
     const nTyped=Object.keys(_beCost).filter(k=>Number(_beCost[k])>0).length;
     w.innerHTML=`
-      <datalist id="beSupDL">${_supOptions()}</datalist>
       <div class="grid2" style="margin-bottom:2px">
-        <div class="fld gold"><label>🏪 Supplier</label><input id="beSup" list="beSupDL" value="${esc(_beSup)}" placeholder="கடை பேர்"></div>
+        <div class="fld gold"><label>🏪 Supplier</label><input id="beSup" value="${esc(_beSup)}" placeholder="கடை பேர் — type பண்ணா list வரும்" autocomplete="off"></div>
         <div class="fld gold"><label>🧾 Bill No</label><input id="beInv" value="${esc(_beInv)}" placeholder="7789"></div>
         <div class="fld"><label>📅 Bill Date</label><input type="date" id="beDate" value="${esc(_beDate)}"></div>
         <div class="fld gold"><label>💰 Bill Total (Rs) — bill-ல இருக்கறது</label><input type="number" inputmode="decimal" id="beTotal" value="${esc(_beTotal)}" placeholder="24500"></div>
@@ -2095,7 +2094,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
           <td class="num"><input data-becost="${esc(r.key)}" data-beix="${i}" type="number" inputmode="decimal" value="${esc(cur)}" placeholder="0" style="width:74px;font-size:11.5px;padding:4px 5px;border:1px solid var(--line);border-radius:6px;text-align:right"></td>
         </tr>`;}).join('')}</tbody></table></div>
         ${rows.length>300?`<div class="note" style="text-align:left;padding:4px 0">⚠️ ${rows.length} item — முதல் 300 மட்டும். மேல தேடு box use பண்ணு.</div>`:''}`
-        :'<div class="empty">Item இல்ல — search-ஐ மாத்து illa "bill ஆனதையும் காட்டு" tick பண்ணு</div>'}
+        :`<div class="empty">${_beSearch?('"'+esc(_beSearch)+'" — item கிடைக்கல. வேற word try பண்ணு.'):'Cost போடாத item இல்ல'+(_beIncBilled?'':' — ☑ "Bill ஆன orders-ஐயும் காட்டு" tick பண்ணு')}</div>`}
       <div class="dpanel" style="margin-top:8px;padding:8px 10px;background:${bt>0?(okAmt?'#f0f9f4':'#fdf5ee'):'#f7f9fc'}">
         <div style="font-size:12.5px;font-weight:800;color:var(--navy)">
           நீ போட்டது: Rs ${fmt(run)} <span style="font-weight:500;color:var(--muted)">(${nTyped} item)</span>
@@ -2112,6 +2111,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   function _beWire(){
     const bind=(id,fn,ev)=>{const el=$(id);if(el)el.addEventListener(ev||'change',fn);};
     bind('beSup',e=>{_beSup=e.target.value.trim();});
+    _supAC($('beSup'),name=>{_beSup=name;const el=$('beSup');if(el)el.value=name;});
     bind('beInv',e=>{_beInv=e.target.value.trim();_beRender();});
     bind('beDate',e=>{_beDate=e.target.value;});
     bind('beTotal',e=>{_beTotal=e.target.value;_beRender();},'input');
@@ -2303,7 +2303,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(mb)mb.onclick=()=>{_purMode='buy';mb.classList.add('on');mr&&mr.classList.remove('on');if(_purOrder)_purRender();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';};
     if(mr)mr.onclick=()=>{_purMode='ret';mr.classList.add('on');mb&&mb.classList.remove('on');if(_purOrder)_retRender();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';};
     if(_purOrder)(_purMode==='ret'?_retRender:_purRender)();else $('purBody').innerHTML='<div class="empty">Order No தேடி load பண்ணு</div>';
-    try{await _loadBusyItems();await _loadBusyCfg();await _loadBusySuppliers();if(_purOrder&&_purMode==='buy')_purRender();}catch(e){}
+    try{await _loadBusyItems();await _loadBusyCfg();await _loadBusySuppliers();_beRender();if(_purOrder&&_purMode==='buy')_purRender();}catch(e){}
   }
   function _purFind(q){q=(q||'').trim().toLowerCase();if(!q)return null;return orders.find(x=>(x.order_no||'').toLowerCase()===q)||orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q))||orders.find(x=>(x.order_no||'').toLowerCase().includes(q));}
   function _purLoad(){const o=_purFind($('purSearch').value);if(!o){$('purBody').innerHTML='<div class="empty">Order கிடைக்கல</div>';_purOrder=null;return;}_purOrder=o;_purSelSet=new Set();_purFocus=false;(_purMode==='ret'?_retRender:_purRender)();}
