@@ -157,10 +157,17 @@
   .no-order #tabNew{display:none!important}
   .no-report #tabDash{display:none!important}
   .no-value #tabDash{display:none!important}
-  .no-report.no-billentry #tabRep{display:none!important}
-  .no-value:not(.bill-only) #tabRep{display:none!important}
+  .no-report.no-billentry.no-comm #tabRep{display:none!important}
+  .no-value:not(.bill-only):not(.comm-only) #tabRep{display:none!important}
   .bill-only #rmReport,.bill-only #rmPending,.bill-only #rmDaily,.bill-only #rmCal,.bill-only #rmOut,.bill-only #rmPay,.bill-only #rmComm,.bill-only #rmSum,.bill-only #rmSales,.bill-only #rmTender,.bill-only #rmBusy,.bill-only #rmReturn{display:none!important}
   .bill-only #repNormal{display:none!important}
+  .no-comm.no-report #rmComm{display:none!important}
+  .comm-only #rmReport,.comm-only #rmPending,.comm-only #rmDaily,.comm-only #rmCal,.comm-only #rmOut,.comm-only #rmPay,.comm-only #rmSum,.comm-only #rmSales,.comm-only #rmTender,.comm-only #rmBusy,.comm-only #rmReturn{display:none!important}
+  .comm-only #rmBill{display:none!important}
+  .comm-only.can-bill #rmBill{display:inline-flex!important}
+  .comm-only #repNormal{display:none!important}
+  .comm-only .egpbulk.pctbox,.comm-only .v3egp.egpdetect{display:none!important}
+  .comm-only #commApoPdf,.comm-only #commClarkPdf{display:none!important}
   .no-value .pf{display:none!important}
   .no-value .puSell{display:none!important}
   .no-value .puProfit{display:none!important}
@@ -1668,7 +1675,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     return n;
   }
   function _egpBulkHtml(){
-    return `<div class="v3egp">
+    return `<div class="v3egp egpdetect">
       <div class="v3t">🔄 V3-ல இருந்து eGP auto-detect</div>
       <div class="v3s">V3 quote-ஓட match ஆன order எல்லாம் auto eGP-ஆ mark ஆகும் (paste வேண்டாம்)</div>
       <button class="btn gold" id="v3EgpBtn">🔄 V3 படிச்சு eGP detect பண்ணு</button>
@@ -1819,7 +1826,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     };
   }
   function _bulkPctHtml(){
-    return `<details class="egpbulk"><summary>📊 Commission % — bulk set (eGP தனி rate)</summary>
+    return `<details class="egpbulk pctbox"><summary>📊 Commission % — bulk set (eGP தனி rate)</summary>
       <div class="fld" style="margin:4px 13px"><label>எந்த orders-க்கு?</label><select id="bulkPctTarget"><option value="non">Non-eGP மட்டும் (சாதாரண %)</option><option value="egp">🏛️ eGP மட்டும் (தனி %)</option><option value="all">எல்லா supplied orders</option></select></div>
       <div class="grid2" style="padding:0 13px 4px">
         <div class="fld"><label>Apo %</label><input type="number" inputmode="decimal" id="bulkApo" placeholder="non-eGP:10 · eGP:1"></div>
@@ -1914,7 +1921,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('rmBusy').onclick=()=>{setRepMode('busy');renderBusy();};
     $('rmReturn').onclick=()=>{setRepMode('return');renderReturn();};
     $('rmBill').onclick=()=>{setRepMode('bill');renderBill();};
-    if(can('bill')&&!can('report')){setRepMode('bill');renderBill();}else{renderReport();}
+    if(can('comm')&&!can('report')){setRepMode('comm');renderCommission();}
+    else if(can('bill')&&!can('report')){setRepMode('bill');renderBill();}else{renderReport();}
   }
   var V3_DB='https://ngrd-motors-default-rtdb.firebaseio.com/ngrd';
   var _v3Cache=null;
@@ -5275,14 +5283,17 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     b.classList.toggle('no-order',!can('order'));
     b.classList.toggle('no-report',!can('report'));
     b.classList.toggle('no-billentry',!can('bill'));
-    b.classList.toggle('bill-only',can('bill')&&!can('report'));
+    b.classList.toggle('bill-only',can('bill')&&!can('report')&&!can('comm'));
+    b.classList.toggle('no-comm',!can('comm'));
+    b.classList.toggle('can-bill',can('bill'));
+    b.classList.toggle('comm-only',can('comm')&&!can('report'));
     b.classList.toggle('no-value',!can('value'));
     b.classList.toggle('no-payment',!can('payment'));
     b.classList.toggle('no-del',!can('del'));
     b.classList.toggle('no-users',!CURRENT||CURRENT.role!=='admin');
   }
   function enterApp(){$('loginGate').style.display='none';applyRole();_updateTasksBadge();$('logoutBtn').textContent='Logout ('+(CURRENT?CURRENT.u:'')+')';
-    if(can('report')&&can('value')){setTab('dash');renderDash();}else if(isStaff()){setTab('tasks');renderTasks();}else{setTab('list');renderList();}}
+    if(can('report')&&can('value')){setTab('dash');renderDash();}else if(can('comm')&&!can('report')){setTab('rep');setRepMode('comm');renderCommission();}else if(isStaff()){setTab('tasks');renderTasks();}else{setTab('list');renderList();}}
   async function doLogin(){
     const u=($('gateUser').value||'').trim().toLowerCase(),p=($('gatePass').value||'');
     if(!u||!p){$('gateErr').textContent='Username + Password போடு';return;}
@@ -5302,7 +5313,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
       else{localStorage.removeItem('ngrd_user');location.reload();}}catch(e){}
   }else setTimeout(()=>$('gateUser').focus(),100);}catch(e){setTimeout(()=>$('gateUser').focus(),100);}})();
 
-  const PERM_DEFS=[['order','புது Order (AI)'],['purchase','Purchasing add'],['supply','Supply mark'],['payment','Payment add'],['value','Value/Profit பாக்க'],['report','Dashboard/Report'],['bill','Bill Entry'],['del','Delete']];
+  const PERM_DEFS=[['order','புது Order (AI)'],['purchase','Purchasing add'],['supply','Supply mark'],['payment','Payment add'],['value','Value/Profit பாக்க'],['report','Dashboard/Report'],['bill','Bill Entry'],['comm','Commission mark'],['del','Delete']];
   function permChecks(idprefix,perms){perms=perms||{};
     return PERM_DEFS.map(([k,lbl])=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;font-weight:600;color:var(--navy)"><input type="checkbox" class="${idprefix}" data-perm="${k}" ${perms[k]?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"> ${lbl}</label>`).join('');
   }
