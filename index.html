@@ -88,7 +88,7 @@
   .pb .v{font-size:16px;font-weight:800;margin-top:3px;color:var(--navy)}
   .pb.sell .v{color:var(--navy2)}.pb.buy .v{color:#9a6b00}.pb.prof .v{color:var(--green)}.pb.prof.neg .v{color:var(--red)}
   .badge{display:inline-block;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px}
-  .b-pend{background:var(--blue-bg);color:var(--blue)}.b-inv{background:var(--amber-bg);color:var(--amber)}.b-paid{background:var(--green-bg);color:var(--green)}.b-na{background:#f2f2f4;color:#6b6b76;border:1px solid #d8d8de}
+  .b-pend{background:var(--blue-bg);color:var(--blue)}.b-inv{background:var(--amber-bg);color:var(--amber)}.b-paid{background:var(--green-bg);color:var(--green)}.b-na{background:#f2f2f4;color:#6b6b76;border:1px solid #d8d8de}.b-nawarn{background:#fff4e5;color:#a35a00;border:1px solid #ffcf99}
   .empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:13px;background:#fff;border:1px solid var(--line);border-radius:13px;margin-top:16px}
   .spin{display:inline-block;width:15px;height:15px;border:2.5px solid #ffffff66;border-top-color:#fff;border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes r{to{transform:rotate(360deg)}}
@@ -1229,8 +1229,13 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   function _syncSupplied(o,its){const anyBill=its.some(x=>x.bill);const allDone=its.every(x=>x.bill||x.na);
     if(!anyBill&&its.length&&its.every(x=>x.na)){o.supplied=false;o.partial=false;return;}
     o.supplied=allDone&&anyBill?true:(o.supplied||false);o.partial=!allDone;}
+  function _naLetterDone(o){return !!(o.na_letter&&o.na_letter.date);}
+  // effective value = N/A item-a thavira. dashboard/report-la revenue thappa yeradhu.
+  function _effVal(o){const its=(o.items||[]);if(!its.some(x=>x.na))return Number(o.sell)||0;
+    const live=its.filter(x=>!x.na).reduce((a,x)=>a+(Number(x.total)||0),0);
+    return its.some(x=>Number(x.total))?live:(Number(o.sell)||0);}
   function _isAllNA(o){const its=(o.items||[]);return its.length>0&&its.every(it=>it.na);}
-  function statusOf(o){if(o.paid)return{t:'Paid 🟢',c:'b-paid'};if(_isAllNA(o))return{t:'N/A 🚫',c:'b-na'};if(o.supplied||o.bill_no)return{t:'Invoiced 🟠',c:'b-inv'};return{t:'Pending 🔵',c:'b-pend'};}
+  function statusOf(o){if(o.paid)return{t:'Paid 🟢',c:'b-paid'};if(_isAllNA(o))return{t:_naLetterDone(o)?'N/A 🚫 Letter ✓':'N/A 🚫 Letter ⏳',c:_naLetterDone(o)?'b-na':'b-nawarn'};if(o.supplied||o.bill_no)return{t:'Invoiced 🟠',c:'b-inv'};return{t:'Pending 🔵',c:'b-pend'};}
 
   function parseDate(s){
     if(!s)return null;s=String(s).trim();
@@ -2908,7 +2913,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       ${o.supplied?'<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:6px">📦 Supply ஆச்சு ✓</div>':''}
       ${naBlock}
     </div>`;
-    const _naBtn=out.querySelector('#naLetterBtn');if(_naBtn)_naBtn.onclick=async()=>{const rsn=(out.querySelector('#naReason').value||'').trim();o.na_reason=rsn;const _naSealCb=out.querySelector('#naSeal');const withSeal=_naSealCb?_naSealCb.checked:true;try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_genNALetter(o,rsn,withSeal);};
+    const _naBtn=out.querySelector('#naLetterBtn');if(_naBtn)_naBtn.onclick=async()=>{const rsn=(out.querySelector('#naReason').value||'').trim();o.na_reason=rsn;const _naSealCb=out.querySelector('#naSeal');const withSeal=_naSealCb?_naSealCb.checked:true;o.na_letter={date:(_todayKey?_todayKey():new Date().toISOString().slice(0,10)),by:(CURRENT&&(CURRENT.name||CURRENT.u))||'',reason:rsn,items:(o.items||[]).filter(x=>x.na).map(x=>x.description||'')};o.na_letter_log=(o.na_letter_log||[]).concat([{...o.na_letter,ts:Date.now()}]);try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}_genNALetter(o,rsn,withSeal);};
     const save=async(msg)=>{try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){alert('Save fail');return;}if(msg)showInfoModal('Saved',msg);_billRenderOrder(o,head,'','');};
     const _sm=out.querySelector('#billSupplyMark');if(_sm)_sm.onclick=async()=>{if(!await showConfirm('📦 Supply Mark','இந்த order-ஐ முழுசா Supply ஆச்சு-னு mark பண்ணட்டா?'))return;o.supplied=true;o.supply_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';o.supply_at=Date.now();_updateTasksBadge();await save('📦 Supply Mark ஆச்சு ✓');};
     out.querySelectorAll('[data-bilna]').forEach(b=>b.onclick=async()=>{const it=its[+b.dataset.bilna];if(!it)return;if(!await showConfirm('🚫 N/A mark','<b>'+esc(it.description)+'</b><br>market-ல இல்ல — N/A ஆ mark பண்ணட்டா?<br><span style="color:#999;font-size:11px">(Navy-க்கு letter கொடுத்திருக்கணும். தப்பானா ↺ போட்டு மாத்தலாம்.)</span>'))return;it.na=true;it.na_date=_todayKey?_todayKey():new Date().toISOString().slice(0,10);it.na_by=(CURRENT&&(CURRENT.name||CURRENT.u))||'';_syncSupplied(o,its);await save('🚫 N/A mark ஆச்சு.');});
@@ -4374,9 +4379,12 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   function _searchCard(o){
     const sk=statusKey(o);const supplied=!!(o.supplied||o.bill_no);
     const badge=sk==='paid'?'<span class="sb" style="background:var(--green-bg);color:var(--green)">🟢 Paid</span>'
+      :sk==='na'?'<span class="sb" style="background:'+(_naLetterDone(o)?'#f2f2f4;color:#6b6b76':'#fff4e5;color:#a35a00')+'">🚫 N/A '+(_naLetterDone(o)?'· Letter ✓':'· Letter ⏳')+'</span>'
       :sk==='invoiced'?'<span class="sb" style="background:var(--amber-bg);color:var(--amber)">🟠 Invoiced</span>'
       :'<span class="sb" style="background:#e8f0fb;color:#2563b5">🔵 Pending</span>';
-    const supLine=supplied
+    const supLine=_isAllNA(o)
+      ? `<div class="supL no">🚫 எல்லா item-ும் N/A — supply இல்ல${_naLetterDone(o)?' · Navy letter ✅ '+esc(o.na_letter.date):' · <b>Navy letter இன்னும் குடுக்கல</b>'}</div>`
+      : supplied
       ? `<div class="supL ok">✅ Supply ஆச்சு${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''}</div>`
       : `<div class="supL no">⏳ இன்னும் supply ஆகல</div>`;
     // verify strip: AI extract must be checked against paper PO
