@@ -161,7 +161,8 @@
   .no-value:not(.bill-only):not(.comm-only) #tabRep{display:none!important}
   .bill-only #rmReport,.bill-only #rmPending,.bill-only #rmDaily,.bill-only #rmCal,.bill-only #rmOut,.bill-only #rmPay,.bill-only #rmComm,.bill-only #rmSum,.bill-only #rmSales,.bill-only #rmTender,.bill-only #rmBusy,.bill-only #rmReturn{display:none!important}
   .bill-only #repNormal{display:none!important}
-  .no-comm.no-report #rmComm{display:none!important}
+  .no-billentry #rmBill{display:none!important}
+  .no-comm #rmComm{display:none!important}
   .comm-only #rmReport,.comm-only #rmPending,.comm-only #rmDaily,.comm-only #rmCal,.comm-only #rmOut,.comm-only #rmPay,.comm-only #rmSum,.comm-only #rmSales,.comm-only #rmTender,.comm-only #rmBusy,.comm-only #rmReturn{display:none!important}
   .comm-only #rmBill{display:none!important}
   .comm-only.can-bill #rmBill{display:inline-flex!important}
@@ -1394,6 +1395,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   function wireDetail(box,o){
     const del=box.querySelector('[data-del]');
     if(del)del.addEventListener('click',async ()=>{
+      if(!can('del')){alert('Delete permission இல்ல bro');return;}
       const ono=(o.order_no||'').trim().toLowerCase();
       const isTarget=x=>x.id===o.id||(ono&&(x.order_no||'').trim().toLowerCase()===ono);
       const copies=orders.filter(isTarget);const n=copies.length;
@@ -5177,7 +5179,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
   }
   function _goToBill(orderNo){
     setTab('rep');initReport();
-    if(!(can('bill')&&!can('report'))){setRepMode('bill');renderBill();}
+    if(can('bill')){setRepMode('bill');renderBill();}
     setTimeout(()=>{const inp=$('billOrdSearch'),btn=$('billOrdBtn');if(inp&&btn){inp.value=orderNo;btn.click();}},60);
   }
   function taskRow(o,isAdmin){
