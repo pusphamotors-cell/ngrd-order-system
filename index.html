@@ -3547,7 +3547,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       </div>
       <div class="grid2" style="padding:8px 13px 2px"><div class="fld"><label>Paid date</label><input type="date" id="cpkDate" value="${new Date().toISOString().slice(0,10)}"></div><div class="fld"><label>Paid via</label><select id="cpkMode"><option value="cash">💵 Cash</option><option value="bank">🏦 Bank deposit</option></select></div></div>
       <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Paid to (name)</label><input id="cpkTo" placeholder="${esc(agL)}"></div><div class="fld"><label>Bank / Slip ref</label><input id="cpkRef" placeholder="slip no"></div></div>
-      <button class="btn gold" id="cpkDo" style="margin:6px 13px 12px" disabled>✅ ${esc(agL)} Paid mark பண்ணு</button>
+      <button class="btn gold" id="cpkDo" style="margin:6px 13px 4px" disabled>✅ ${esc(agL)} Paid mark பண்ணு</button>
+      <button class="btn" id="cpkPdf" style="margin:0 13px 12px;background:#0b2a4a" disabled>📄 Select பண்ணதுக்கு PDF</button>
     </details>`;
   }
   function _wireCommPick(list){
@@ -3562,6 +3563,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       if(cEl)cEl.textContent=ids.length+' order';
       if(tEl)tEl.textContent='Rs '+fmt(t);
       bar.disabled=ids.length===0;
+      const pb=$('cpkPdf');if(pb){pb.disabled=ids.length===0;pb.textContent=ids.length?('📄 '+ids.length+' order PDF'):'📄 Select பண்ணதுக்கு PDF';}
       bar.textContent=ids.length?('✅ '+ids.length+' order · Rs '+fmt(t)+' — '+agL+' Paid mark'):('✅ '+agL+' Paid mark பண்ணு');
     }
     document.querySelectorAll('[data-cpk]').forEach(cb=>cb.addEventListener('change',()=>{
@@ -3577,6 +3579,14 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       document.querySelectorAll('#cpkList .cpk').forEach(el=>{if(el.style.display==='none')return;const cb=el.querySelector('input');cb.checked=true;_commPickSel[cb.dataset.cpk]=true;el.classList.add('on');});refresh();});
     const nB=$('cpkNone');if(nB)nB.addEventListener('click',()=>{
       document.querySelectorAll('#cpkList .cpk').forEach(el=>{const cb=el.querySelector('input');cb.checked=false;_commPickSel[cb.dataset.cpk]=false;el.classList.remove('on');});refresh();});
+    const pdfB=$('cpkPdf');
+    if(pdfB)pdfB.addEventListener('click',()=>{
+      const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
+      if(!ids.length)return;
+      const sel=ids.map(i=>byId[i]);
+      const t=sel.reduce((a,o)=>a+_agComm(o,ag),0);
+      openCommissionPDF(agL,sel,_commCamp,{agKey:ag,subTitle:'Selected list — '+sel.length+' order · Rs '+fmt(t)});
+    });
     bar.addEventListener('click',async()=>{
       const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
       if(!ids.length)return;
@@ -3921,7 +3931,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const nonPct=Number(opts.nonPct)||0,egpPct=Number(opts.egpPct)||0;
     const mFrom=(opts.mFrom&&opts.mFrom!=='all')?opts.mFrom:'',mTo=(opts.mTo&&opts.mTo!=='all')?opts.mTo:'';
     const monthOf=o=>{const d=o.egp_date||o.bill_date||o.order_date||'';return (String(d).match(/\d{4}-\d{2}/)||[''])[0];};
-    const pctOf=o=>_isEgp(o)?egpPct:nonPct;
+    const pctOf=o=>opts.agKey?_agPct(o,opts.agKey):(_isEgp(o)?egpPct:nonPct);
     let list=sup.slice();
     if(mFrom||mTo)list=list.filter(o=>{const mk=monthOf(o);if(!mk)return false;if(mFrom&&mk<mFrom)return false;if(mTo&&mk>mTo)return false;return true;});
     if(!list.length){alert(name+'-க்கு அந்த month range-ல commission இல்ல');return;}
@@ -3947,7 +3957,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
       ${head}
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
-        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)} &nbsp;·&nbsp; Month: <b>${esc(monTxt)}</b><br><span style="font-size:10px;color:#666">Non-eGP ${nonPct}% · eGP ${egpPct}%</span></div>
+        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)} &nbsp;·&nbsp; Month: <b>${esc(monTxt)}</b><br><span style="font-size:10px;color:#666">${opts.agKey?'Order-wise saved %':'Non-eGP '+nonPct+'% · eGP '+egpPct+'%'}</span>${opts.subTitle?'<br><span style="font-size:10px;color:#0b6b4a;font-weight:700">'+esc(opts.subTitle)+'</span>':''}</div>
         <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
