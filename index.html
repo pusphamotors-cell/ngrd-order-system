@@ -3007,6 +3007,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const tel=isP?'Tel/Fax: 0112 449385 · Hotline: 075 9515507 / 077 9338696':'Tel: 0112 449385 · 076 6886526 / 071 5748561';
     const email=isP?'pusphamotors@gmail.com':'ngrdmotors@gmail.com';
     const na=(o.items||[]).filter(it=>it.na);
+    const _totItems=(o.items||[]).length;
+    const _allNA=na.length>0&&na.length>=_totItems;   // order-la ellame N/A → supply/payment line kudukka koodadhu
+    const _one=na.length===1;
     const bills=[...new Set((o.items||[]).filter(it=>it.bill).map(it=>it.bill))];
     const today=new Date().toLocaleDateString('en-GB');
     const camp=_campOf(o);
@@ -3022,12 +3025,14 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     <div class="hd"><h1>${comp}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${addr} · ${tel} · ${email}</div></div>
     <div class="meta"><div><b>Date:</b> ${today}</div><div><b>Order No:</b> ${esc(o.order_no||'')}${o.file_no?'<br><b>File No:</b> '+esc(o.file_no):''}</div></div>
     <div>To,<br>The Officer in Charge / Superintendent Logistics,<br>Sri Lanka Navy — ${esc(camp)}</div>
-    <div class="sub2">Subject: Non-availability of Items — Order ${esc(o.order_no||'')}</div>
+    <div class="sub2">Subject: Non-availability of Item${_one?'':'s'} — Order ${esc(o.order_no||'')}</div>
     <div>Dear Sir,</div>
-    <p>With reference to the above Purchase Order${o.model?' for vehicle '+esc(o.model)+(o.naha_no?' ('+esc(o.naha_no)+')':''):''}, we regret to inform you that the following item(s) are <b>currently not available in the market</b>, and therefore could not be supplied:</p>
+    <p>With reference to the above Purchase Order${o.model?' for vehicle '+esc(o.model)+(o.naha_no?' ('+esc(o.naha_no)+')':''):''}, we regret to inform you that the following item${_one?' is':'s are'} <b>currently not available in the market</b>, and therefore could not be supplied:</p>
     <table><thead><tr><th>No</th><th>Item Description</th><th>Qty</th></tr></thead><tbody>${naRows}</tbody></table>
     ${reason?`<p><b>Reason:</b> ${esc(reason)}</p>`:''}
-    <p>We have supplied the remaining items against the above order${bills.length?' under Invoice No. <b>'+bills.map(esc).join(', ')+'</b>':''}${(function(){const s=(o.items||[]).filter(it=>it.bill).reduce((a,it)=>a+(Number(it.total)||0),0);return s?' (Total: <b>Rs '+(s.toLocaleString('en-US'))+'</b>)':'';})()}. We kindly request you to arrange the <b>payment for the supplied items</b> accordingly.</p>
+    ${_allNA
+      ?`<p>${_one?'As the above item is the only item ordered under the said Purchase Order':'As all the items ordered under the said Purchase Order are affected as stated above'}, we regret that <b>no supply could be effected</b> against this order. We therefore kindly request you to arrange for the <b>cancellation / closure of the above order</b> accordingly.</p>`
+      :`<p>We have supplied the remaining items against the above order${bills.length?' under Invoice No. <b>'+bills.map(esc).join(', ')+'</b>':''}${(function(){const s=(o.items||[]).filter(it=>it.bill).reduce((a,it)=>a+(Number(it.total)||0),0);return s?' (Total: <b>Rs '+(s.toLocaleString('en-US'))+'</b>)':'';})()}. We kindly request you to arrange the <b>payment for the supplied items</b> accordingly.</p>`}
     <p>We apologize for any inconvenience caused and assure you of our best service at all times.</p>
     <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Thanking you,<br>Yours faithfully,<br><b>For ${comp}</b><div class="line">Authorized Signature</div></div>${withSeal?`<img src="${_extStamp(isP?'Puspha Motors':'NGRD Motors')}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
     </body></html>`;
