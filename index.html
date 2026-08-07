@@ -89,6 +89,16 @@
   .pb.sell .v{color:var(--navy2)}.pb.buy .v{color:#9a6b00}.pb.prof .v{color:var(--green)}.pb.prof.neg .v{color:var(--red)}
   .badge{display:inline-block;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px}
   .b-pend{background:var(--blue-bg);color:var(--blue)}.b-inv{background:var(--amber-bg);color:var(--amber)}.b-paid{background:var(--green-bg);color:var(--green)}.b-na{background:#f2f2f4;color:#6b6b76;border:1px solid #d8d8de}.b-nawarn{background:#fff4e5;color:#a35a00;border:1px solid #ffcf99}
+  .cpk{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #eee;cursor:pointer;font-size:12.5px}
+  .cpk:last-child{border-bottom:0}.cpk:active{background:#fff8e6}
+  .cpk input{width:19px;height:19px;flex:0 0 auto;accent-color:#0b6b4a}
+  .cpk.on{background:#eaf7ee}
+  .cpk .cpk-b{flex:1;min-width:0}
+  .cpk .cpk-o{display:block;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cpk .cpk-m{display:block;font-size:10.5px;color:var(--muted);margin-top:1px}
+  .cpk .cpk-v{flex:0 0 auto;text-align:right;font-weight:800;color:#0b6b4a}
+  .cpk .cpk-v small{display:block;font-weight:500;color:var(--muted);font-size:10px}
+  #cpkBar{position:sticky;bottom:0;background:#0b2a4a;color:#fff;padding:9px 12px;font-size:12.5px;font-weight:700;border-radius:0 0 12px 12px;display:flex;justify-content:space-between;align-items:center}
   .empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:13px;background:#fff;border:1px solid var(--line);border-radius:13px;margin-top:16px}
   .spin{display:inline-block;width:15px;height:15px;border:2.5px solid #ffffff66;border-top-color:#fff;border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px;margin-right:6px}
   @keyframes r{to{transform:rotate(360deg)}}
@@ -3507,6 +3517,85 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(cSet.length>1)return {amb:cSet,via:'amount'};
     return {none:true};
   }
+  let _commPickSel={};
+  function _commPickHtml(list){
+    const ag=_commPayAgent,agL=_agLabel(ag);
+    const pend=list.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag))
+      .sort((a,b)=>(b.bill_date||b.order_date||'').localeCompare(a.bill_date||a.order_date||''));
+    const tot=pend.reduce((a,o)=>a+_agComm(o,ag),0);
+    if(!pend.length)return `<details class="egpbulk"><summary>✅ Tick பண்ணி Paid mark — ${esc(agL)}</summary>
+      <div class="modetoggle" style="margin:8px 13px 4px"><button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button><button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button></div>
+      <div style="padding:10px 13px 14px;font-size:12.5px;color:var(--green);font-weight:700">✅ ${esc(agL)}-க்கு pending commission ஒன்னும் இல்ல (இந்த filter-ல)</div></details>`;
+    const rows=pend.map(o=>`<label class="cpk ${_commPickSel[o.id]?'on':''}" data-cpks="${esc((o.order_no+' '+_campOf(o)+' '+(o.bill_no||'')+' '+(o.model||'')).toLowerCase())}">
+        <input type="checkbox" data-cpk="${esc(o.id)}" ${_commPickSel[o.id]?'checked':''}>
+        <span class="cpk-b"><span class="cpk-o">${esc(o.order_no)}</span><span class="cpk-m">${esc(_campOf(o))}${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''}${_isEgp(o)?' · 🏛️ eGP':''}</span></span>
+        <span class="cpk-v">${fmt(_agComm(o,ag))}<small>${_agPct(o,ag)}% · Rs ${fmt(o.sell)}</small></span>
+      </label>`).join('');
+    return `<details class="egpbulk" open><summary>✅ Tick பண்ணி Paid mark — ${esc(agL)} (${pend.length} pending · Rs ${fmt(tot)})</summary>
+      <div class="modetoggle" style="margin:8px 13px 4px">
+        <button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button>
+        <button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button>
+      </div>
+      <div style="display:flex;gap:8px;margin:4px 13px 6px">
+        <input id="cpkSearch" placeholder="🔍 Order / Camp / Bill தேடு" style="flex:1;border:1.5px solid var(--gold);border-radius:10px;padding:9px 11px;font-size:12.5px;font-family:inherit;background:#fffdf6">
+        <button class="copyprev" id="cpkAll" style="width:auto;margin:0;padding:9px 11px">☑️ All</button>
+        <button class="copyprev" id="cpkNone" style="width:auto;margin:0;padding:9px 11px">✖ Clear</button>
+      </div>
+      <div class="dpanel" style="margin:0 13px;padding:0;overflow:hidden">
+        <div id="cpkList" style="max-height:340px;overflow-y:auto">${rows}</div>
+        <div id="cpkBar"><span id="cpkCount">0 order</span><span id="cpkTot">Rs 0</span></div>
+      </div>
+      <div class="grid2" style="padding:8px 13px 2px"><div class="fld"><label>Paid date</label><input type="date" id="cpkDate" value="${new Date().toISOString().slice(0,10)}"></div><div class="fld"><label>Paid via</label><select id="cpkMode"><option value="cash">💵 Cash</option><option value="bank">🏦 Bank deposit</option></select></div></div>
+      <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Paid to (name)</label><input id="cpkTo" placeholder="${esc(agL)}"></div><div class="fld"><label>Bank / Slip ref</label><input id="cpkRef" placeholder="slip no"></div></div>
+      <button class="btn gold" id="cpkDo" style="margin:6px 13px 12px" disabled>✅ ${esc(agL)} Paid mark பண்ணு</button>
+    </details>`;
+  }
+  function _wireCommPick(list){
+    const ag=_commPayAgent,agL=_agLabel(ag);
+    const pend=list.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag));
+    const byId={};pend.forEach(o=>byId[o.id]=o);
+    const bar=$('cpkDo');if(!bar)return;
+    function refresh(){
+      const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
+      const t=ids.reduce((a,i)=>a+_agComm(byId[i],ag),0);
+      const cEl=$('cpkCount'),tEl=$('cpkTot');
+      if(cEl)cEl.textContent=ids.length+' order';
+      if(tEl)tEl.textContent='Rs '+fmt(t);
+      bar.disabled=ids.length===0;
+      bar.textContent=ids.length?('✅ '+ids.length+' order · Rs '+fmt(t)+' — '+agL+' Paid mark'):('✅ '+agL+' Paid mark பண்ணு');
+    }
+    document.querySelectorAll('[data-cpk]').forEach(cb=>cb.addEventListener('change',()=>{
+      _commPickSel[cb.dataset.cpk]=cb.checked;
+      const lb=cb.closest('.cpk');if(lb)lb.classList.toggle('on',cb.checked);
+      refresh();
+    }));
+    const sB=$('cpkSearch');if(sB)sB.addEventListener('input',()=>{
+      const q=sB.value.trim().toLowerCase();
+      document.querySelectorAll('#cpkList .cpk').forEach(el=>{el.style.display=(!q||el.dataset.cpks.includes(q))?'':'none';});
+    });
+    const aB=$('cpkAll');if(aB)aB.addEventListener('click',()=>{
+      document.querySelectorAll('#cpkList .cpk').forEach(el=>{if(el.style.display==='none')return;const cb=el.querySelector('input');cb.checked=true;_commPickSel[cb.dataset.cpk]=true;el.classList.add('on');});refresh();});
+    const nB=$('cpkNone');if(nB)nB.addEventListener('click',()=>{
+      document.querySelectorAll('#cpkList .cpk').forEach(el=>{const cb=el.querySelector('input');cb.checked=false;_commPickSel[cb.dataset.cpk]=false;el.classList.remove('on');});refresh();});
+    bar.addEventListener('click',async()=>{
+      const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
+      if(!ids.length)return;
+      const dt=$('cpkDate').value||new Date().toISOString().slice(0,10);
+      const mode=($('cpkMode').value||'cash');const to=($('cpkTo').value||'').trim()||agL;const ref=($('cpkRef').value||'').trim();
+      const t=ids.reduce((a,i)=>a+_agComm(byId[i],ag),0);
+      if(!await showConfirm('💵 '+agL+' Paid mark',ids.length+' order · <b>Rs '+fmt(t)+'</b><br>'+(mode==='bank'?'🏦 Bank':'💵 Cash')+' → '+esc(to)+'<br><span style="color:#999;font-size:11px">Date: '+esc(dt)+'</span>'))return;
+      bar.disabled=true;bar.innerHTML='<span class="spin"></span>Update ஆகுது...';let n=0;
+      for(const i of ids){const o=byId[i];
+        if(ag==='apo'){o.apo_paid=true;o.apo_paid_date=dt;o.apo_paid_amt=_agComm(o,'apo');o.apo_paid_mode=mode;o.apo_paid_to=to;o.apo_paid_ref=ref;}
+        else{o.clark_paid=true;o.clark_paid_date=dt;o.clark_paid_amt=_agComm(o,'clark');o.clark_paid_mode=mode;o.clark_paid_to=to;o.clark_paid_ref=ref;}
+        try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}
+      }
+      _commPickSel={};
+      await loadOrders();renderCommission();
+      showInfoModal('✅ Paid mark ஆச்சு',n+' order · <b>'+esc(agL)+'</b> commission paid ✓<br><b>Rs '+fmt(t)+'</b> · '+(mode==='bank'?'🏦 Bank':'💵 Cash')+' → '+esc(to)+'<br><span style="color:#999;font-size:11px">'+esc(dt)+(ref?' · ref '+esc(ref):'')+'</span>');
+    });
+    refresh();
+  }
   function _commPaidHtml(){
     const ag=_commPayAgent,agL=_agLabel(ag);
     return `<details class="egpbulk"><summary>💵 Commission Paid — ${agL}-க்கு கொடுத்ததை mark பண்ணு (paper list)</summary>
@@ -3530,7 +3619,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   }
   function _wireCommPaid(){
     const ag=_commPayAgent;
-    document.querySelectorAll('[data-cpag]').forEach(el=>el.addEventListener('click',()=>{_commPayAgent=el.dataset.cpag;_commPayStaged=null;renderCommission();}));
+    document.querySelectorAll('[data-cpag]').forEach(el=>el.addEventListener('click',()=>{_commPayAgent=el.dataset.cpag;_commPayStaged=null;_commPickSel={};renderCommission();}));
     const tEl=$('cpayText');if(tEl&&_cpayDraft!=null)tEl.value=_cpayDraft;
     if(tEl)tEl.addEventListener('input',()=>{_cpayDraft=tEl.value;});
     // photo AI read
@@ -3773,6 +3862,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${egpBtns}
       ${_bulkPctHtml()}
       ${_egpBulkHtml()}
+      ${_commPickHtml(sup)}
       ${_commPaidHtml()}
       <div class="drow">
         <div class="dstat gold"><div class="k">🤝 Apo${_commCamp==='all'?'':' ('+esc(_commCamp.slice(0,14))+')'}</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
@@ -3819,7 +3909,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     wrap.querySelectorAll('[data-ledadj]').forEach(el=>el.addEventListener('click',()=>{const p=el.dataset.ledadj.split('|');_openAdjEdit(p[0],p[1],p[2]);}));
     const _lpdf=$('ledPdf');if(_lpdf)_lpdf.onclick=()=>openLedgerPDF(_ledgerAgent);
     _wireEgpBulk();
-    _wireCommPaid();
+    _wireCommPaid();_wireCommPick(sup);
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
     $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
     $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
