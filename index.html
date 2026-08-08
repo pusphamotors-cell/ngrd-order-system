@@ -3528,13 +3528,23 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     return {none:true};
   }
   let _commPickSel={};
-  function _commPickHtml(list){
+  // ag-ku pending order-la irukkura distinct % (1 rate -> "10%", pala rate -> "10/12%")
+  function _pctLabel(arr,ag){const r=Array.from(new Set(arr.map(o=>_agPct(o,ag)))).filter(x=>x>0).sort((a,b)=>a-b);
+    return r.length?r.join('/')+'%':'—';}
+  function _commPickHtml(list,base,camps){
     const ag=_commPayAgent,agL=_agLabel(ag);
+    base=base||list;camps=camps||[];
+    const bp=base.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag));
+    const eg=bp.filter(_isEgp),non=bp.filter(o=>!_isEgp(o));
+    const egT=eg.reduce((a,o)=>a+_agComm(o,ag),0),nonT=non.reduce((a,o)=>a+_agComm(o,ag),0);
+    const campSel=`<div class="fld" style="margin:4px 13px 6px"><label>🏕️ Camp / Buyer</label><select id="cpkCamp"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>`;
+    const egpBar=`<div class="modetoggle" style="margin:0 13px 6px"><button class="mbtn ${_commEgp==='all'?'on':''}" data-cpke="all" type="button">எல்லாம் (${bp.length})</button><button class="mbtn ${_commEgp==='egp'?'on':''}" data-cpke="egp" type="button">🏛️ eGP ${_pctLabel(eg,ag)} (${eg.length})</button><button class="mbtn ${_commEgp==='non'?'on':''}" data-cpke="non" type="button">Non-eGP ${_pctLabel(non,ag)} (${non.length})</button></div><div style="margin:0 13px 8px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between"><span>🏛️ eGP <b style=\"color:#1f5bb5\">Rs ${fmt(egT)}</b></span><span>Non-eGP <b style=\"color:#7a5a00\">Rs ${fmt(nonT)}</b></span></div>`;
     const pend=list.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag))
       .sort((a,b)=>(b.bill_date||b.order_date||'').localeCompare(a.bill_date||a.order_date||''));
     const tot=pend.reduce((a,o)=>a+_agComm(o,ag),0);
     if(!pend.length)return `<details class="egpbulk"><summary>✅ Tick பண்ணி Paid mark — ${esc(agL)}</summary>
       <div class="modetoggle" style="margin:8px 13px 4px"><button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button><button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button></div>
+      ${campSel}${egpBar}
       <div style="padding:10px 13px 14px;font-size:12.5px;color:var(--green);font-weight:700">✅ ${esc(agL)}-க்கு pending commission ஒன்னும் இல்ல (இந்த filter-ல)</div></details>`;
     const rows=pend.map(o=>`<label class="cpk ${_commPickSel[o.id]?'on':''}" data-cpks="${esc((o.order_no+' '+_campOf(o)+' '+(o.bill_no||'')+' '+(o.model||'')).toLowerCase())}">
         <input type="checkbox" data-cpk="${esc(o.id)}" ${_commPickSel[o.id]?'checked':''}>
@@ -3546,6 +3556,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button>
         <button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button>
       </div>
+      ${campSel}${egpBar}
       <div style="display:flex;gap:8px;margin:4px 13px 6px">
         <input id="cpkSearch" placeholder="🔍 Order / Camp / Bill தேடு" style="flex:1;border:1.5px solid var(--gold);border-radius:10px;padding:9px 11px;font-size:12.5px;font-family:inherit;background:#fffdf6">
         <button class="copyprev" id="cpkAll" style="width:auto;margin:0;padding:9px 11px">☑️ All</button>
@@ -3562,6 +3573,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     </details>`;
   }
   function _wireCommPick(list){
+    const cs=$('cpkCamp');if(cs)cs.onchange=e=>{_commCamp=e.target.value;_commPickSel={};renderCommission();};
+    document.querySelectorAll('[data-cpke]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cpke;_commPickSel={};renderCommission();}));
     const ag=_commPayAgent,agL=_agLabel(ag);
     const pend=list.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag));
     const byId={};pend.forEach(o=>byId[o.id]=o);
@@ -3882,7 +3895,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${egpBtns}
       ${_bulkPctHtml()}
       ${_egpBulkHtml()}
-      ${_commPickHtml(sup)}
+      ${_commPickHtml(sup,sup0,camps)}
       ${_commPaidHtml()}
       <div class="drow">
         <div class="dstat gold"><div class="k">🤝 Apo${_commCamp==='all'?'':' ('+esc(_commCamp.slice(0,14))+')'}</div><div class="v">${fmt(apoT)}</div><div class="s">Rs</div></div>
