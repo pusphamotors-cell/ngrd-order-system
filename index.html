@@ -4144,6 +4144,14 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   let _slFrom='',_slTo='',_slComp='NGRD Motors',_slCamp='all';
   function _slBillDate(o){return parseDate(o.bill_date)||parseDate(o.delivery_date)||parseDate(o.order_date);}
   function _slMk(o){const d=_slBillDate(o);return d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'—';}
+  let _slSort='bill';
+  // Bill series thani-thani: "4108 [ SEC/0059 ]" → {p:"",n:4108} , "RAG/0232" → {p:"RAG",n:232}
+  // Illa-na RAG/0232-oda 232, plain 4103-ku munnadi vandhudum.
+  function _slBillKey(o){const b=String(o.bill_no||'').trim();
+    if(!b)return{p:'\uffff',n:Number.MAX_SAFE_INTEGER,s:''};
+    const m=b.match(/^\s*([^0-9]*?)\s*(\d+)/);
+    if(!m)return{p:b.toUpperCase(),n:Number.MAX_SAFE_INTEGER,s:b.toLowerCase()};
+    return{p:(m[1]||'').replace(/[^A-Za-z]/g,'').toUpperCase(),n:parseInt(m[2],10),s:b.toLowerCase()};}
   function _slRemark(o){return _isEgp(o)?'e-GP':'Non e-GP';}
   function _slCampList(){const s={};orders.forEach(o=>{if(!(o.supplied&&o.bill_no))return;if(_slComp!=='all'&&_companyOf(o)!==_slComp)return;const mk=_slMk(o);if(_slFrom&&(mk==='—'||mk<_slFrom))return;if(_slTo&&(mk==='—'||mk>_slTo))return;s[_campOf(o)]=1;});return Object.keys(s).sort();}
   function _slByMonth(list){const m={};list.forEach(o=>{const k=_slMk(o);(m[k]=m[k]||[]).push(o);});return Object.keys(m).sort().map(k=>({mk:k,label:k==='—'?'Date இல்ல':_mLabel(k),rows:m[k],amt:m[k].reduce((a,o)=>a+(Number(o.sell)||0),0)}));}
@@ -4155,7 +4163,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       const d=_slBillDate(o);const mk=d?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'';
       if(_slFrom&&(!mk||mk<_slFrom))return false;if(_slTo&&(!mk||mk>_slTo))return false;
       return true;
-    }).sort((a,b)=>{const da=_slBillDate(a),db=_slBillDate(b);return (da?da.getTime():0)-(db?db.getTime():0);});
+    }).sort((a,b)=>{const da=_slBillDate(a),db=_slBillDate(b);const td=(da?da.getTime():0)-(db?db.getTime():0);
+      if(_slSort==='date')return td||_slBillKey(a).n-_slBillKey(b).n;
+      const ka=_slBillKey(a),kb=_slBillKey(b);
+      return ka.p.localeCompare(kb.p)||(ka.n-kb.n)||ka.s.localeCompare(kb.s)||td;});
   }
   function _compInfo(c){
     if(c==='all')return{name:'NGRD MOTORS + PUSPHA MOTORS (COMBINED)',addr:'Mohideen Masjid Road, Panchikawatta, Colombo 10',tel:'011 244 9385 / 0779 338 696',mail:'ngrdmotors@gmail.com / pusphamotors@gmail.com'};
@@ -4221,6 +4232,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <div class="fld"><label>🏕️ Camp</label><select id="slCamp"><option value="all">எல்லா Camp</option>${campList.map(c=>`<option value="${esc(c)}" ${_slCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
         <div class="fld"><label>From</label><select id="slFrom">${mopt(_slFrom)}</select></div>
         <div class="fld"><label>To</label><select id="slTo">${mopt(_slTo)}</select></div>
+        <div class="fld"><label>Order (வரிசை)</label><select id="slSort"><option value="bill" ${_slSort==='bill'?'selected':''}>🧾 Bill No வரிசையா</option><option value="date" ${_slSort==='date'?'selected':''}>📅 Bill Date வரிசையா</option></select></div>
       </div></div>
       <div class="dsec">📋 ${_slComp==='all'?'NGRD + Puspha (Both)':esc(_slComp)} — Sales Register (${_mLabel(_slFrom)} → ${_mLabel(_slTo)})${_slCamp==='all'?'':' · 🏕️ '+esc(_slCamp)}</div>
       <div class="dstat gold" style="margin-bottom:8px"><div class="k">மொத்த Sales · ${list.length} bills</div><div class="v">${fmt(total)}</div><div class="s">Rs</div></div>
@@ -4235,6 +4247,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${list.length?`<div class="dpanel"><div class="tablewrap"><table><thead><tr><th class="num">#</th><th>Order No</th><th>File No</th><th>Invoice No</th><th>Invoice Date</th>${_slComp==='all'?'<th>Company</th>':''}<th class="num">Amount</th><th>Remark</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="${_slCols-2}" style="text-align:right;font-weight:800">TOTAL (Rs)</td><td class="num" style="font-weight:800">${fmt(total)}</td><td></td></tr></tfoot></table></div></div>`:'<div class="empty">இந்த period-ல bill ஆன sales இல்ல</div>'}`;
     $('slComp').onchange=e=>{_slComp=e.target.value;_slCamp='all';renderSales();};
     $('slCamp').onchange=e=>{_slCamp=e.target.value;renderSales();};
+    $('slSort').onchange=e=>{_slSort=e.target.value;renderSales();};
     const fcb=$('fixCoBtn');if(fcb)fcb.onclick=_fixCompanyModal;
     $('slFrom').onchange=e=>{_slFrom=e.target.value;if(_slFrom>_slTo)_slTo=_slFrom;renderSales();};
     $('slTo').onchange=e=>{_slTo=e.target.value;if(_slTo<_slFrom)_slFrom=_slTo;renderSales();};
