@@ -1606,9 +1606,22 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   // Promise.lk eGP ref = 20 + 11 digit (2026050285030). Navy file ref (NNA/NMTOSN/.../0733) eGP illa.
   function _egpRefOk(r){return /\b20\d{11}\b/.test(String(r||''));}
-  function _isEgp(o){return !!(o.egp===true||_egpRefOk(o.egp_ref)||/E-?GP/i.test((o.remark||'')));}
-  // egp_ref-la edho type panniruku, aana adhu eGP ref format illa -> sandhegam
-  function _egpSuspect(o){const r=String(o.egp_ref||'').trim();return !!r&&!_egpRefOk(r);}
+  // EQ No = File No. eGP Register-la (V3 + book = saved truth) irukkaanu paakkiradhu.
+  function _eqNoHit(o){return !!(_egpLookup(o.file_no)||_egpLookup(o.order_no));}
+  // RE No sari-yaa IRUNDHAALUM sari, EQ No register-la match aanaalum sari — edhaavadhu onnu podhum
+  function _isEgp(o){return _egpRefOk(o.egp_ref)||_eqNoHit(o);}
+  // enna kuraiyudhu-nu solra reason. null = kuzhappam illa.
+  // eGP madhiri theriyudhu, aana RE-um match aagala EQ-um register-la illa
+  function _egpGap(o){
+    if(_isEgp(o))return null;
+    const r=String(o.egp_ref||'').trim();
+    const claimed=!!(o.egp===true||r||/E-?GP/i.test(o.remark||''));
+    if(!claimed)return null;
+    if(r)return 'RE No format தப்பு · EQ No-வும் Register-ல இல்ல';
+    if(o.egp===true)return 'eGP tick இருக்கு · RE No இல்ல, EQ No-வும் Register-ல இல்ல';
+    return 'Remark-ல eGP · RE No இல்ல, EQ No-வும் Register-ல இல்ல';
+  }
+  function _egpSuspect(o){return _egpGap(o)!==null;}
   async function _bulkEgpMark(text){
     const lines=String(text||'').split(/\r?\n/);
     const targets=[];
@@ -3540,19 +3553,20 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(!bad.length)return '';
     const rows=bad.slice(0,60).map(o=>`<div class="cpk" style="cursor:default">
         <span class="cpk-b"><span class="cpk-o">${esc(o.order_no||'')}</span>
-        <span class="cpk-m">${esc(_campOf(o))} · Ref: <b style="color:#a35a00">${esc(o.egp_ref)}</b>${o.egp===true?' · <span style="color:#1f5bb5">eGP tick ✓</span>':''}</span></span>
+        <span class="cpk-m"><b style="color:#a35a00">${esc(_egpGap(o)||'')}</b><br>${esc(_campOf(o))} · RE ${o.egp_ref?esc(o.egp_ref):'—'} · EQ ${o.file_no?esc(o.file_no):'—'}${o.egp===true?' · <span style="color:#1f5bb5">tick ✓</span>':''}</span></span>
         <span style="flex:0 0 auto;display:flex;gap:6px">
           <button class="copyprev" data-egpyes="${esc(o.id)}" style="width:auto;margin:0;padding:6px 9px;font-size:11px">🏛️ eGP தான்</button>
           <button class="copyprev" data-egpno="${esc(o.id)}" style="width:auto;margin:0;padding:6px 9px;font-size:11px">✗ Non-eGP</button>
         </span></div>`).join('');
     return `<details class="egpbulk pctbox"><summary>⚠️ eGP Ref சந்தேகம் (${bad.length})</summary>
-      <div style="padding:8px 13px;font-size:11.5px;color:var(--muted)">உண்மையான eGP ref = <b>2026050285030</b> மாதிரி 13 இலக்கம். கீழ இருக்கறதுல வேற மாதிரி ref போட்டிருக்கு — commission rate தப்பா போகும்.</div>
+      <div style="padding:8px 13px;font-size:11.5px;color:var(--muted)"><b>RE No</b> (2026050285030 மாதிரி 13 இலக்கம்) சரியா இருந்தாலும் சரி, <b>EQ No</b> (File No) eGP Register-ல match ஆனாலும் சரி — ஏதாவது ஒண்ணு போதும். கீழ இருக்கறதுக்கு <b>ரெண்டுமே</b> இல்ல, அதனால <b>non-eGP</b>-ஆ கணக்கு.</div>
       <div class="dpanel" style="margin:0 13px 12px;padding:0;overflow:hidden"><div style="max-height:300px;overflow-y:auto">${rows}</div></div>
       ${bad.length>60?`<div style="padding:0 13px 12px;font-size:11px;color:var(--muted)">முதல் 60 மட்டும் காட்டுது.</div>`:''}
     </details>`;
   }
   function _wireEgpSuspect(){
     const set=async(id,isEgp)=>{const o=orders.find(x=>x.id===id);if(!o)return;
+      if(isEgp&&!_isEgp(o)){alert('⚠️ '+(_egpGap(o)||'')+'\n\nEdit-ல சரியான RE No போடு, illa eGP Register-ல antha EQ No-வ சேர்த்துடு bro.');return;}
       o.egp=isEgp;o.non_egp_confirmed=!isEgp;
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
       await loadOrders();renderCommission();};
