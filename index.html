@@ -1348,7 +1348,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <div class="sec">🏛️ eGP (commission தனி month-wise)</div>
       <label class="toggle" style="margin:0 13px"><input type="checkbox" id="e_egp" ${o.egp?'checked':''}><span>இது eGP order-ஆ? ✓</span></label>
       <div class="grid2" style="padding:0 13px 4px">
-        <div class="fld"><label>eGP Ref No</label><input id="e_egpRef" value="${v(o.egp_ref||o.proc_ref||'')}" placeholder="2026041581946"></div>
+        <div class="fld"><label>eGP Ref No</label><input id="e_egpRef" value="${v(o.egp_ref||o.proc_ref||'')}" placeholder="2026041581946">${_egpSuspect(o)?`<div style="font-size:10.5px;color:#a35a00;margin-top:3px">⚠️ இது eGP ref format இல்ல (20+11 இலக்கம் வேணும்)</div>`:''}</div>
         <div class="fld"><label>eGP Date</label><input type="date" id="e_egpDate" value="${v(o.egp_date)}"></div>
       </div>
       ${showPur?`<div class="modetoggle" style="margin:0 13px 8px">
@@ -1604,7 +1604,11 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     for(const c of _CAMPS){if(c.code.length>=3&&s.indexOf(c.code+'/')>=0)return c.name;}
     return 'மற்றவை';
   }
-  function _isEgp(o){return !!(o.egp||(o.egp_ref&&String(o.egp_ref).trim())||/E-?GP/i.test((o.remark||'')));}
+  // Promise.lk eGP ref = 20 + 11 digit (2026050285030). Navy file ref (NNA/NMTOSN/.../0733) eGP illa.
+  function _egpRefOk(r){return /\b20\d{11}\b/.test(String(r||''));}
+  function _isEgp(o){return !!(o.egp===true||_egpRefOk(o.egp_ref)||/E-?GP/i.test((o.remark||'')));}
+  // egp_ref-la edho type panniruku, aana adhu eGP ref format illa -> sandhegam
+  function _egpSuspect(o){const r=String(o.egp_ref||'').trim();return !!r&&!_egpRefOk(r);}
   async function _bulkEgpMark(text){
     const lines=String(text||'').split(/\r?\n/);
     const targets=[];
@@ -3531,6 +3535,30 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   // ag-ku pending order-la irukkura distinct % (1 rate -> "10%", pala rate -> "10/12%")
   function _pctLabel(arr,ag){const r=Array.from(new Set(arr.map(o=>_agPct(o,ag)))).filter(x=>x>0).sort((a,b)=>a-b);
     return r.length?r.join('/')+'%':'—';}
+  function _egpSuspectHtml(){
+    const bad=orders.filter(_egpSuspect);
+    if(!bad.length)return '';
+    const rows=bad.slice(0,60).map(o=>`<div class="cpk" style="cursor:default">
+        <span class="cpk-b"><span class="cpk-o">${esc(o.order_no||'')}</span>
+        <span class="cpk-m">${esc(_campOf(o))} · Ref: <b style="color:#a35a00">${esc(o.egp_ref)}</b>${o.egp===true?' · <span style="color:#1f5bb5">eGP tick ✓</span>':''}</span></span>
+        <span style="flex:0 0 auto;display:flex;gap:6px">
+          <button class="copyprev" data-egpyes="${esc(o.id)}" style="width:auto;margin:0;padding:6px 9px;font-size:11px">🏛️ eGP தான்</button>
+          <button class="copyprev" data-egpno="${esc(o.id)}" style="width:auto;margin:0;padding:6px 9px;font-size:11px">✗ Non-eGP</button>
+        </span></div>`).join('');
+    return `<details class="egpbulk pctbox"><summary>⚠️ eGP Ref சந்தேகம் (${bad.length})</summary>
+      <div style="padding:8px 13px;font-size:11.5px;color:var(--muted)">உண்மையான eGP ref = <b>2026050285030</b> மாதிரி 13 இலக்கம். கீழ இருக்கறதுல வேற மாதிரி ref போட்டிருக்கு — commission rate தப்பா போகும்.</div>
+      <div class="dpanel" style="margin:0 13px 12px;padding:0;overflow:hidden"><div style="max-height:300px;overflow-y:auto">${rows}</div></div>
+      ${bad.length>60?`<div style="padding:0 13px 12px;font-size:11px;color:var(--muted)">முதல் 60 மட்டும் காட்டுது.</div>`:''}
+    </details>`;
+  }
+  function _wireEgpSuspect(){
+    const set=async(id,isEgp)=>{const o=orders.find(x=>x.id===id);if(!o)return;
+      o.egp=isEgp;o.non_egp_confirmed=!isEgp;
+      try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
+      await loadOrders();renderCommission();};
+    document.querySelectorAll('[data-egpyes]').forEach(b=>b.onclick=()=>set(b.dataset.egpyes,true));
+    document.querySelectorAll('[data-egpno]').forEach(b=>b.onclick=()=>set(b.dataset.egpno,false));
+  }
   let _cpkNoPct=false;
   // % podaadha supplied+billed order-um venum-na list-la sekkardhu
   function _cpkExtra(ag){if(!_cpkNoPct)return[];
@@ -3952,6 +3980,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${egpBtns}
       ${_bulkPctHtml()}
       ${_egpBulkHtml()}
+      ${_egpSuspectHtml()}
       ${_commPickHtml(sup,sup0,camps)}
       ${_commPaidHtml()}
       <div class="drow">
@@ -3999,7 +4028,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     wrap.querySelectorAll('[data-ledadj]').forEach(el=>el.addEventListener('click',()=>{const p=el.dataset.ledadj.split('|');_openAdjEdit(p[0],p[1],p[2]);}));
     const _lpdf=$('ledPdf');if(_lpdf)_lpdf.onclick=()=>openLedgerPDF(_ledgerAgent);
     _wireEgpBulk();
-    _wireCommPaid();_wireCommPick(sup);
+    _wireCommPaid();_wireEgpSuspect();_wireCommPick(sup);
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
     $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
     $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
