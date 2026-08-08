@@ -902,8 +902,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('result').innerHTML=`
       <div class="card">
         <div class="chead"><span class="ono">${esc(p.order_no||'PO')}</span>${p.buyer?'<span class="pill">'+esc(p.buyer)+'</span>':''}</div>
-        <div class="sec">🤖 PO Details (AI எடுத்தது)</div>
-        <div class="metarow">
+        <div class="sec">🤖 PO Details (AI எடுத்தது) <button class="copyprev" id="poEditBtn" style="width:auto;margin:0 0 0 8px;padding:5px 10px;font-size:11px;vertical-align:middle">✏️ திருத்து</button></div>
+        <div class="metarow" id="poView">
           <div class="mc"><div class="l">Order No</div><div class="d">${esc(p.order_no||'—')}</div></div>
           <div class="mc"><div class="l">File No</div><div class="d">${esc(p.file_no||'—')}</div></div>
           <div class="mc"><div class="l">Vehicle No (NAHA)</div><div class="d">${esc(p.naha_no||'—')}</div></div>
@@ -914,6 +914,24 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
           <div class="mc"><div class="l">Quotation Date</div><div class="d">${esc(p.quotation_date||'—')}</div></div>
           <div class="mc"><div class="l">Order Date</div><div class="d">${esc(p.po_date||'—')}</div></div>
           <div class="mc"><div class="l">Delivery Date (on or before)</div><div class="d">${esc(p.delivery_date||'—')}</div></div>
+        </div>
+        <div id="poEdit" class="hide" style="border:1.5px dashed var(--gold);border-radius:12px;padding:10px 12px;background:#fffdf6;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AI தப்பா படிச்சா இங்கயே சரி பண்ணு — photo மறுபடி போட வேணாம். <b>0/O, 1/7, 4/9</b> கவனி.</div>
+          <div class="grid2">
+            <div class="fld"><label>Order No</label><input id="pe_order_no" value="${esc(p.order_no||'')}"></div>
+            <div class="fld"><label>File No</label><input id="pe_file_no" value="${esc(p.file_no||'')}"></div>
+            <div class="fld"><label>Vehicle No (NAHA)</label><input id="pe_naha_no" value="${esc(p.naha_no||'')}"></div>
+            <div class="fld"><label>Civil No</label><input id="pe_civil_no" value="${esc(p.civil_no||'')}"></div>
+            <div class="fld"><label>Chassis No</label><input id="pe_chassis_no" value="${esc(p.chassis_no||'')}"></div>
+            <div class="fld"><label>Engine No</label><input id="pe_engine_no" value="${esc(p.engine_no||'')}"></div>
+            <div class="fld full"><label>Vehicle / Model</label><input id="pe_model" value="${esc(p.model||'')}"></div>
+            <div class="fld full"><label>Buyer / Command</label><input id="pe_buyer" value="${esc(p.buyer||'')}"></div>
+            <div class="fld"><label>Quotation Date</label><input id="pe_quotation_date" value="${esc(p.quotation_date||'')}"></div>
+            <div class="fld"><label>Order Date</label><input id="pe_po_date" value="${esc(p.po_date||'')}"></div>
+            <div class="fld"><label>Delivery Date</label><input id="pe_delivery_date" value="${esc(p.delivery_date||'')}"></div>
+            <div class="fld"><label>eGP Ref No</label><input id="pe_egp_ref" value="${esc(p.egp_ref||'')}" placeholder="2026041581946"></div>
+          </div>
+          <button class="btn gold" id="poEditSave" style="margin:8px 0 0">✅ சரி பண்ணது சேமி</button>
         </div>
         <div class="sec">📦 Items (${(p.items||[]).length})</div>
         <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead><tbody>${rows||'<tr><td colspan=5 class=ctr style="padding:12px;color:#999">item இல்ல</td></tr>'}</tbody></table></div>
@@ -954,6 +972,23 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('cmTotal').onclick=()=>{costMode='total';$('cmTotal').classList.add('on');$('cmItems').classList.remove('on');$('costItems').classList.add('hide');$('buyIn').readOnly=false;$('buyIn').value='';recalc();};
     $('cmItems').onclick=()=>{costMode='items';$('cmItems').classList.add('on');$('cmTotal').classList.remove('on');$('costItems').classList.remove('hide');$('buyIn').readOnly=true;recalc();};
     window._costMode=()=>costMode;
+    // AI thappa padichaa inga-ye thiruththalaam — photo marubadi poda thevaila
+    const PEF=['order_no','file_no','naha_no','civil_no','chassis_no','engine_no','model','buyer','quotation_date','po_date','delivery_date','egp_ref'];
+    $('poEditBtn').onclick=()=>{const ed=$('poEdit'),vw=$('poView'),open=ed.classList.contains('hide');
+      ed.classList.toggle('hide',!open);vw.classList.toggle('hide',open);
+      $('poEditBtn').textContent=open?'✖ மூடு':'✏️ திருத்து';
+      if(open){const f=$('pe_file_no');if(f){f.focus();f.select();}}};
+    $('poEditSave').onclick=()=>{
+      PEF.forEach(k=>{const el=$('pe_'+k);if(el)current[k]=(el.value||'').trim();});
+      window._partModel=current.model||'';
+      const keep={sell:$('sellIn').value,buy:$('buyIn')?$('buyIn').value:'',mode:window._costMode?window._costMode():'total'};
+      showForm();
+      if($('sellIn')&&keep.sell)$('sellIn').value=keep.sell;
+      if($('buyIn')&&keep.buy)$('buyIn').value=keep.buy;
+      if(keep.mode==='items'&&$('cmItems'))$('cmItems').click();
+      recalc();
+      showInfoModal('✅ திருத்தி ஆச்சு','PO Details update ஆயிடுச்சு.<br><b>'+esc(current.file_no||'—')+'</b><br><span style="color:#999;font-size:11px">இப்போ கீழ Save பண்ணு.</span>');
+    };
     $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);
     wireItemCost($('costItems'),recalc);
     $('saveBtn').addEventListener('click',saveOrder);recalc();
@@ -1232,7 +1267,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       chassis_no:current.chassis_no||'',engine_no:current.engine_no||'',company:current.company||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
       items,sell,buy,profit:(buy>0?sell-buy:null),
-      order_date:current.po_date||'',delivery_date:current.delivery_date||'',
+      order_date:current.po_date||'',delivery_date:current.delivery_date||'',egp_ref:current.egp_ref||'',
       supplied:$('supplied').checked,bill_no:$('billNo').value||'',bill_date:$('billDate').value||'',bill_amt:Number($('billAmt').value)||0,
       paid:$('paid').checked,cheque_no:$('chequeNo').value||'',pay_date:$('payDate').value||'',
       savedAt:new Date().toISOString()};
