@@ -167,7 +167,7 @@
   .comm-only #rmBill{display:none!important}
   .comm-only.can-bill #rmBill{display:inline-flex!important}
   .comm-only #repNormal{display:none!important}
-  .comm-only .egpbulk.pctbox,.comm-only .v3egp.egpdetect{display:none!important}
+  .comm-only .egpbulk.pctbox,.comm-only .v3egp.egpdetect,.comm-only .cpkpct{display:none!important}
   .comm-only #commApoPdf,.comm-only #commClarkPdf{display:none!important}
   .no-value .pf{display:none!important}
   .no-value .puSell{display:none!important}
@@ -3531,6 +3531,17 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   // ag-ku pending order-la irukkura distinct % (1 rate -> "10%", pala rate -> "10/12%")
   function _pctLabel(arr,ag){const r=Array.from(new Set(arr.map(o=>_agPct(o,ag)))).filter(x=>x>0).sort((a,b)=>a-b);
     return r.length?r.join('/')+'%':'—';}
+  let _cpkNoPct=false;
+  // % podaadha supplied+billed order-um venum-na list-la sekkardhu
+  function _cpkExtra(ag){if(!_cpkNoPct)return[];
+    return orders.filter(o=>o.supplied&&o.bill_no&&_agPct(o,ag)<=0
+      &&(_commCamp==='all'||_campOf(o)===_commCamp)
+      &&(_commEgp==='all'||(_commEgp==='egp'?_isEgp(o):!_isEgp(o))));}
+  function _cpkList(list,ag){
+    const main=list.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag));
+    const seen=new Set(main.map(o=>o.id));
+    const ex=_cpkExtra(ag).filter(o=>!seen.has(o.id));
+    return main.concat(ex).sort((a,b)=>(b.bill_date||b.order_date||'').localeCompare(a.bill_date||a.order_date||''));}
   function _commPickHtml(list,base,camps){
     const ag=_commPayAgent,agL=_agLabel(ag);
     base=base||list;camps=camps||[];
@@ -3539,8 +3550,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const egT=eg.reduce((a,o)=>a+_agComm(o,ag),0),nonT=non.reduce((a,o)=>a+_agComm(o,ag),0);
     const campSel=`<div class="fld" style="margin:4px 13px 6px"><label>🏕️ Camp / Buyer</label><select id="cpkCamp"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>`;
     const egpBar=`<div class="modetoggle" style="margin:0 13px 6px"><button class="mbtn ${_commEgp==='all'?'on':''}" data-cpke="all" type="button">எல்லாம் (${bp.length})</button><button class="mbtn ${_commEgp==='egp'?'on':''}" data-cpke="egp" type="button">🏛️ eGP ${_pctLabel(eg,ag)} (${eg.length})</button><button class="mbtn ${_commEgp==='non'?'on':''}" data-cpke="non" type="button">Non-eGP ${_pctLabel(non,ag)} (${non.length})</button></div><div style="margin:0 13px 8px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between"><span>🏛️ eGP <b style=\"color:#1f5bb5\">Rs ${fmt(egT)}</b></span><span>Non-eGP <b style=\"color:#7a5a00\">Rs ${fmt(nonT)}</b></span></div>`;
-    const pend=list.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag))
-      .sort((a,b)=>(b.bill_date||b.order_date||'').localeCompare(a.bill_date||a.order_date||''));
+    const pend=_cpkList(list,ag);
+    const noPctN=orders.filter(o=>o.supplied&&o.bill_no&&_agPct(o,ag)<=0
+      &&(_commCamp==='all'||_campOf(o)===_commCamp)
+      &&(_commEgp==='all'||(_commEgp==='egp'?_isEgp(o):!_isEgp(o)))).length;
     const tot=pend.reduce((a,o)=>a+_agComm(o,ag),0);
     if(!pend.length)return `<details class="egpbulk"><summary>✅ Tick பண்ணி Paid mark — ${esc(agL)}</summary>
       <div class="modetoggle" style="margin:8px 13px 4px"><button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button><button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button></div>
@@ -3549,7 +3562,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const rows=pend.map(o=>`<label class="cpk ${_commPickSel[o.id]?'on':''}" data-cpks="${esc((o.order_no+' '+_campOf(o)+' '+(o.bill_no||'')+' '+(o.model||'')).toLowerCase())}">
         <input type="checkbox" data-cpk="${esc(o.id)}" ${_commPickSel[o.id]?'checked':''}>
         <span class="cpk-b"><span class="cpk-o">${esc(o.order_no)}</span><span class="cpk-m">${esc(_campOf(o))}${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''}${_isEgp(o)?' · 🏛️ eGP':''}</span></span>
-        <span class="cpk-v">${fmt(_agComm(o,ag))}<small>${_agPct(o,ag)}% · Rs ${fmt(o.sell)}</small></span>
+        <span class="cpk-v">${_agPct(o,ag)>0?fmt(_agComm(o,ag)):'<span style=\"color:#a35a00\">% இல்ல</span>'}<small>${_agPct(o,ag)>0?_agPct(o,ag)+'% · ':''}Rs ${fmt(o.sell)}</small></span>
       </label>`).join('');
     return `<details class="egpbulk" open><summary>✅ Tick பண்ணி Paid mark — ${esc(agL)} (${pend.length} pending · Rs ${fmt(tot)})</summary>
       <div class="modetoggle" style="margin:8px 13px 4px">
@@ -3568,15 +3581,25 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       </div>
       <div class="grid2" style="padding:8px 13px 2px"><div class="fld"><label>Paid date</label><input type="date" id="cpkDate" value="${new Date().toISOString().slice(0,10)}"></div><div class="fld"><label>Paid via</label><select id="cpkMode"><option value="cash">💵 Cash</option><option value="bank">🏦 Bank deposit</option></select></div></div>
       <div class="grid2" style="padding:0 13px 2px"><div class="fld"><label>Paid to (name)</label><input id="cpkTo" placeholder="${esc(agL)}"></div><div class="fld"><label>Bank / Slip ref</label><input id="cpkRef" placeholder="slip no"></div></div>
+      <div class="cpkpct" style="margin:8px 13px 4px;padding:9px 11px;border:1.5px dashed var(--gold);border-radius:11px;background:#fffdf6">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">
+          <input type="checkbox" id="cpkNoPct" ${_cpkNoPct?'checked':''} style="width:18px;height:18px;accent-color:var(--gold)"> ⚠️ % போடாத order-உம் காட்டு (${noPctN})</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="cpkPct" type="number" step="0.01" min="0" max="100" placeholder="%" style="width:82px;border:1.5px solid var(--gold);border-radius:9px;padding:8px 10px;font-size:13px;font-weight:800;font-family:inherit;text-align:center">
+          <button class="btn" id="cpkSetPct" style="margin:0;flex:1;background:#5a3fb0;padding:9px" disabled>📊 Select பண்ணதுக்கு % set</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:6px">eGP-க்கு தனி rate — 🏛️ eGP chip select பண்ணி, எல்லாம் tick பண்ணி, % போட்டு set பண்ணு.</div>
+      </div>
       <button class="btn gold" id="cpkDo" style="margin:6px 13px 4px" disabled>✅ ${esc(agL)} Paid mark பண்ணு</button>
       <button class="btn" id="cpkPdf" style="margin:0 13px 12px;background:#0b2a4a" disabled>📄 Select பண்ணதுக்கு PDF</button>
     </details>`;
   }
   function _wireCommPick(list){
+    const np=$('cpkNoPct');if(np)np.onchange=()=>{_cpkNoPct=np.checked;_commPickSel={};renderCommission();};
     const cs=$('cpkCamp');if(cs)cs.onchange=e=>{_commCamp=e.target.value;_commPickSel={};renderCommission();};
     document.querySelectorAll('[data-cpke]').forEach(el=>el.addEventListener('click',()=>{_commEgp=el.dataset.cpke;_commPickSel={};renderCommission();}));
     const ag=_commPayAgent,agL=_agLabel(ag);
-    const pend=list.filter(o=>_agPct(o,ag)>0&&!_agPaid(o,ag));
+    const pend=_cpkList(list,ag);
     const byId={};pend.forEach(o=>byId[o.id]=o);
     const bar=$('cpkDo');if(!bar)return;
     function refresh(){
@@ -3586,6 +3609,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       if(cEl)cEl.textContent=ids.length+' order';
       if(tEl)tEl.textContent='Rs '+fmt(t);
       bar.disabled=ids.length===0;
+      const sb=$('cpkSetPct');if(sb)sb.disabled=ids.length===0;
       const pb=$('cpkPdf');if(pb){pb.disabled=ids.length===0;pb.textContent=ids.length?('📄 '+ids.length+' order PDF'):'📄 Select பண்ணதுக்கு PDF';}
       bar.textContent=ids.length?('✅ '+ids.length+' order · Rs '+fmt(t)+' — '+agL+' Paid mark'):('✅ '+agL+' Paid mark பண்ணு');
     }
@@ -3602,6 +3626,26 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       document.querySelectorAll('#cpkList .cpk').forEach(el=>{if(el.style.display==='none')return;const cb=el.querySelector('input');cb.checked=true;_commPickSel[cb.dataset.cpk]=true;el.classList.add('on');});refresh();});
     const nB=$('cpkNone');if(nB)nB.addEventListener('click',()=>{
       document.querySelectorAll('#cpkList .cpk').forEach(el=>{const cb=el.querySelector('input');cb.checked=false;_commPickSel[cb.dataset.cpk]=false;el.classList.remove('on');});refresh();});
+    const setB=$('cpkSetPct');
+    if(setB)setB.addEventListener('click',async()=>{
+      const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
+      if(!ids.length)return;
+      const raw=($('cpkPct').value||'').trim();
+      if(raw===''){alert('% போடு bro');return;}
+      const pct=Number(raw);
+      if(!isFinite(pct)||pct<0||pct>100){alert('% 0–100 நடுவுல இருக்கணும்');return;}
+      const sel=ids.map(i=>byId[i]);
+      const nv=sel.reduce((a,o)=>a+(Number(o.sell)||0),0);
+      const oldT=sel.reduce((a,o)=>a+_agComm(o,ag),0),newT=nv*pct/100;
+      if(!await showConfirm('📊 '+agL+' % set',ids.length+' order · Value <b>Rs '+fmt(nv)+'</b><br>% → <b>'+pct+'%</b><br>Commission: Rs '+fmt(oldT)+' → <b>Rs '+fmt(newT)+'</b>'))return;
+      setB.disabled=true;setB.innerHTML='<span class="spin"></span>Set ஆகுது...';let n=0;
+      for(const o of sel){
+        if(ag==='apo')o.apo_pct=pct;else o.clark_pct=pct;
+        try{await window.storage.set(o.id,JSON.stringify(o));n++;}catch(e){}
+      }
+      _commPickSel={};await loadOrders();renderCommission();
+      showInfoModal('✅ % set ஆச்சு',n+' order · <b>'+esc(agL)+'</b> → <b>'+pct+'%</b><br>Commission <b>Rs '+fmt(newT)+'</b>');
+    });
     const pdfB=$('cpkPdf');
     if(pdfB)pdfB.addEventListener('click',()=>{
       const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
@@ -3613,6 +3657,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     bar.addEventListener('click',async()=>{
       const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
       if(!ids.length)return;
+      const zero=ids.filter(i=>_agPct(byId[i],ag)<=0);
+      if(zero.length){alert('⚠️ '+zero.length+' order-ku % போடல bro.\nமுதல்ல % set பண்ணு, அப்புறம் Paid mark.');return;}
       const dt=$('cpkDate').value||new Date().toISOString().slice(0,10);
       const mode=($('cpkMode').value||'cash');const to=($('cpkTo').value||'').trim()||agL;const ref=($('cpkRef').value||'').trim();
       const t=ids.reduce((a,i)=>a+_agComm(byId[i],ag),0);
