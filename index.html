@@ -5262,14 +5262,30 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
   }
   function _renderCampPend(){
     const box=$('campPendStrip');if(!box)return;
-    const camp={};orders.forEach(o=>{if(o.paid||o.bill_no||o.supplied)return;const c=_campOf(o);camp[c]=camp[c]||{n:0,v:0};camp[c].n++;camp[c].v+=Number(o.sell)||0;});
+    const compSel=(($('compFilter')||{}).value)||'all';
+    const camp={},co={'NGRD Motors':{n:0,v:0},'Puspha Motors':{n:0,v:0}};
+    orders.forEach(o=>{if(o.paid||o.bill_no||o.supplied)return;
+      const cm=_companyOf(o),val=Number(o.sell)||0;
+      if(co[cm]){co[cm].n++;co[cm].v+=val;}
+      if(compSel!=='all'&&cm!==compSel)return;   // chips follow the company filter
+      const c=_campOf(o);camp[c]=camp[c]||{n:0,v:0,ngrd:0,pus:0};camp[c].n++;camp[c].v+=val;
+      if(cm==='Puspha Motors')camp[c].pus++;else if(cm==='NGRD Motors')camp[c].ngrd++;});
     const keys=Object.keys(camp).sort((a,b)=>camp[b].n-camp[a].n);
     const totN=keys.reduce((a,k)=>a+camp[k].n,0);
-    if(!totN){box.innerHTML='';return;}
+    const allN=co['NGRD Motors'].n+co['Puspha Motors'].n;
+    if(!allN){box.innerHTML='';return;}
     const curCamp=(($('campFilter')||{}).value)||'all';
-    box.innerHTML=`<div style="font-size:11px;font-weight:800;color:var(--navy);margin-bottom:5px">⏳ Pending வேலை — camp வாரி (${totN})</div><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:3px">`+
-      keys.map(k=>`<div data-campp="${esc(k)}" style="cursor:pointer;flex:0 0 auto;background:${curCamp===k?'var(--navy)':'#eef4ff'};color:${curCamp===k?'#fff':'var(--navy)'};border-radius:10px;padding:7px 11px;font-size:11.5px;font-weight:700;text-align:center;min-width:82px"><div>${esc(k.replace(/\s*\(.*\)/,''))}</div><div style="font-size:16px">${camp[k].n}</div><div class="puProfit" style="font-size:9.5px;font-weight:500;opacity:.85">Rs ${fmt(camp[k].v)}</div></div>`).join('')+`</div>`;
+    const cbtn=(val,lab,d)=>`<div data-compp="${esc(val)}" style="cursor:pointer;flex:1;text-align:center;background:${compSel===val?'var(--navy)':'#eef4ff'};color:${compSel===val?'#fff':'var(--navy)'};border-radius:9px;padding:6px 8px;font-size:11px;font-weight:700">${lab} <b style="font-size:13px">${d.n}</b><div class="puProfit" style="font-size:9px;font-weight:500;opacity:.85">Rs ${fmt(d.v)}</div></div>`;
+    box.innerHTML=`<div style="font-size:11px;font-weight:800;color:var(--navy);margin-bottom:5px">⏳ Pending வேலை — company வாரி (${allN})</div>`+
+      `<div style="display:flex;gap:6px;margin-bottom:8px">`+
+        cbtn('all','எல்லாம்',{n:allN,v:co['NGRD Motors'].v+co['Puspha Motors'].v})+
+        cbtn('NGRD Motors','NGRD',co['NGRD Motors'])+
+        cbtn('Puspha Motors','Puspha',co['Puspha Motors'])+
+      `</div>`+
+      `<div style="font-size:11px;font-weight:800;color:var(--navy);margin-bottom:5px">⏳ Camp வாரி${compSel!=='all'?' — <span style="color:#7a5a00">'+esc(compSel)+'</span>':''} (${totN})</div><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:3px">`+
+      keys.map(k=>`<div data-campp="${esc(k)}" style="cursor:pointer;flex:0 0 auto;background:${curCamp===k?'var(--navy)':'#eef4ff'};color:${curCamp===k?'#fff':'var(--navy)'};border-radius:10px;padding:7px 11px;font-size:11.5px;font-weight:700;text-align:center;min-width:82px"><div>${esc(k.replace(/\s*\(.*\)/,''))}</div><div style="font-size:16px">${camp[k].n}</div><div style="font-size:9px;font-weight:600;opacity:.8">${compSel==='all'?'N '+camp[k].ngrd+' · P '+camp[k].pus:''}</div><div class="puProfit" style="font-size:9.5px;font-weight:500;opacity:.85">Rs ${fmt(camp[k].v)}</div></div>`).join('')+(totN?'':'<div style="font-size:11.5px;color:var(--muted);padding:7px 2px">இந்த company-க்கு pending இல்ல</div>')+`</div>`;
     box.querySelectorAll('[data-campp]').forEach(el=>el.addEventListener('click',()=>{const cf=$('campFilter');if(cf)cf.value=el.dataset.campp;const sf=$('statFilter');if(sf)sf.value='pending';_listFilter=null;renderList();}));
+    box.querySelectorAll('[data-compp]').forEach(el=>el.addEventListener('click',()=>{const cf=$('compFilter');if(cf)cf.value=el.dataset.compp;_listFilter=null;renderList();}));
   }
   function _fillVehFilter(){
     const dl=$('vehDL');if(!dl)return;
