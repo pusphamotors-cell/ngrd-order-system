@@ -3010,9 +3010,26 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     addr:isP?'No. 202/19 A, Mohideen Masjid Road, Panchikawatta, Colombo 10.':'No. 202/17 B, Mohideen Masjid Road, Panchikawatta, Colombo 10.',
     tel:isP?'Tel/Fax: 0112 449385 · Hotline: 075 9515507 / 077 9338696':'Tel: 0112 449385 · 076 6886526 / 071 5748561',
     email:isP?'pusphamotors@gmail.com':'ngrdmotors@gmail.com'};}
-  function _sampleLetterBlock(company,camp,entries,withSeal){
+  // 'incorrect item return' clause — ella camp-kum illa, thernthedutha camp-ku mattum
+  let _smExtraCamps=null;
+  async function _smLoadCamps(){if(_smExtraCamps)return _smExtraCamps;
+    try{const r=await window.storage.get('cfg:sampleExtraCamps');_smExtraCamps=r&&r.value?JSON.parse(r.value):[];}catch(e){_smExtraCamps=[];}
+    return _smExtraCamps;}
+  async function _smSaveCamps(arr){_smExtraCamps=arr;try{await window.storage.set('cfg:sampleExtraCamps',JSON.stringify(arr));}catch(e){}}
+  function _smExtraPara(){
+    return `<p>We also wish to place one matter before you for your kind consideration. When one item in a supply is found to be unsuitable, the whole consignment is at present sent back to us along with the invoice, and the reason for rejecting that item is not mentioned. We are then left to guess what is required, and the balance items, which are in order, are also held up.</p>
+      <p>We would be grateful if the following could kindly be considered in such cases:</p>
+      <ol style="margin:6px 0 6px 20px;padding:0">
+        <li style="margin:5px 0">That the reason for which the item is found incorrect be briefly noted, for example the size, the model variant, or the part number.</li>
+        <li style="margin:5px 0">That the sample of that item be released to us, so that the correct part can be identified straight away.</li>
+        <li style="margin:5px 0">That the items found to be in order be retained, and only the item in question be returned.</li>
+      </ol>
+      <p>This would help us to replace the item quickly and correctly, and the balance supply would not be delayed.</p>`;
+  }
+  function _sampleLetterBlock(company,camp,entries,withSeal,extra){
     const ci=_coInfo(company);const today=new Date().toLocaleDateString('en-GB');
     const single=entries.length===1;const o0=entries[0].o;
+    const oneItem=single&&entries[0].items.length===1;const S=oneItem?'':'s';
     const metaRight=single?`<b>Order No:</b> ${esc(o0.order_no||'')}${o0.file_no?'<br><b>File No:</b> '+esc(o0.file_no):''}`:`<b>No. of Orders:</b> ${entries.length}`;
     const vehLine=single?` in respect of vehicle <b>${esc(o0.model||'the noted vehicle')}${o0.naha_no?' ('+esc(o0.naha_no)+')':''}${o0.chassis_no?', Chassis No. '+esc(o0.chassis_no):''}</b>`:` in respect of the vehicles listed below`;
     const poWord=single?'Purchase Order':'Purchase Orders';
@@ -3020,25 +3037,35 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       const rows=en.items.map((it,i)=>`<tr><td style="text-align:center;width:40px">${i+1}</td><td>${esc(it.description)}</td><td style="text-align:center;width:64px">${esc(it.qty)}</td></tr>`).join('');
       const oh=single?'':`<div class="oh">Order ${idx+1}: ${esc(o.order_no||'')}${o.file_no?' &nbsp;·&nbsp; File No. '+esc(o.file_no):''} &nbsp;&mdash;&nbsp; ${esc(o.model||'')}${o.naha_no?' ('+esc(o.naha_no)+')':''}${o.chassis_no?', Chassis '+esc(o.chassis_no):''}</div>`;
       return `${oh}<table><thead><tr><th>No</th><th>Item Description</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>`;}).join('');
+    const vehTable=single?'':`<div class="oh">Orders covered by this letter (${entries.length})</div>
+      <table><thead><tr><th style="width:34px">No</th><th>Order No</th><th>File No</th><th>Vehicle No</th><th>Vehicle</th></tr></thead><tbody>${entries.map((en,i)=>{const o=en.o;
+        return `<tr><td style="text-align:center">${i+1}</td><td>${esc(o.order_no||'')}</td><td>${esc(o.file_no||'—')}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.model||'—')}</td></tr>`;}).join('')}</tbody></table>`;
     return `<div class="pg">
       <div class="hd"><h1>${ci.name}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${ci.addr} &nbsp;·&nbsp; ${ci.tel} &nbsp;·&nbsp; ${ci.email}</div></div>
       <div class="meta"><div><b>Date:</b> ${today}</div><div style="text-align:right">${metaRight}</div></div>
       <div class="to">The Superintendent Logistics,<br>Sri Lanka Navy${camp?' &mdash; '+esc(camp):''},</div>
-      <div class="subj">Subject: Request for Item Sample(s) for Accurate Supply${single?' &mdash; Order '+esc(o0.order_no||''):''}</div>
+      <div class="subj">Subject: Request for Item Sample${S} for Accurate Supply${single?' &mdash; Order '+esc(o0.order_no||''):''}</div>
       <p>Dear Sir,</p>
-      <p>We thank you for the above ${poWord}${vehLine}, and we are pleased to attend to the supply.</p>
-      <p>In the course of sourcing, we find that a few of the requested components need to be confirmed against the actual fitment of the vehicle${single?'':'s'}, as certain parts on service vehicles are, in the course of use, <b>modified or replaced</b> and may vary from the standard catalogue specification. To ensure that the <b>exact and correct part</b> is supplied &mdash; and to avoid any mismatch or delay at the point of delivery &mdash; we respectfully request that a <b>physical sample</b> of the following item(s) be made available to us for verification.</p>
+      <p>We refer to the above ${poWord}${vehLine}, and thank you for the same. We have commenced sourcing the items.</p>
+      <p>A few of the items, however, we are not able to confirm from the catalogue alone. ${single?'This vehicle has been in service for some years, and on such vehicles parts are often replaced with substitutes that no longer match the original specification.':'These vehicles have been in service for some years, and on such vehicles parts are often replaced with substitutes that no longer match the original specification.'} If we go by the catalogue number and the fitting turns out to be different, the item will have to be returned and the supply will be delayed.</p>
+      <p>We therefore kindly request that a sample of the following item${S} be released to us for checking.</p>
+      ${vehTable}
       ${sections}
-      <p>On receipt of the sample(s), we assure you of the <b>prompt supply of the correct items</b>, in keeping with our commitment to quality and dependable service to the Sri Lanka Navy.</p>
-      <p>We are grateful for your kind cooperation in this matter.</p>
+      ${extra?_smExtraPara():''}
+      <p>The sample${S} may be handed over to our representative, or we shall arrange to collect ${oneItem?'it':'them'} at your convenience. Once checked, we will attend to the supply without delay.</p>
+      <p>We thank you for your kind assistance.</p>
       <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Yours faithfully,<br><b>For ${ci.name}</b><div class="line">Authorized Signature</div></div>${withSeal?`<img src="${_extStamp(company)}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
     </div>`;
   }
-  function _genSampleLetters(entries,withSeal){
+  function _genSampleLetters(entries,withSeal,extraCamps,perOrder){
     if(withSeal===undefined)withSeal=true;
+    const EC=Array.isArray(extraCamps)?extraCamps:[];
     const groups={};
-    entries.forEach(en=>{const c=_companyOf(en.o),camp=_campOf(en.o),key=c+'||'+camp;(groups[key]=groups[key]||{company:c,camp:camp,list:[]}).list.push(en);});
-    const letters=Object.values(groups).map(g=>_sampleLetterBlock(g.company,g.camp,g.list,withSeal));
+    // perOrder = ovvoru order-kum thani letter. illatti company+camp varisaiya ore letter.
+    entries.forEach(en=>{const c=_companyOf(en.o),camp=_campOf(en.o);
+      const key=perOrder?('ord||'+en.o.id):(c+'||'+camp);
+      (groups[key]=groups[key]||{company:c,camp:camp,list:[]}).list.push(en);});
+    const letters=Object.values(groups).map(g=>_sampleLetterBlock(g.company,g.camp,g.list,withSeal,EC.indexOf(g.camp)>=0));
     const html=`<html><head><meta charset="utf-8"><title>Sample Request Letter</title><style>
       *{font-family:Georgia,'Times New Roman',serif;box-sizing:border-box}
       body{margin:0;color:#111;font-size:13.5px;line-height:1.6}
@@ -3049,7 +3076,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       .subj{text-align:center;font-weight:bold;text-decoration:underline;margin:14px 0 10px;font-size:14px}
       table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #444;padding:6px 8px;font-size:12.5px}th{background:#eef2f8}
       .oh{font-weight:bold;margin:12px 0 2px;color:#0b2a4a;font-size:12.5px}p{margin:9px 0}
-      .sign{margin-top:40px}.line{border-top:1px solid #000;width:230px;margin-top:34px;padding-top:3px;font-size:12px}
+      .sign{margin-top:22px}.line{border-top:1px solid #000;width:230px;margin-top:16px;padding-top:3px;font-size:12px}
       @media print{.pg{padding:22px}}
     </style></head><body>${letters.join('')}</body></html>`;
     const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
@@ -3060,6 +3087,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const list=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||''));
     const ov=document.createElement('div');ov.className='modal';document.body.appendChild(ov);
     function coShort(c){return c==='Puspha Motors'?'Puspha':(c==='NGRD Motors'?'NGRD':'?');}
+    let _smPerOrder=false;
     function render(){
       const single=sel.size===1;const theOne=single?list.find(o=>sel.has(o.id)):null;
       const orderRows=list.map(o=>`<label style="display:flex;gap:7px;align-items:center;padding:4px 2px;font-size:11.5px;border-bottom:1px solid var(--line)"><input type="checkbox" data-so="${esc(o.id)}" ${sel.has(o.id)?'checked':''}><span style="flex:1">${esc(o.order_no)} <span style="color:var(--muted)">· ${esc(_campOf(o).replace(/\s*\(.*\)/,''))} · ${coShort(_companyOf(o))} · ${(o.items||[]).length} it</span></span></label>`).join('');
@@ -3067,25 +3095,49 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       if(single&&theOne){const its=(theOne.items||[]);
         itemPanel=`<div style="margin-top:8px"><div style="font-weight:700;font-size:12px;color:var(--navy);margin-bottom:3px">📦 Items — sample venum-na tick (default எல்லாம்)</div>${its.map((it,ix)=>`<label style="display:flex;gap:7px;align-items:center;padding:2px;font-size:11px"><input type="checkbox" data-si="${ix}" ${(itemSel===null||itemSel.has(ix))?'checked':''}><span>${esc(it.description)} <span style="color:var(--muted)">×${esc(it.qty)}</span></span></label>`).join('')}</div>`;
       } else itemPanel=`<div style="margin-top:8px;font-size:11px;color:var(--muted)">📦 பல order தேர்ந்தது — ஒவ்வொரு order-oda <b>எல்லா items-um</b> letter-la வரும்.</div>`;
-      const chosen=list.filter(o=>sel.has(o.id));const g={};chosen.forEach(o=>{const k=coShort(_companyOf(o))+' · '+_campOf(o).replace(/\s*\(.*\)/,'');g[k]=(g[k]||0)+1;});
-      const prev=Object.keys(g).length?`<div style="font-size:11px;color:#0b6b4a;margin-top:7px">📄 ${Object.keys(g).length} letter உருவாகும்: ${Object.entries(g).map(([k,n])=>esc(k)+' ('+n+')').join(' · ')}</div>`:'';
+      const chosen=list.filter(o=>sel.has(o.id));const g={};
+      chosen.forEach(o=>{const k=_smPerOrder?esc(o.order_no||o.id):(coShort(_companyOf(o))+' · '+_campOf(o).replace(/\s*\(.*\)/,''));g[k]=(g[k]||0)+1;});
+      const allCamps=Array.from(new Set(list.map(o=>_campOf(o)))).sort();
+      const extraCamps=_smExtraCamps||[];
+      const chosenCamps=Array.from(new Set(chosen.map(o=>_campOf(o))));
+      const chosenExtra=chosenCamps.filter(c=>extraCamps.indexOf(c)>=0);
+      const prev=Object.keys(g).length?`<div style="font-size:11px;color:#0b6b4a;margin-top:7px">📄 <b>${Object.keys(g).length}</b> letter உருவாகும்: ${Object.keys(g).map(k=>esc(k)+(_smPerOrder?'':' ('+g[k]+' order)')).join(' · ')}</div>`:'';
       ov.innerHTML=`<div class="modalbox" style="max-width:520px;text-align:left"><h3>📋 Sample Request Letter</h3>
         <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Orders tick பண்ணு — NGRD / Puspha auto தனி letter, camp வாரியா. ஒரு order மட்டுமானா items select பண்ணலாம்.</div>
         <div style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:3px 8px">${orderRows}</div>
-        ${itemPanel}${prev}
+        ${itemPanel}
+        <div style="font-weight:700;font-size:11.5px;color:var(--navy);margin:10px 0 4px">📄 Letter எப்படி வேணும்?</div>
+        <div class="modetoggle">
+          <button class="mbtn ${_smPerOrder?'':'on'}" data-smm="camp" type="button">Camp வாரி — ஒரே letter</button>
+          <button class="mbtn ${_smPerOrder?'on':''}" data-smm="ord" type="button">Order-க்கு ஒரு letter</button>
+        </div>
+        ${prev}
+        <details style="margin-top:10px;border:1.5px dashed var(--gold);border-radius:10px;background:#fffdf6" ${chosenExtra.length?'open':''}>
+          <summary style="padding:8px 11px;font-size:11.5px;font-weight:700;color:var(--navy);cursor:pointer">➕ "தப்பான item — reason + sample" பத்தி${chosenExtra.length?' <span style="color:#0b6b4a">✓ '+chosenExtra.length+' camp':''}</summary>
+          <div style="padding:0 11px 10px">
+            <div style="font-size:10.5px;color:var(--muted);margin-bottom:7px">எந்த camp-க்கு இந்த பத்தி letter-ல சேரணும்? Tick பண்ணது நினைவுல இருக்கும் — அடுத்த தடவை தானா வரும்.</div>
+            ${allCamps.map(c=>`<label style="display:flex;gap:7px;align-items:center;padding:3px 2px;font-size:11.5px"><input type="checkbox" data-sec="${esc(c)}" ${extraCamps.indexOf(c)>=0?'checked':''}><span>${esc(c)}${chosenCamps.indexOf(c)>=0?' <span style="color:#0b6b4a;font-size:10px">· இப்போ select ஆகியிருக்கு</span>':''}</span></label>`).join('')}
+          </div>
+        </details>
         <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:10px"><input type="checkbox" id="smSeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
         <div style="display:flex;gap:8px;margin-top:8px"><button class="btn gold smGen" style="flex:1;margin:0">📄 Letter உருவாக்கு / Print</button><button class="btn smClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div></div>`;
       ov.querySelectorAll('[data-so]').forEach(cb=>cb.onchange=()=>{const id=cb.dataset.so;if(cb.checked)sel.add(id);else sel.delete(id);itemSel=null;render();});
       ov.querySelectorAll('[data-si]').forEach(cb=>cb.onchange=()=>{if(itemSel===null)itemSel=new Set((theOne.items||[]).map((_,i)=>i));const ix=+cb.dataset.si;if(cb.checked)itemSel.add(ix);else itemSel.delete(ix);});
+      ov.querySelectorAll('[data-smm]').forEach(b=>b.onclick=()=>{_smPerOrder=(b.dataset.smm==='ord');render();});
+      ov.querySelectorAll('[data-sec]').forEach(cb=>cb.onchange=async()=>{
+        const c=cb.dataset.sec;const cur=(_smExtraCamps||[]).slice();
+        const i=cur.indexOf(c);if(cb.checked){if(i<0)cur.push(c);}else if(i>=0)cur.splice(i,1);
+        await _smSaveCamps(cur);render();});
       ov.querySelector('.smClose').onclick=()=>ov.remove();
       ov.querySelector('.smGen').onclick=()=>{
         if(!sel.size){alert('குறைந்தது ஒரு order tick பண்ணு');return;}
         const entries=list.filter(o=>sel.has(o.id)).map(o=>{let items=(o.items||[]).filter(it=>!it.na);if(sel.size===1&&itemSel!==null)items=items.filter((it,i)=>itemSel.has(i));return{o,items};}).filter(e=>e.items.length);
         if(!entries.length){alert('Sample-ku items இல்ல (N/A தவிர).');return;}
         const withSeal=$('smSeal')?$('smSeal').checked:true;
-        ov.remove();_genSampleLetters(entries,withSeal);
+        ov.remove();_genSampleLetters(entries,withSeal,_smExtraCamps||[],_smPerOrder);
       };
     }
+    _smLoadCamps().then(render);
     render();ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
   }
   function _genNALetter(o,reason,withSeal){
