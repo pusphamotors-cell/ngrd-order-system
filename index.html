@@ -3953,12 +3953,25 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div class="dpanel" style="margin:0 13px 12px;padding:0;overflow:hidden"><div style="max-height:260px;overflow-y:auto">
       ${batches.map(b=>`<div class="cpk" style="cursor:default">
         <span class="cpk-b"><span class="cpk-o">${b.kind==='na'?'🚫 ':'💵 '}${esc(b.dt||'—')} · ${b.n} order</span><span class="cpk-m">${b.kind==='na'?'eGP → N/A · ':''}${esc(Object.keys(b.camps).join(', ')||'—')}${b.to?' · '+esc(b.to):''}${b.kind==='paid'?(b.mode==='bank'?' · 🏦':' · 💵'):''}</span></span>
-        <span class="cpk-v" style="${b.kind==='na'?'color:#b00':''}">${fmt(b.amt)}<small>${b.kind==='na'?'value · ':''}<span data-cundo="${esc(b.bid)}" data-ckind="${b.kind}" style="cursor:pointer;color:#b00;font-weight:700">↩️ Undo</span></small></span>
+        <span class="cpk-v" style="${b.kind==='na'?'color:#b00':''}">${fmt(b.amt)}<small>${b.kind==='na'?'value · ':`<span data-cbpdf="${esc(b.bid)}" style="cursor:pointer;color:#0b2a4a;font-weight:700">📄 PDF</span> · `}<span data-cundo="${esc(b.bid)}" data-ckind="${b.kind}" style="cursor:pointer;color:#b00;font-weight:700">↩️ Undo</span></small></span>
       </div>`).join('')}
       </div></div></details>`;
   }
   function _wireCommUndo(){
     const ag=_commPayAgent,agL=_agLabel(ag);
+    document.querySelectorAll('[data-cbpdf]').forEach(el=>el.addEventListener('click',()=>{
+      const bid=el.dataset.cbpdf;
+      const sel=orders.filter(o=>_agPaid(o,ag)&&(ag==='apo'?o.apo_paid_bid:o.clark_paid_bid)===bid);
+      if(!sel.length){alert('அந்த batch கிடைக்கல bro');return;}
+      const camps=Array.from(new Set(sel.map(o=>_campOf(o))));
+      const cp=camps.length===1?camps[0]:'all';
+      const dt=(ag==='apo'?sel[0].apo_paid_date:sel[0].clark_paid_date)||'';
+      const to=(ag==='apo'?sel[0].apo_paid_to:sel[0].clark_paid_to)||agL;
+      const t=sel.reduce((a,o)=>a+_agComm(o,ag),0);
+      const naL=orders.filter(o=>o.supplied&&o.bill_no&&_agNA(o,ag)&&(cp==='all'||_campOf(o)===cp));
+      openCommissionPDF(agL,sel,cp,{agKey:ag,paidTo:to,naList:naL,
+        subTitle:'Paid '+(dt||'—')+' · '+sel.length+' order · Rs '+fmt(t)});
+    }));
     document.querySelectorAll('[data-cundo]').forEach(el=>el.addEventListener('click',async()=>{
       const bid=el.dataset.cundo,kind=el.dataset.ckind||'paid';
       if(kind==='na'){
