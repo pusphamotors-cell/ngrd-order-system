@@ -3741,10 +3741,11 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       &&(_commCamp==='all'||_campOf(o)===_commCamp)
       &&(_commEgp==='all'||(_commEgp==='egp'?_isEgp(o):!_isEgp(o)))).length;
     const naArr=_cpkNaList(ag),naN=naArr.length;
-    const naBlock=(naN||_cpkNaShow)?`<div style="margin:6px 13px 0">
+    const naBlock=`<div style="margin:6px 13px 0">
         <button class="copyprev" id="cpkNaToggle" style="width:auto;margin:0;padding:6px 10px;font-size:11.5px;${_cpkNaShow?'background:#fdf0f0;color:#b00;border-color:#e6b8b8':''}">🚫 N/A — commission கிடையாது (${naN})</button>
+        <button class="copyprev" id="cpkNaBulk" style="width:auto;margin:0 0 0 6px;padding:6px 10px;font-size:11.5px;background:#fdf0f0;color:#b00;border-color:#e6b8b8">🚫 eGP எல்லாத்தையும் N/A (${esc(agL)})</button>
         ${_cpkNaShow?`<div class="dpanel" style="margin:6px 0 0;padding:0;overflow:hidden"><div style="max-height:200px;overflow-y:auto">${naArr.length?naArr.map(o=>`<div class="cpk" style="cursor:default"><span class="cpk-b"><span class="cpk-o">${esc(o.order_no)}</span><span class="cpk-m">${esc(_campOf(o))}${o.bill_no?' · Bill '+esc(o.bill_no):''}${_isEgp(o)?' · 🏛️ eGP':''}${_agNAInfo(o,ag)?' · '+esc(_agNAInfo(o,ag)):''}</span></span><span class="cpk-v"><span style="color:#b00;font-size:11px">N/A</span><small><span data-cpknaundo="${esc(o.id)}" style="cursor:pointer;color:#1f5bb5;font-weight:700">↺ திரும்ப</span></small></span></div>`).join(''):'<div style="padding:12px 13px;font-size:12px;color:var(--muted)">இந்த filter-ல N/A order இல்ல</div>'}</div></div>`:''}
-      </div>`:'';
+      </div>`;
     const tot=pend.reduce((a,o)=>a+_agComm(o,ag),0);
     if(!pend.length)return `<details class="egpbulk"><summary>✅ Tick பண்ணி Paid mark — ${esc(agL)}</summary>
       <div class="modetoggle" style="margin:8px 13px 4px"><button class="mbtn ${ag==='apo'?'on':''}" data-cpag="apo" type="button">🤝 Apo</button><button class="mbtn ${ag==='clark'?'on':''}" data-cpag="clark" type="button">🤝 Clark</button></div>
@@ -3790,6 +3791,36 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   function _wireCommPick(list){
     const np=$('cpkNoPct');if(np)np.onchange=()=>{_cpkNoPct=np.checked;_commPickSel={};renderCommission();};
     const naT=$('cpkNaToggle');if(naT)naT.onclick=()=>{_cpkNaShow=!_cpkNaShow;renderCommission();};
+    const naB=$('cpkNaBulk');if(naB)naB.onclick=async()=>{
+      const agB=_commPayAgent,agBL=_agLabel(agB);
+      // scope: current camp filter · eGP only · supplied+billed · already-paid-a thodakoodathu
+      const hit=orders.filter(o=>o.supplied&&o.bill_no&&_isEgp(o)&&!_agNA(o,agB)&&!_agPaid(o,agB)
+        &&(_commCamp==='all'||_campOf(o)===_commCamp));
+      const skipped=orders.filter(o=>o.supplied&&o.bill_no&&_isEgp(o)&&_agPaid(o,agB)
+        &&(_commCamp==='all'||_campOf(o)===_commCamp)).length;
+      if(!hit.length){alert('இந்த filter-ல N/A பண்ண eGP order இல்ல bro'+(skipped?'\n\n('+skipped+' order ஏற்கனவே paid — அதை தொடல)':''));return;}
+      const val=hit.reduce((a,o)=>a+(Number(o.sell)||0),0);
+      const lost=hit.reduce((a,o)=>a+_agComm(o,agB),0);
+      const campTxt=(_commCamp==='all')?'<b style="color:#b00">எல்லா Camp</b>':esc(_commCamp);
+      if(!await showConfirm('🚫 eGP → N/A ('+agBL+')',
+        '<b>'+hit.length+'</b> eGP order · Value Rs <b>'+fmt(val)+'</b><br>Camp: '+campTxt+
+        '<br><br>'+agBL+'-க்கு இந்த order-ல commission கிடையாதுன்னு mark ஆகும்.'+
+        (lost>0?'<br><span style="color:#b00">இப்ப போட்டிருக்க commission Rs <b>'+fmt(lost)+'</b> — அது 0 ஆகும்.</span>':'')+
+        (skipped?'<br><span style="color:#666;font-size:11px">'+skipped+' order ஏற்கனவே paid — அதை தொடல ✓</span>':'')+
+        '<br><span style="color:#666;font-size:11px">↩️ Undo panel-ல திரும்ப எடுக்கலாம்.</span>'))return;
+      naB.textContent='...';
+      const bid='N'+Date.now().toString(36),dt=new Date().toISOString().slice(0,10),ts=new Date().toISOString();
+      const failed=[];
+      for(const o of hit){
+        const oldPct=_agPct(o,agB);
+        if(agB==='apo'){o.apo_na=true;o.apo_na_date=dt;o.apo_na_bid=bid;o.apo_na_oldpct=oldPct;o.apo_pct=0;}
+        else{o.clark_na=true;o.clark_na_date=dt;o.clark_na_bid=bid;o.clark_na_oldpct=oldPct;o.clark_pct=0;}
+        _commLog(o,{ag:agB,act:'na_bulk',bid,dt,oldpct:oldPct,ts});
+        try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){failed.push(o.order_no);}
+      }
+      await loadOrders();renderCommission();
+      showInfoModal('🚫 N/A ஆச்சு',(hit.length-failed.length)+' eGP order · <b>'+esc(agBL)+'</b><br>commission கிடையாதுன்னு mark ஆச்சு'+(failed.length?'<br><span style="color:#b00">'+failed.length+' order save ஆகல — மறுபடி பண்ணு</span>':''));
+    };
     const _agT=_commPayAgent,_agTL=_agLabel(_agT);
     const _naSave=async(o,on)=>{
       const dt=new Date().toISOString().slice(0,10);
@@ -3905,25 +3936,47 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const ag=_commPayAgent,agL=_agLabel(ag);
     const map={};
     orders.forEach(o=>{(o.comm_log||[]).forEach(e=>{
-      if(e.ag!==ag||e.act!=='paid'||!e.bid)return;
-      if(!_agPaid(o,ag))return;
-      const b=map[e.bid]||(map[e.bid]={bid:e.bid,dt:e.dt,ts:e.ts,to:e.to,mode:e.mode,n:0,amt:0,camps:{}});
-      b.n++;b.amt+=Number(e.amt)||0;b.camps[_campOf(o)]=1;});});
+      if(e.ag!==ag||!e.bid)return;
+      if(e.act==='paid'){
+        if(!_agPaid(o,ag))return;
+        const b=map[e.bid]||(map[e.bid]={kind:'paid',bid:e.bid,dt:e.dt,ts:e.ts,to:e.to,mode:e.mode,n:0,amt:0,camps:{}});
+        b.n++;b.amt+=Number(e.amt)||0;b.camps[_campOf(o)]=1;
+      }else if(e.act==='na_bulk'){
+        if(!_agNA(o,ag)||(ag==='apo'?o.apo_na_bid:o.clark_na_bid)!==e.bid)return;
+        const b=map[e.bid]||(map[e.bid]={kind:'na',bid:e.bid,dt:e.dt,ts:e.ts,n:0,amt:0,camps:{}});
+        b.n++;b.amt+=Number(o.sell)||0;b.camps[_campOf(o)]=1;
+      }});});
     const batches=Object.values(map).sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||''))).slice(0,8);
     if(!batches.length)return '';
-    return `<details class="egpbulk"><summary>↩️ Paid mark Undo — ${esc(agL)} (கடைசி ${batches.length} batch)</summary>
+    return `<details class="egpbulk"><summary>↩️ Undo — ${esc(agL)} · Paid / N/A (கடைசி ${batches.length} batch)</summary>
       <div style="font-size:11px;color:var(--muted);margin:8px 13px 6px">தப்பா Paid mark பண்ணிட்டா இங்க திரும்ப எடுக்கலாம். Undo பண்ணா அந்த order மறுபடி pending-க்கு வரும். Log-ல பதிவு இருக்கும்.</div>
       <div class="dpanel" style="margin:0 13px 12px;padding:0;overflow:hidden"><div style="max-height:260px;overflow-y:auto">
       ${batches.map(b=>`<div class="cpk" style="cursor:default">
-        <span class="cpk-b"><span class="cpk-o">${esc(b.dt||'—')} · ${b.n} order</span><span class="cpk-m">${esc(Object.keys(b.camps).join(', ')||'—')}${b.to?' · '+esc(b.to):''}${b.mode==='bank'?' · 🏦':' · 💵'}</span></span>
-        <span class="cpk-v">${fmt(b.amt)}<small><span data-cundo="${esc(b.bid)}" style="cursor:pointer;color:#b00;font-weight:700">↩️ Undo</span></small></span>
+        <span class="cpk-b"><span class="cpk-o">${b.kind==='na'?'🚫 ':'💵 '}${esc(b.dt||'—')} · ${b.n} order</span><span class="cpk-m">${b.kind==='na'?'eGP → N/A · ':''}${esc(Object.keys(b.camps).join(', ')||'—')}${b.to?' · '+esc(b.to):''}${b.kind==='paid'?(b.mode==='bank'?' · 🏦':' · 💵'):''}</span></span>
+        <span class="cpk-v" style="${b.kind==='na'?'color:#b00':''}">${fmt(b.amt)}<small>${b.kind==='na'?'value · ':''}<span data-cundo="${esc(b.bid)}" data-ckind="${b.kind}" style="cursor:pointer;color:#b00;font-weight:700">↩️ Undo</span></small></span>
       </div>`).join('')}
       </div></div></details>`;
   }
   function _wireCommUndo(){
     const ag=_commPayAgent,agL=_agLabel(ag);
     document.querySelectorAll('[data-cundo]').forEach(el=>el.addEventListener('click',async()=>{
-      const bid=el.dataset.cundo;
+      const bid=el.dataset.cundo,kind=el.dataset.ckind||'paid';
+      if(kind==='na'){
+        const nh=orders.filter(o=>_agNA(o,ag)&&(ag==='apo'?o.apo_na_bid:o.clark_na_bid)===bid);
+        if(!nh.length){alert('அந்த batch கிடைக்கல bro');return;}
+        if(!await showConfirm('↩️ N/A Undo',nh.length+' eGP order-ஓட N/A mark-ஐ திரும்ப எடுக்கவா?<br><span style="color:#999;font-size:11px">பழைய % திரும்ப வரும்.</span>'))return;
+        el.textContent='...';const ts2=new Date().toISOString();const f2=[];
+        for(const o of nh){
+          const old=Number(ag==='apo'?o.apo_na_oldpct:o.clark_na_oldpct)||0;
+          if(ag==='apo'){delete o.apo_na;delete o.apo_na_date;delete o.apo_na_bid;delete o.apo_na_oldpct;o.apo_pct=old;}
+          else{delete o.clark_na;delete o.clark_na_date;delete o.clark_na_bid;delete o.clark_na_oldpct;o.clark_pct=old;}
+          _commLog(o,{ag,act:'na_undo',bid,ts:ts2});
+          try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){f2.push(o.order_no);}
+        }
+        await loadOrders();renderCommission();
+        showInfoModal('↩️ Undo ஆச்சு',(nh.length-f2.length)+' order N/A திரும்ப எடுத்தாச்சு'+(f2.length?'<br><span style="color:#b00">'+f2.length+' save ஆகல</span>':''));
+        return;
+      }
       const hit=orders.filter(o=>_agPaid(o,ag)&&(ag==='apo'?o.apo_paid_bid:o.clark_paid_bid)===bid);
       if(!hit.length){alert('அந்த batch கிடைக்கல bro');return;}
       const t=hit.reduce((a,o)=>a+(Number(ag==='apo'?o.apo_paid_amt:o.clark_paid_amt)||0),0);
