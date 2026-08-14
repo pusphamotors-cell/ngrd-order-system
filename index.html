@@ -4393,29 +4393,40 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const modeOf=o=>{const m=ag==='apo'?o.apo_paid_mode:o.clark_paid_mode;return m==='bank'?'Bank':'Cash';};
     const toOf=o=>(ag==='apo'?o.apo_paid_to:o.clark_paid_to)||agL;
     const refOf=o=>(ag==='apo'?o.apo_paid_ref:o.clark_paid_ref)||'';
-    const byMonth={};list.forEach(o=>{const k=pMonth(o);(byMonth[k]=byMonth[k]||[]).push(o);});
     const today=new Date().toLocaleDateString('en-GB');const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
-    let gTot=0,gN=0;
+    let gTot=0,gN=0,gVal=0;
     const cell=(v,al,b)=>`<td style="border:1px solid #ccc;padding:5px;${al?'text-align:'+al+';':''}${b?'font-weight:700;':''}">${v}</td>`;
-    const sections=Object.keys(byMonth).sort().reverse().map(mk=>{
-      let sub=0;const rws=byMonth[mk].slice().sort((a,b)=>(_agPaidDate(a,ag)||'').localeCompare(_agPaidDate(b,ag)||'')).map(o=>{
-        const c=_agComm(o,ag);sub+=c;gTot+=c;gN++;
-        return `<tr>${cell(esc(o.order_no))}${cell(esc(o.bill_no||'-'))}${cell(fmt(o.sell),'right')}${cell(_agPct(o,ag)+'%','center')}${cell(fmt(c),'right',1)}${cell(esc(_agPaidDate(o,ag)||'-'),'center')}${cell(esc(modeOf(o)),'center')}${cell(esc(toOf(o))+(refOf(o)?'<br><span style=\"font-size:9px;color:#666\">'+esc(refOf(o))+'</span>':''))}</tr>`;
-      }).join('');
-      return `<tr><td colspan="8" style="background:#e9f7ec;border:1px solid #ccc;padding:6px;font-weight:800;color:#1b6b2e">📅 ${esc(mk)} (${byMonth[mk].length})</td></tr>${rws}<tr><td colspan="4" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${esc(mk)} — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:800;background:#fafafa">${fmt(sub)}</td><td colspan="3" style="border:1px solid #ccc;background:#fafafa"></td></tr>`;
-    }).join('');
+    const refCell=o=>cell(_isEgp(o)?'<b>'+esc(o.egp_ref||o.proc_ref||'-')+'</b>':'-');
+    const rowOf=o=>{const c=_agComm(o,ag);gTot+=c;gN++;gVal+=Number(o.sell)||0;
+      return `<tr>${cell(esc(o.order_no))}${refCell(o)}${cell(esc(o.bill_no||'-'))}${cell(fmt(o.sell),'right')}${cell(_agPct(o,ag)+'%','center')}${cell(fmt(c),'right',1)}${cell(esc(_agPaidDate(o,ag)||'-'),'center')}${cell(esc(modeOf(o)),'center')}${cell(esc(toOf(o))+(refOf(o)?'<br><span style="font-size:9px;color:#666">'+esc(refOf(o))+'</span>':''))}</tr>`;};
+    const secOf=(title,arr,bg,col)=>{
+      if(!arr.length)return '';
+      let sub=0,vsub=0;
+      const rws=arr.slice().sort((a,b)=>(_agPaidDate(a,ag)||'').localeCompare(_agPaidDate(b,ag)||'')).map(o=>{sub+=_agComm(o,ag);vsub+=Number(o.sell)||0;return rowOf(o);}).join('');
+      return `<tr><td colspan="9" style="background:${bg};border:1px solid #ccc;padding:7px;font-weight:800;color:${col};font-size:12px">${title} (${arr.length} orders)</td></tr>${rws}<tr><td colspan="3" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${title} — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(vsub)}</td><td style="border:1px solid #ccc;background:#fafafa"></td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fafafa">${fmt(sub)}</td><td colspan="3" style="border:1px solid #ccc;background:#fafafa"></td></tr>`;};
+    let sections=secOf('Non-eGP Orders',list.filter(o=>!_isEgp(o)),'#eef2f8','#0b2a4a')
+                +secOf('🏛️ eGP Orders',list.filter(_isEgp),'#e7f0ff','#0b2a4a');
+    // 🚫 N/A — commission கிடையாது (eGP Ref-oda, மொத்தத்துல சேர்க்கல)
+    const naL=orders.filter(o=>o.supplied&&o.bill_no&&_agNA(o,ag)&&(!camp||camp==='all'||_campOf(o)===camp));
+    let naVal=0;
+    if(naL.length){
+      const naRows=naL.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{const v=Number(o.sell)||0;naVal+=v;
+        return `<tr style="background:#fffaf9">${cell(esc(o.order_no))}${refCell(o)}${cell(esc(o.bill_no||'-'))}${cell(fmt(v),'right')}${cell('<span style="color:#b00;font-weight:700">N/A</span>','center')}${cell('<span style="color:#b00;font-weight:700">0.00</span>','right')}${cell(esc(_agNAInfo(o,ag)||'-'),'center')}${cell('-','center')}${cell('-')}</tr>`;}).join('');
+      sections+=`<tr><td colspan="9" style="background:#fdecea;border:1px solid #ccc;padding:7px;font-weight:800;color:#8a1c0c;font-size:12px">🚫 N/A — Commission கிடையாது (${naL.length} orders)&nbsp;<span style="font-weight:600;font-size:10px">· eGP Ref No கீழ இருக்கு · மொத்தத்துல சேர்க்கல</span></td></tr>${naRows}<tr><td colspan="3" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fff5f4">N/A — Subtotal</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fff5f4">${fmt(naVal)}</td><td style="border:1px solid #ccc;background:#fff5f4"></td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fff5f4;color:#b00">0.00</td><td colspan="3" style="border:1px solid #ccc;background:#fff5f4"></td></tr>`;
+    }
     const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
       <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
       <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &bull; ngrdmotors@gmail.com</div></div>`;
     const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
       ${head}
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
-        <div><span style="font-size:15px;font-weight:800">COMMISSION PAID STATEMENT</span><br>Agent: <b>${esc(agL)}</b><br>Camp: ${esc(campTxt)}<br><span style="font-size:10px;color:#666">Month-wise by paid date</span></div>
-        <div style="text-align:right">Date: ${today}<br>Paid orders: ${gN}</div>
+        <div><span style="font-size:15px;font-weight:800">COMMISSION PAID STATEMENT</span><br>Agent: <b>${esc(agL)}</b><br>Camp: ${esc(campTxt)}<br><span style="font-size:10px;color:#666">Non-eGP / eGP தனித்தனி · paid date-படி</span></div>
+        <div style="text-align:right">Date: ${today}<br>Paid orders: ${gN}${naL.length?' <span style="font-size:10px;color:#b00">+ '+naL.length+' N/A</span>':''}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:#0b2a4a;color:#fff">
           <th style="padding:6px;border:1px solid #0b2a4a">Order No</th>
+          <th style="padding:6px;border:1px solid #0b2a4a;width:96px">eGP Ref No</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:64px">Bill No</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:74px">Value</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:34px">%</th>
@@ -4424,7 +4435,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
           <th style="padding:6px;border:1px solid #0b2a4a;width:44px">Via</th>
           <th style="padding:6px;border:1px solid #0b2a4a;width:96px">Paid to / Ref</th>
         </tr></thead><tbody>${sections}</tbody>
-        <tfoot><tr><td colspan="4" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Paid Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gTot)}</td><td colspan="3" style="border:1px solid #ccc"></td></tr></tfoot>
+        <tfoot><tr><td colspan="3" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Value / Paid Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gVal)}</td><td style="border:1px solid #ccc"></td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gTot)}</td><td colspan="3" style="border:1px solid #ccc"></td></tr></tfoot>
       </table>
       <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
         <div>__________________________<br>Received by (${esc(agL)})</div>
