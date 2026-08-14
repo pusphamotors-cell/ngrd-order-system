@@ -3904,7 +3904,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       if(!ids.length)return;
       const sel=ids.map(i=>byId[i]);
       const t=sel.reduce((a,o)=>a+_agComm(o,ag),0);
-      openCommissionPDF(agL,sel,_commCamp,{agKey:ag,subTitle:'Selected list — '+sel.length+' order · Rs '+fmt(t),naList:_cpkNaList(ag),paidTo:(($('cpkTo')||{}).value||'').trim()});
+      // N/A list — camp மட்டும் filter (eGP chip-ஐ மதிக்காம), ஏன்னா விட்டுப்போனது எல்லாம் PDF-ல தெரியணும்
+      const naPdf=orders.filter(o=>o.supplied&&o.bill_no&&_agNA(o,ag)&&(_commCamp==='all'||_campOf(o)===_commCamp));
+      openCommissionPDF(agL,sel,_commCamp,{agKey:ag,subTitle:'Selected list — '+sel.length+' order · Rs '+fmt(t),naList:naPdf,paidTo:(($('cpkTo')||{}).value||'').trim()});
     });
     bar.addEventListener('click',async()=>{
       const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
