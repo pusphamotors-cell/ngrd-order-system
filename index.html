@@ -3873,7 +3873,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       if(!ids.length)return;
       const sel=ids.map(i=>byId[i]);
       const t=sel.reduce((a,o)=>a+_agComm(o,ag),0);
-      openCommissionPDF(agL,sel,_commCamp,{agKey:ag,subTitle:'Selected list — '+sel.length+' order · Rs '+fmt(t)});
+      openCommissionPDF(agL,sel,_commCamp,{agKey:ag,subTitle:'Selected list — '+sel.length+' order · Rs '+fmt(t),naList:_cpkNaList(ag),paidTo:(($('cpkTo')||{}).value||'').trim()});
     });
     bar.addEventListener('click',async()=>{
       const ids=Object.keys(_commPickSel).filter(i=>_commPickSel[i]&&byId[i]);
@@ -4269,7 +4269,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const pctOf=o=>opts.agKey?_agPct(o,opts.agKey):(_isEgp(o)?egpPct:nonPct);
     let list=sup.slice();
     if(mFrom||mTo)list=list.filter(o=>{const mk=monthOf(o);if(!mk)return false;if(mFrom&&mk<mFrom)return false;if(mTo&&mk>mTo)return false;return true;});
-    if(!list.length){alert(name+'-க்கு அந்த month range-ல commission இல்ல');return;}
+    let naL=(opts.naList||[]).slice();
+    if(mFrom||mTo)naL=naL.filter(o=>{const mk=monthOf(o);if(!mk)return false;if(mFrom&&mk<mFrom)return false;if(mTo&&mk>mTo)return false;return true;});
+    if(!list.length&&!naL.length){alert(name+'-க்கு அந்த month range-ல commission இல்ல');return;}
     const monTxt=(mFrom||mTo)?((mFrom||'ஆரம்பம்')+(mFrom===mTo?'':' → '+(mTo||'இறுதி'))):'எல்லா Month';
     const today=new Date().toLocaleDateString('en-GB');let total=0;let gn=0;let gvalue=0;
     const campTxt=(camp&&camp!=='all')?camp:'எல்லா Camp';
@@ -4286,6 +4288,13 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     }else{
       rows=list.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const s=Number(o.sell)||0;const c=s*pctOf(o)/100;total+=c;gvalue+=s;return rowCell(gn,o,s,c);}).join('');
     }
+    let naSec='',naVal=0;
+    if(naL.length){
+      const naRows=naL.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{gn++;const v=Number(o.sell)||0;naVal+=v;
+        return `<tr style="background:#fffaf9"><td style="text-align:center;border:1px solid #ccc;padding:5px">${gn}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.order_no)}</td><td style="border:1px solid #ccc;padding:5px;font-size:10px">${esc(_companyOf(o).replace(' Motors',''))}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.file_no||'-')}</td><td style="border:1px solid #ccc;padding:5px;font-weight:700">${_isEgp(o)?esc(o.egp_ref||o.proc_ref||'-'):'-'}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_no||'-')}</td><td style="border:1px solid #ccc;padding:5px">${esc(o.bill_date||'-')}</td><td style="text-align:right;border:1px solid #ccc;padding:5px">${fmt(v)}</td><td style="text-align:center;border:1px solid #ccc;padding:5px;color:#b00;font-weight:700">N/A</td><td style="text-align:right;border:1px solid #ccc;padding:5px;color:#b00;font-weight:700">0.00</td></tr>`;}).join('');
+      naSec=`<tr><td colspan="10" style="background:#fdecea;border:1px solid #ccc;padding:7px;font-weight:800;color:#8a1c0c;font-size:12px">🚫 N/A — Commission கிடையாது (${naL.length} orders)&nbsp;<span style="font-weight:600;font-size:10px">· eGP Ref No கீழ இருக்கு · மொத்தத்துல சேர்க்கல</span></td></tr>${naRows}<tr><td colspan="7" style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fff5f4">N/A — Subtotal (commission கிடையாது)</td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fff5f4">${fmt(naVal)}</td><td style="border:1px solid #ccc;background:#fff5f4"></td><td style="border:1px solid #ccc;padding:6px;text-align:right;font-weight:700;background:#fff5f4;color:#b00">0.00</td></tr>`;
+      rows=rows+naSec;
+    }
     const head=`<div style="border-bottom:3px double #0b2a4a;padding-bottom:8px;margin-bottom:14px">
       <div style="font-size:22px;font-weight:800;color:#0b2a4a;letter-spacing:1px">N.G.R.D. MOTORS</div>
       <div style="font-size:11px;color:#333;line-height:1.5">202/17B, Mohideen Masjid Road, Panchikawatta, Colombo 10<br>Tel: 011 244 9385 / 076 688 6526 &nbsp;&bull;&nbsp; ngrdmotors@gmail.com</div></div>`;
@@ -4293,7 +4302,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${head}
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
         <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)} &nbsp;·&nbsp; Month: <b>${esc(monTxt)}</b><br><span style="font-size:10px;color:#666">${opts.agKey?'Order-wise saved %':'Non-eGP '+nonPct+'% · eGP '+egpPct+'%'}</span>${opts.subTitle?'<br><span style="font-size:10px;color:#0b6b4a;font-weight:700">'+esc(opts.subTitle)+'</span>':''}</div>
-        <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}</div>
+        <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}${naL.length?' <span style="font-size:10px;color:#b00">+ '+naL.length+' N/A</span>':''}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="background:#0b2a4a;color:#fff">
@@ -4311,7 +4320,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <tfoot><tr><td colspan="7" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">மொத்த Value / Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gvalue)}</td><td style="border:1px solid #ccc"></td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
       </table>
       <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
-        <div>__________________________<br>Received by (${esc(name)})</div>
+        <div>__________________________<br>Received by${opts.paidTo?': <b>'+esc(opts.paidTo)+'</b> <span style="font-size:10px;color:#666">(for '+esc(name)+')</span>':' ('+esc(name)+')'}</div>
         <div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div>
       </div>
       <div style="margin-top:16px;font-size:10px;color:#777;border-top:1px solid #ccc;padding-top:6px">NGRD Order System — Commission statement</div>
