@@ -3038,7 +3038,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       </ol>
       <p>This would enable us to effect the replacement promptly and correctly, without delay to the balance supply.</p>`;
   }
-  function _sampleLetterBlock(company,camp,entries,withSeal,extra,ourRef,ldClause){
+  function _sampleLetterBlock(company,camp,entries,withSeal,extra,ourRef,ldClause,retClause){
     const ci=_coInfo(company);const today=new Date().toLocaleDateString('en-GB');
     const single=entries.length===1;const o0=entries[0].o;
     const oneItem=single&&entries[0].items.length===1;const S=oneItem?'':'s';
@@ -3062,6 +3062,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${vehTable}
       ${single?sections:''}
       ${ldClause?`<p>We should further request that the delivery period in respect of the said item(s) be reckoned from the date on which the sample(s) are made available to us, so that the time taken in verification does not operate against us.</p>`:''}
+      ${retClause?`<p>We would also respectfully highlight that the entire supply under the said ${poWord} is raised under a <b>single invoice</b>. Accordingly, should even one item be found not to conform at the point of acceptance, the <b>whole consignment, together with the invoice, would have to be returned</b>, and a fresh supply against a fresh invoice would become necessary. Such a situation would cause an avoidable delay and inconvenience to your good office as much as to ourselves. Verification against a physical sample at this stage will therefore ensure that the consignment is accepted in full at the first instance.</p>`:''}
       ${extra?_smExtraPara():''}
       <p>On receipt of the sample(s), we assure you of the <b>prompt supply of the correct items</b>, in keeping with our commitment to quality and dependable service to the Sri Lanka Navy.</p>
       <p>We are grateful for your kind cooperation in this matter.</p>
@@ -3084,7 +3085,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
     }
   }
-  async function _genSampleLetters(entries,withSeal,extraCamps,perOrder,ld){
+  async function _genSampleLetters(entries,withSeal,extraCamps,perOrder,ld,ret){
     if(withSeal===undefined)withSeal=true;
     const EC=Array.isArray(extraCamps)?extraCamps:[];
     const groups={};
@@ -3097,7 +3098,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     for(const g of gs){
       const ref=await _srNextRef(g.company);
       await _srStamp(g.list,ref);
-      letters.push(_sampleLetterBlock(g.company,g.camp,g.list,withSeal,EC.indexOf(g.camp)>=0,ref,ld));
+      letters.push(_sampleLetterBlock(g.company,g.camp,g.list,withSeal,EC.indexOf(g.camp)>=0,ref,ld,ret));
     }
     try{await loadOrders();}catch(e){}
     const html=`<html><head><meta charset="utf-8"><title>Sample Request Letter</title><style>
@@ -3164,6 +3165,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
           </div>
         </details>
         <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:10px"><input type="checkbox" id="smLD"> ⏱️ "Delivery period sample கொடுத்த தேதியில இருந்து" வரி சேர் <span style="color:var(--muted);font-size:10px">(LD பாதுகாப்பு)</span></label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:6px"><input type="checkbox" id="smRET"> 📦 "ஒரு item தப்பானா மொத்தமும் invoice-oda திரும்பும்" பத்தி சேர் <span style="color:var(--muted);font-size:10px">(Return risk)</span></label>
         <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:6px"><input type="checkbox" id="smSeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
         <div style="display:flex;gap:8px;margin-top:8px"><button class="btn gold smGen" style="flex:1;margin:0">📄 Letter உருவாக்கு / Print</button><button class="btn smClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div></div>`;
       ov.querySelectorAll('[data-so]').forEach(cb=>cb.onchange=()=>{const id=cb.dataset.so;if(cb.checked)sel.add(id);else sel.delete(id);itemSel=null;render();});
@@ -3180,7 +3182,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         if(!entries.length){alert('Sample-ku items இல்ல (N/A தவிர).');return;}
         const withSeal=$('smSeal')?$('smSeal').checked:true;
         const ld=$('smLD')?$('smLD').checked:false;
-        ov.remove();_genSampleLetters(entries,withSeal,_smExtraCamps||[],_smPerOrder,ld);
+        const ret=$('smRET')?$('smRET').checked:false;
+        ov.remove();_genSampleLetters(entries,withSeal,_smExtraCamps||[],_smPerOrder,ld,ret);
       };
     }
     _smLoadCamps().then(render);
