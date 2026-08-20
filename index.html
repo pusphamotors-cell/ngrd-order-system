@@ -3066,7 +3066,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${extra?_smExtraPara():''}
       <p>On receipt of the sample(s), we assure you of the <b>prompt supply of the correct items</b>, in keeping with our commitment to quality and dependable service to the Sri Lanka Navy.</p>
       <p>We are grateful for your kind cooperation in this matter.</p>
-      <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Yours faithfully,<br><b>For ${ci.name}</b><div class="line">Authorized Signature</div></div>${withSeal?`<img src="${_extStamp(company)}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
+      <div class="sign"><div>Yours faithfully,<br><b>For ${ci.name}</b></div>${withSeal?`<div style="margin:4px 0 -10px"><img src="${_extStamp(company)}" alt="Seal" style="width:132px;height:auto;opacity:0.92;display:block"/></div>`:`<div style="height:38px"></div>`}<div class="line">Authorized Signature</div></div>
     </div>`;
   }
   // Our Ref: NGRD/SR/2026/0007 — letter-ku thani number. illatti Navy reply-a edhoda match panradhu nu theriyaadhu.
