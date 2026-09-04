@@ -3038,7 +3038,12 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       </ol>
       <p>This would enable us to effect the replacement promptly and correctly, without delay to the balance supply.</p>`;
   }
-  function _sampleLetterBlock(company,camp,entries,withSeal,extra,ourRef,ldClause,retClause){
+  // simple = manushan pesura mathiri wording. formal-a venum-na simple=false.
+  function _smExtraParaSimple(){
+    return `<p>There is one more thing we would like your help with. When an item is sent back to us as incorrect, we are not told what was wrong with it. Without knowing that, we cannot work out the correct one, and the rest of the items &mdash; which are fine &mdash; are also held up and cannot be invoiced.</p>
+      <p>If the reason can be noted, the sample of that item released to us, and the items that are in order kept at your end, we can settle it quickly.</p>`;
+  }
+  function _sampleLetterBlock(company,camp,entries,withSeal,extra,ourRef,ldClause,retClause,simple){
     const ci=_coInfo(company);const today=new Date().toLocaleDateString('en-GB');
     const single=entries.length===1;const o0=entries[0].o;
     const oneItem=single&&entries[0].items.length===1;const S=oneItem?'':'s';
@@ -3051,8 +3056,33 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       return `${oh}<table><thead><tr><th>No</th><th>Item Description</th><th>Qty</th></tr></thead><tbody>${rows}</tbody></table>`;}).join('');
     const vehTable=single?'':`<div class="oh">Schedule of Purchase Orders (${entries.length})</div><table><thead><tr><th style="width:34px">No</th><th>Order No</th><th>Vehicle No</th><th>Vehicle</th></tr></thead><tbody>${entries.map((en,i)=>{const o=en.o;
         return `<tr><td style="text-align:center">${i+1}</td><td>${esc(o.order_no||'')}</td><td>${esc(o.naha_no||'—')}</td><td>${esc(o.model||'—')}</td></tr>`;}).join('')}</tbody></table>`;
+    const hdBlock=`<div class="hd"><h1>${ci.name}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${ci.addr} &nbsp;·&nbsp; ${ci.tel} &nbsp;·&nbsp; ${ci.email}</div></div>`;
+    const metaBlock=`<div class="meta"><div><b>Date:</b> ${today}</div><div style="text-align:right">${metaRight}</div></div>`;
+    const toBlock=`<div class="to">The Superintendent Logistics,<br>Sri Lanka Navy${camp?' &mdash; '+esc(camp):''},</div>`;
+    const signBlock=`<div class="sign"><div>Yours faithfully,<br><b>For ${ci.name}</b></div>${withSeal?`<div style="margin:4px 0 -10px"><img src="${_extStamp(company)}" alt="Seal" style="width:132px;height:auto;opacity:0.92;display:block"/></div>`:`<div style="height:38px"></div>`}<div class="line">Authorized Signature</div></div>`;
+
+    if(simple){
+      const vehBit=single?` &mdash; ${esc(o0.model||'')}${o0.chassis_no?', Chassis No. '+esc(o0.chassis_no):''}`:'';
+      return `<div class="pg">
+      ${hdBlock}${metaBlock}${toBlock}
+      <div class="subj">Subject: Request for sample${S}${ldClause?' and extension of delivery period':''}${single?' &mdash; Order '+esc(o0.order_no||''):''}${vehBit}</div>
+      <p>Dear Sir,</p>
+      <p>Thank you for the order.</p>
+      <p>While checking the list, we found a few items where the part differs from vehicle to vehicle. To supply the correct item for this ${single&&o0.chassis_no?'chassis number':'vehicle'}, we need to see a sample before we place the order with our supplier.</p>
+      <p>The old parts removed from the vehicle are enough for this. We do not need any new parts from your stock. Even worn out or broken ones will do &mdash; we only need to check the size, the fitting and the shape so that we can match them correctly. Once matched, the sample${S} will be returned to you along with the supply.</p>
+      ${vehTable}
+      ${single?sections:''}
+      ${extra?_smExtraParaSimple():''}
+      <p>We are ready to proceed with the balance items. However, we are unable to purchase these items until the sample${S} ${oneItem?'is':'are'} released to us.</p>
+      ${ldClause?`<p>As this waiting period is beyond our control, we kindly request that the delivery period be extended by the number of days taken to release the sample${S}, and that liquidated damages not be applied for that period. The supply will be completed without delay once we receive them.</p>`:`<p>The supply will be completed without delay once we receive them.</p>`}
+      ${retClause?`<p>We would also mention that the whole supply under this ${single?'order':'order'} goes on a single invoice. If even one item is found not to fit at the time of acceptance, the entire consignment and the invoice have to come back to us, and a fresh supply and fresh invoice become necessary. Checking against a sample now will avoid that.</p>`:''}
+      <p>Thank you for your help.</p>
+      ${signBlock}
+    </div>`;
+    }
+
     return `<div class="pg">
-      <div class="hd"><h1>${ci.name}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${ci.addr} &nbsp;·&nbsp; ${ci.tel} &nbsp;·&nbsp; ${ci.email}</div></div>
+      ${hdBlock}
       <div class="meta"><div><b>Date:</b> ${today}</div><div style="text-align:right">${metaRight}</div></div>
       <div class="to">The Superintendent Logistics,<br>Sri Lanka Navy${camp?' &mdash; '+esc(camp):''},</div>
       <div class="subj">Subject: Request for Item Sample(s) for Accurate Supply${single?' &mdash; Order '+esc(o0.order_no||''):''}</div>
@@ -3085,7 +3115,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}
     }
   }
-  async function _genSampleLetters(entries,withSeal,extraCamps,perOrder,ld,ret){
+  async function _genSampleLetters(entries,withSeal,extraCamps,perOrder,ld,ret,simple){
     if(withSeal===undefined)withSeal=true;
     const EC=Array.isArray(extraCamps)?extraCamps:[];
     const groups={};
@@ -3098,7 +3128,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     for(const g of gs){
       const ref=await _srNextRef(g.company);
       await _srStamp(g.list,ref);
-      letters.push(_sampleLetterBlock(g.company,g.camp,g.list,withSeal,EC.indexOf(g.camp)>=0,ref,ld,ret));
+      letters.push(_sampleLetterBlock(g.company,g.camp,g.list,withSeal,EC.indexOf(g.camp)>=0,ref,ld,ret,simple));
     }
     try{await loadOrders();}catch(e){}
     const html=`<html><head><meta charset="utf-8"><title>Sample Request Letter</title><style>
@@ -3123,7 +3153,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},400);
   }
   function _sampleModal(preO){
-    const sel=new Set([preO.id]);let itemSel=null;
+    const sel=new Set([preO.id]);let itemSel=null;let _smSimple=true;
     const list=orders.slice().sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||''));
     const ov=document.createElement('div');ov.className='modal';document.body.appendChild(ov);
     function coShort(c){return c==='Puspha Motors'?'Puspha':(c==='NGRD Motors'?'NGRD':'?');}
@@ -3156,6 +3186,12 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
           <button class="mbtn ${_smPerOrder?'':'on'}" data-smm="camp" type="button">Camp வாரி — ஒரே letter</button>
           <button class="mbtn ${_smPerOrder?'on':''}" data-smm="ord" type="button">Order-க்கு ஒரு letter</button>
         </div>
+        <div style="font-weight:700;font-size:11.5px;color:var(--navy);margin:10px 0 4px">✍️ Wording</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px"><b>Simple</b> — normal English, short வரிகள். பழைய damaged part-ஏ sample-a போதும்னு கேட்குது.<br><b>Formal</b> — பழைய full official wording.</div>
+        <div class="modetoggle">
+          <button class="mbtn ${_smSimple?'on':''}" data-smw="simple" type="button">Simple (human)</button>
+          <button class="mbtn ${_smSimple?'':'on'}" data-smw="formal" type="button">Formal</button>
+        </div>
         ${prev}
         <details style="margin-top:10px;border:1.5px dashed var(--gold);border-radius:10px;background:#fffdf6" ${chosenExtra.length?'open':''}>
           <summary style="padding:8px 11px;font-size:11.5px;font-weight:700;color:var(--navy);cursor:pointer">➕ "தப்பான item — reason + sample" பத்தி${chosenExtra.length?' <span style="color:#0b6b4a">✓ '+chosenExtra.length+' camp':''}</summary>
@@ -3171,6 +3207,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ov.querySelectorAll('[data-so]').forEach(cb=>cb.onchange=()=>{const id=cb.dataset.so;if(cb.checked)sel.add(id);else sel.delete(id);itemSel=null;render();});
       ov.querySelectorAll('[data-si]').forEach(cb=>cb.onchange=()=>{if(itemSel===null)itemSel=new Set((theOne.items||[]).map((_,i)=>i));const ix=+cb.dataset.si;if(cb.checked)itemSel.add(ix);else itemSel.delete(ix);});
       ov.querySelectorAll('[data-smm]').forEach(b=>b.onclick=()=>{_smPerOrder=(b.dataset.smm==='ord');render();});
+      ov.querySelectorAll('[data-smw]').forEach(b=>b.onclick=()=>{_smSimple=(b.dataset.smw==='simple');render();});
       ov.querySelectorAll('[data-sec]').forEach(cb=>cb.onchange=async()=>{
         const c=cb.dataset.sec;const cur=(_smExtraCamps||[]).slice();
         const i=cur.indexOf(c);if(cb.checked){if(i<0)cur.push(c);}else if(i>=0)cur.splice(i,1);
@@ -3183,7 +3220,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         const withSeal=$('smSeal')?$('smSeal').checked:true;
         const ld=$('smLD')?$('smLD').checked:false;
         const ret=$('smRET')?$('smRET').checked:false;
-        ov.remove();_genSampleLetters(entries,withSeal,_smExtraCamps||[],_smPerOrder,ld,ret);
+        ov.remove();_genSampleLetters(entries,withSeal,_smExtraCamps||[],_smPerOrder,ld,ret,_smSimple);
       };
     }
     _smLoadCamps().then(render);
