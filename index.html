@@ -1368,6 +1368,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         ${can('purchase')?`<button class="btn" data-purchase="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#0b2a4a">🛒 Purchase PDF</button>`:''}
         ${can('value')?`<button class="btn" data-orderpdf="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1f6f8b">📄 Order PDF</button>`:''}
         <button class="btn" data-sample="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#7a5c00">📋 Sample Letter</button>
+        ${_vatEligible(o)?`<button class="btn" data-vat="${esc(o.id)}" style="margin-top:0;flex:1;min-width:130px;background:#6b2d8a">🧾 VAT Letter</button>`:''}
         <button class="btn" data-wa="${esc(o.id)}" style="margin-top:0;flex:1;min-width:120px;background:#1faa53">📱 WhatsApp</button>
         <button class="del" data-del="${esc(o.id)}" style="font-size:16px;font-weight:700">🗑</button>
       </div>
@@ -1465,6 +1466,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(opdf)opdf.addEventListener('click',()=>openOrderPDF(o));
     const sm=box.querySelector('[data-sample]');
     if(sm)sm.addEventListener('click',()=>_sampleModal(o));
+    const vt=box.querySelector('[data-vat]');
+    if(vt)vt.addEventListener('click',()=>_vatModal(o));
   }
 
   function purchaseForm(o){
@@ -3022,6 +3025,31 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     addr:isP?'No. 202/19 A, Mohideen Masjid Road, Panchikawatta, Colombo 10.':'No. 202/17 B, Mohideen Masjid Road, Panchikawatta, Colombo 10.',
     tel:isP?'Tel/Fax: 0112 449385 · Hotline: 075 9515507 / 077 9338696':'Tel: 0112 449385 · 076 6886526 / 071 5748561',
     email:isP?'pusphamotors@gmail.com':'ngrdmotors@gmail.com'};}
+
+  // ===== VAT config — Puspha Motors மட்டும் VAT. NGRD non-VAT. =====
+  const _VAT={
+    'Puspha Motors':{
+      tin:'103311012',
+      vatno:'103311012-7000',        // ⚠️ VAT certificate-ல இருக்கிற exact VAT No போடு
+      from:'2026-06-01',             // Date of VAT Registration (01.06.2026)
+      fromTxt:'01.06.2026',
+      certValid:'2027-01-06',        // certificate valid until 06.01.2027
+      certValidTxt:'06.01.2027',
+      rate:18,
+      prop:'M. Naganadan'
+    }
+    // NGRD Motors — VAT இல்ல. இங்க add பண்ணக்கூடாது.
+  };
+  function _vatCfg(o){return _VAT[_companyOf(o)]||null;}
+  // bill date VAT registration date-க்கு அப்பறமா இருந்தா மட்டும் VAT letter
+  function _vatEligible(o){
+    const v=_vatCfg(o);if(!v)return false;
+    const d=(o.bill_date||o.supply_date||'').slice(0,10);
+    if(!d)return false;
+    return d>=v.from;
+  }
+  function _vatCertDaysLeft(o){const v=_vatCfg(o);if(!v)return null;
+    return Math.round((new Date(v.certValid)-new Date())/86400000);}
   // 'incorrect item return' clause — ella camp-kum illa, thernthedutha camp-ku mattum
   let _smExtraCamps=null;
   async function _smLoadCamps(){if(_smExtraCamps)return _smExtraCamps;
@@ -3267,6 +3295,65 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     </body></html>`;
     const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
     w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
+  }
+  // ===== VAT Intimation Letter (Puspha Motors only) =====
+  function _genVATLetter(o,withSeal){
+    if(withSeal===undefined)withSeal=true;
+    const v=_vatCfg(o);
+    if(!v){alert('இந்த order NGRD Motors — NGRD non-VAT. VAT letter இல்ல bro.');return;}
+    const ci=_coInfo(_companyOf(o));
+    const today=new Date().toLocaleDateString('en-GB');
+    const camp=_campOf(o);
+    const bill=o.bill_no||'';
+    const billDate=o.bill_date?new Date(o.bill_date).toLocaleDateString('en-GB'):'';
+    const amt=Number(o.bill_amt)||Number(o.sell)||0;
+    const vatAmt=amt*v.rate/100;
+    const html=`<html><head><meta charset="utf-8"><title>VAT Letter ${esc(o.order_no)}</title>
+    <style>*{font-family:Georgia,'Times New Roman',serif;box-sizing:border-box}body{margin:0;padding:34px 40px;color:#111;font-size:13.5px;line-height:1.6}
+    .hd{text-align:center;border-bottom:3px double #0b2a4a;padding-bottom:10px;margin-bottom:6px}.hd h1{margin:0;color:#0b2a4a;font-size:28px;letter-spacing:1px}.hd .sub{color:#a33;font-size:11.5px;margin-top:2px}.hd .a{font-size:11px;color:#333;margin-top:4px}
+    .meta{display:flex;justify-content:space-between;margin:14px 0 6px;font-size:12.5px}
+    .sub2{text-align:center;font-weight:bold;text-decoration:underline;margin:14px 0 8px;font-size:14px}
+    .ref{margin:8px 0 12px;font-size:12.5px}.ref b{display:inline}
+    table{width:100%;border-collapse:collapse;margin:10px 0}th,td{border:1px solid #444;padding:6px 9px;font-size:12.5px}th{background:#eef2f8}
+    .sign{margin-top:44px}.line{border-top:1px solid #000;width:230px;margin-top:34px;padding-top:3px;font-size:12px}
+    .encl{margin-top:18px;font-size:12px}
+    @media print{body{padding:20px}}</style></head><body>
+    <div class="hd"><h1>${ci.name}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${ci.addr} &middot; ${ci.tel} &middot; ${ci.email}</div><div class="a" style="font-weight:700;color:#0b2a4a">VAT Reg. No: ${esc(v.vatno)} &nbsp;&middot;&nbsp; TIN: ${esc(v.tin)}</div></div>
+    <div class="meta"><div>The Officer in Charge / Superintendent Logistics,<br>Sri Lanka Navy &mdash; ${esc(camp)}</div><div style="text-align:right"><b>Date:</b> ${today}</div></div>
+    <div class="sub2">REGARDING TO THE BILL PAYMENT</div>
+    <div class="ref"><b>Ref:</b> (a). Purchase Order No: <b>${esc(o.order_no||'')}</b>${o.file_no?'<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(b). File No: <b>'+esc(o.file_no)+'</b>':''}<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(${o.file_no?'c':'b'}). Tax Invoice No: <b>${esc(bill||'—')}</b>${billDate?' dated <b>'+esc(billDate)+'</b>':''}</div>
+    <div>Dear Sir,</div>
+    <p>We kindly inform you that we have supplied the items of the above referenced order (a) with the invoice referenced above. Further, we have newly registered under VAT with effect from <b>${esc(v.fromTxt)}</b>, and all supporting documents are attached herewith.</p>
+    <p>Accordingly, we are required to include <b>VAT at ${v.rate}%</b> on the said invoice, as per the rules and regulations of the Inland Revenue Department of the Government of Sri Lanka. We therefore kindly request you to be good enough to arrange the <b>full invoice payment inclusive of VAT</b> in respect of the above referenced invoice.</p>
+    ${amt?`<table><tbody>
+      <tr><td>Invoice value (excluding VAT)</td><td style="text-align:right;width:150px">Rs ${fmt(amt)}</td></tr>
+      <tr><td>VAT @ ${v.rate}%</td><td style="text-align:right">Rs ${fmt(vatAmt)}</td></tr>
+      <tr><th style="text-align:left">Total payable</th><th style="text-align:right">Rs ${fmt(amt+vatAmt)}</th></tr>
+    </tbody></table>`:''}
+    <p>We are much obliged for your kind attention in this regard.</p>
+    <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Thanking you,<br>Yours faithfully,<br><b>For ${ci.name}</b><div class="line">${esc(v.prop)}<br>Proprietor</div></div>${withSeal?`<img src="${_extStamp(_companyOf(o))}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
+    <div class="encl"><b>Encl:</b> 01. VAT Registration Certificate (copy) &nbsp;&middot;&nbsp; 02. Tax Invoice No. ${esc(bill||'—')} &nbsp;&middot;&nbsp; 03. Supporting documents</div>
+    </body></html>`;
+    const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
+    w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
+  }
+  function _vatModal(o){
+    const v=_vatCfg(o);
+    if(!v){showInfoModal('VAT இல்ல','இந்த order <b>NGRD Motors</b>. NGRD non-VAT — VAT letter அனுப்பக்கூடாது bro.');return;}
+    if(!_vatEligible(o)){showInfoModal('VAT date-க்கு முன்னாடி','Bill date <b>'+esc(o.bill_date||'—')+'</b>. VAT registration <b>'+esc(v.fromTxt)+'</b>-ல இருந்து தான். அதுக்கு முன்னாடி supply-க்கு VAT சேர்க்கக்கூடாது.');return;}
+    const dl=_vatCertDaysLeft(o);
+    const ov=document.createElement('div');ov.className='overlay';
+    ov.innerHTML=`<div class="modalbox" style="max-width:480px;text-align:left"><h3>🧾 VAT Intimation Letter</h3>
+      <div style="font-size:11.5px;background:#f3f6fb;border-radius:8px;padding:8px 10px;margin-bottom:8px">
+        ${esc(o.order_no||'')} · ${esc(_campOf(o))}<br>
+        Invoice <b>${esc(o.bill_no||'—')}</b> · ${esc(o.bill_date||'—')}<br>
+        VAT Reg <b>${esc(v.vatno)}</b> · from ${esc(v.fromTxt)}</div>
+      ${dl!==null&&dl<45?`<div style="font-size:11.5px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#7a5a00">⚠️ VAT certificate <b>${esc(v.certValidTxt)}</b> வரைக்கும் தான் valid — ${dl} நாள் மிச்சம். IRD-ல renew பண்ணு, இல்லேனா payment stuck ஆகும்.</div>`:''}
+      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:6px 0"><input type="checkbox" id="vatSeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn gold vatGen" style="flex:1;margin:0">📄 Letter உருவாக்கு / Print</button><button class="btn vatClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('.vatClose').onclick=()=>ov.remove();
+    ov.querySelector('.vatGen').onclick=()=>{const s=ov.querySelector('#vatSeal').checked;ov.remove();_genVATLetter(o,s);};
   }
   // ===== Return tracker (Order System only — no Busy) =====
   let _retOrder=null;
