@@ -498,6 +498,7 @@
       <button class="mbtn" id="rmTender" type="button">🎯 Tender</button>
       <button class="mbtn" id="rmBusy" type="button">🔗 Busy</button>
       <button class="mbtn" id="rmReturn" type="button">↩️ Return</button>
+      <button class="mbtn" id="rmNA" type="button">🚫 N/A Letter</button>
       <button class="mbtn" id="rmBill" type="button">🧾 Bill Entry</button>
     </div>
     <div id="repNormal">
@@ -528,6 +529,7 @@
     <div id="repTenderWrap" class="hide"></div>
     <div id="repBusyWrap" class="hide"></div>
     <div id="repReturnWrap" class="hide"></div>
+    <div id="repNAWrap" class="hide"></div>
     <div id="repBillWrap" class="hide"></div>
     <div class="brandcard">
       <div class="bcrest">NGRD</div>
@@ -1299,6 +1301,9 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const live=its.filter(x=>!x.na).reduce((a,x)=>a+(Number(x.total)||0),0);
     return its.some(x=>Number(x.total))?live:(Number(o.sell)||0);}
   function _isAllNA(o){const its=(o.items||[]);return its.length>0&&its.every(it=>it.na);}
+  // முழு order-um N/A + N/A letter அனுப்பியாச்சு → order முடிஞ்சது.
+  // supply பண்ண ஒண்ணும் இல்ல, வர பணமும் இல்ல — எந்த pending list-lum காட்டக்கூடாது.
+  function _naClosed(o){return _isAllNA(o)&&_naLetterDone(o);}
   function statusOf(o){if(o.paid)return{t:'Paid 🟢',c:'b-paid'};if(_isAllNA(o))return{t:_naLetterDone(o)?'N/A 🚫 Letter ✓':'N/A 🚫 Letter ⏳',c:_naLetterDone(o)?'b-na':'b-nawarn'};if(o.supplied||o.bill_no)return{t:'Invoiced 🟠',c:'b-inv'};return{t:'Pending 🔵',c:'b-pend'};}
 
   function parseDate(s){
@@ -1989,6 +1994,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('rmTender').onclick=()=>{setRepMode('tender');renderTender();};
     $('rmBusy').onclick=()=>{setRepMode('busy');renderBusy();};
     $('rmReturn').onclick=()=>{setRepMode('return');renderReturn();};
+    $('rmNA').onclick=()=>{setRepMode('na');renderCampNA();};
     $('rmBill').onclick=()=>{setRepMode('bill');renderBill();};
     if(can('comm')&&!can('report')){setRepMode('comm');renderCommission();}
     else if(can('bill')&&!can('report')){setRepMode('bill');renderBill();}else{renderReport();}
@@ -3044,12 +3050,34 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   // bill date VAT registration date-க்கு அப்பறமா இருந்தா மட்டும் VAT letter
   function _vatEligible(o){
     const v=_vatCfg(o);if(!v)return false;
+    if(_isAllNA(o))return false;   // ஒரு item-um supply ஆகல → VAT letter இல்ல
     const d=(o.bill_date||o.supply_date||'').slice(0,10);
     if(!d)return false;
     return d>=v.from;
   }
   function _vatCertDaysLeft(o){const v=_vatCfg(o);if(!v)return null;
     return Math.round((new Date(v.certValid)-new Date())/86400000);}
+  // VAT எதன் மேல? supply பண்ணின item value மட்டும் — order total இல்ல.
+  // 1) item-ku bill tick இருந்தா அதுவே real invoice
+  // 2) இல்ல N/A இருந்தா _effVal (order − N/A). bill_amt-ஐ விட எது குறைவோ அது
+  // 3) N/A-வே இல்ல-னா bill_amt / sell
+  function _vatBase(o){
+    const its=o.items||[];
+    const billed=its.filter(it=>it.bill).reduce((a,it)=>a+(Number(it.total)||0),0);
+    if(billed)return billed;
+    const ba=Number(o.bill_amt)||0;
+    if(!its.some(x=>x.na))return ba||Number(o.sell)||0;
+    if(_isAllNA(o))return 0;                 // supply-ஏ இல்ல → VAT இல்ல
+    const eff=_effVal(o);
+    if(!eff)return ba||Number(o.sell)||0;    // N/A-ku value இல்ல → கையால போடணும்
+    return ba?Math.min(ba,eff):eff;
+  }
+  function _vatSrc(o){
+    const its=o.items||[];
+    if(its.some(it=>it.bill))return 'item-ku bill tick (real invoice)';
+    if(its.some(x=>x.na))return 'order − N/A items';
+    return 'Bill Amount field';
+  }
   // 'incorrect item return' clause — ella camp-kum illa, thernthedutha camp-ku mattum
   let _smExtraCamps=null;
   async function _smLoadCamps(){if(_smExtraCamps)return _smExtraCamps;
@@ -3297,7 +3325,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
   }
   // ===== VAT Intimation Letter (Puspha Motors only) =====
-  function _genVATLetter(o,withSeal){
+  function _genVATLetter(o,withSeal,amtOverride){
     if(withSeal===undefined)withSeal=true;
     const v=_vatCfg(o);
     if(!v){alert('இந்த order NGRD Motors — NGRD non-VAT. VAT letter இல்ல bro.');return;}
@@ -3307,9 +3335,12 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const bill=o.bill_no||'';
     const billDate=o.bill_date?new Date(o.bill_date).toLocaleDateString('en-GB'):'';
     // VAT = supply பண்ணின items மட்டும் (N/A items தவிர) — order total இல்ல
-    const amt=_billedAmount(o);
+    const amt=Number(amtOverride)||_vatBase(o);
     const naItems=(o.items||[]).filter(it=>it.na);
     const ordTot=Number(o.sell)||0;
+    const naAmt=_naAmount(o);
+    // PO value − N/A = invoice value சரியா match ஆனா மட்டும் அந்த breakdown letter-ல
+    const recon=!!(ordTot&&naAmt&&Math.abs(ordTot-naAmt-amt)<1);
     const vatAmt=amt*v.rate/100;
     const html=`<html><head><meta charset="utf-8"><title>VAT Letter ${esc(o.order_no)}</title>
     <style>*{font-family:Georgia,'Times New Roman',serif;box-sizing:border-box}body{margin:0;padding:34px 40px;color:#111;font-size:13.5px;line-height:1.6}
@@ -3331,8 +3362,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     ${naItems.length?`<p>We respectfully bring to your notice that the following item${naItems.length>1?'s':''} of the above Purchase Order ${naItems.length>1?'were':'was'} <b>not supplied</b>, and ${naItems.length>1?'are':'is'} accordingly <b>excluded</b> from the invoice value and from the VAT computation set out below:</p>
     <table><thead><tr><th style="width:36px;text-align:center">No</th><th>Item Description</th><th style="width:60px;text-align:center">Qty</th></tr></thead><tbody>${naItems.map((it,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(it.description)}</td><td style="text-align:center">${esc(it.qty)}</td></tr>`).join('')}</tbody></table>`:''}
     ${amt?`<table><tbody>
-      ${naItems.length&&ordTot?`<tr><td style="color:#555">Purchase Order value</td><td style="text-align:right;width:150px;color:#555">Rs ${fmt(ordTot)}</td></tr>
-      <tr><td style="color:#555">Less: item${naItems.length>1?'s':''} not supplied</td><td style="text-align:right;color:#555">(Rs ${fmt(Math.max(ordTot-amt,0))})</td></tr>`:''}
+      ${recon?`<tr><td style="color:#555">Purchase Order value</td><td style="text-align:right;width:150px;color:#555">Rs ${fmt(ordTot)}</td></tr>
+      <tr><td style="color:#555">Less: item${naItems.length>1?'s':''} not supplied</td><td style="text-align:right;color:#555">(Rs ${fmt(ordTot-amt)})</td></tr>`:''}
       <tr><td><b>Invoice value &mdash; items supplied</b> (excluding VAT)</td><td style="text-align:right;width:150px">Rs ${fmt(amt)}</td></tr>
       <tr><td>VAT @ ${v.rate}%</td><td style="text-align:right">Rs ${fmt(vatAmt)}</td></tr>
       <tr><th style="text-align:left">Total payable</th><th style="text-align:right">Rs ${fmt(amt+vatAmt)}</th></tr>
@@ -3347,11 +3378,14 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   function _vatModal(o){
     const v=_vatCfg(o);
     if(!v){showInfoModal('VAT இல்ல','இந்த order <b>NGRD Motors</b>. NGRD non-VAT — VAT letter அனுப்பக்கூடாது bro.');return;}
+    if(_isAllNA(o)){showInfoModal('Supply-ஏ இல்ல','இந்த order-ல <b>எல்லா item-um N/A</b>. ஒண்ணும் supply ஆகல, invoice-um இல்ல — அதனால VAT letter கிடையாது bro. <b>N/A Letter</b> அனுப்பி order cancel பண்ண சொல்லு.');return;}
     if(!_vatEligible(o)){showInfoModal('VAT date-க்கு முன்னாடி','Bill date <b>'+esc(o.bill_date||'—')+'</b>. VAT registration <b>'+esc(v.fromTxt)+'</b>-ல இருந்து தான். அதுக்கு முன்னாடி supply-க்கு VAT சேர்க்கக்கூடாது.');return;}
     const dl=_vatCertDaysLeft(o);
-    const _amt=_billedAmount(o);
+    const _amt=_vatBase(o);
     const _na=(o.items||[]).filter(it=>it.na);
     const _ord=Number(o.sell)||0;
+    const _naAmt=_naAmount(o);
+    const _ba=Number(o.bill_amt)||0;
     const _vat=_amt*v.rate/100;
     const ov=document.createElement('div');ov.className='overlay';
     ov.innerHTML=`<div class="modalbox" style="max-width:480px;text-align:left"><h3>🧾 VAT Intimation Letter</h3>
@@ -3359,19 +3393,201 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         ${esc(o.order_no||'')} · ${esc(_campOf(o))}<br>
         Invoice <b>${esc(o.bill_no||'—')}</b> · ${esc(o.bill_date||'—')}<br>
         VAT Reg <b>${esc(v.vatno)}</b> · from ${esc(v.fromTxt)}</div>
+      ${_na.length?`<div style="font-size:11.5px;background:#fdf0f0;border:1px solid #e0b0b0;border-radius:8px;padding:8px 10px;margin-bottom:8px">
+        <div style="color:#8a1c1c;font-weight:700;margin-bottom:3px">🚫 ${_na.length} item supply ஆகல — VAT-ல சேர்க்கல</div>
+        <div style="color:#555">${_na.map(it=>esc(it.description)+(Number(it.total)?' <b>Rs '+fmt(it.total)+'</b>':' <span style="color:#b00">(value இல்ல)</span>')).join('<br>')}</div></div>`:''}
       <div style="font-size:11.5px;background:#eef7ef;border:1px solid #bcd9c0;border-radius:8px;padding:8px 10px;margin-bottom:8px">
-        ${_na.length?`<div style="color:#8a1c1c;margin-bottom:4px">🚫 <b>${_na.length}</b> item supply ஆகல — VAT-ல சேர்க்கல:<br><span style="color:#555">${_na.map(it=>esc(it.description)).join(' · ')}</span></div>
-        <div style="color:#555">Order total: Rs ${fmt(_ord)}</div>`:''}
-        Supply ஆனது (VAT இல்லாம): <b>Rs ${fmt(_amt)}</b><br>
-        VAT ${v.rate}%: Rs ${fmt(_vat)}<br>
-        <span style="color:var(--navy);font-weight:800">Letter-ல போகும் total: Rs ${fmt(_amt+_vat)}</span></div>
-      ${_na.length&&_amt===_ord?`<div style="font-size:11.5px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#7a5a00">⚠️ N/A item இருக்கு ஆனா supply total குறையல. Item-ku <b>Bill tick</b> பண்ணியிருக்கியா-னு order edit-ல பாரு — இல்லேனா order total-ஏ போகும்.</div>`:''}
+        <div style="color:#555;font-size:10.5px;margin-bottom:4px">Order total Rs ${fmt(_ord)}${_naAmt?' − N/A Rs '+fmt(_naAmt):''}${_ba?' · Bill Amount field Rs '+fmt(_ba):''}<br>எடுத்தது: <b>${esc(_vatSrc(o))}</b></div>
+        <label style="display:block;font-size:11px;color:var(--navy);font-weight:700;margin-bottom:3px">Invoice value — VAT இல்லாம (Rs)</label>
+        <input type="number" id="vatAmt" inputmode="decimal" value="${_amt||''}" style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:700;text-align:right">
+        <div id="vatCalc" style="margin-top:6px"></div></div>
+      ${_na.length&&_naAmt===0?`<div style="font-size:11.5px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#7a5a00">⚠️ N/A item-ku <b>value இல்ல</b> — அதனால எவ்வளவு கழிக்கணும்-னு app-ku தெரியல. மேல invoice value-ஐ கையால சரி பண்ணு bro.</div>`:''}
+      ${_na.length&&_naAmt&&_amt>=_ord-0.5?`<div style="font-size:11.5px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#7a5a00">⚠️ N/A இருந்தும் invoice value order total-ஏ இருக்கு. மேல சரி பண்ணிட்டு தான் print பண்ணு.</div>`:''}
       ${dl!==null&&dl<45?`<div style="font-size:11.5px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#7a5a00">⚠️ VAT certificate <b>${esc(v.certValidTxt)}</b> வரைக்கும் தான் valid — ${dl} நாள் மிச்சம். IRD-ல renew பண்ணு, இல்லேனா payment stuck ஆகும்.</div>`:''}
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:6px 0"><input type="checkbox" id="vatSeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn gold vatGen" style="flex:1;margin:0">📄 Letter உருவாக்கு / Print</button><button class="btn vatClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div></div>`;
     document.body.appendChild(ov);
+    const _ai=ov.querySelector('#vatAmt'),_ac=ov.querySelector('#vatCalc');
+    const _recalc=()=>{const a=Number(_ai.value)||0,t=a*v.rate/100;
+      _ac.innerHTML=a?`<span style="font-size:11.5px;color:#555">VAT ${v.rate}%: Rs ${fmt(t)}</span><br><span style="font-size:12.5px;color:var(--navy);font-weight:800">Letter-ல போகும் total: Rs ${fmt(a+t)}</span>`
+        :'<span style="font-size:11.5px;color:#b00">Invoice value போடு — இல்லேனா amount table letter-ல வராது</span>';};
+    _ai.addEventListener('input',_recalc);_recalc();
     ov.querySelector('.vatClose').onclick=()=>ov.remove();
-    ov.querySelector('.vatGen').onclick=()=>{const s=ov.querySelector('#vatSeal').checked;ov.remove();_genVATLetter(o,s);};
+    ov.querySelector('.vatGen').onclick=()=>{const s=ov.querySelector('#vatSeal').checked;const a=Number(_ai.value)||0;ov.remove();_genVATLetter(o,s,a);};
+  }
+  // ===== Camp-wise N/A Letter (ஒரே letter-ல பல order cancel கேட்க) =====
+  // Case A மட்டும்: order-la ELLA item-um N/A. பாதி supply ஆன order இங்க வராது —
+  // அதுக்கு order card-la இருக்கிற தனி N/A Letter தான் (item list வேணும்).
+  let _cnaCamp='',_cnaSel=new Set(),_cnaQ='';
+  // Navy letter — English மட்டும். ready-made reason, தமிழ் வர வாய்ப்பே இல்ல.
+  // முழு வாக்கியமா இருக்கணும் — letter-ல தனி sentence-a அச்சாகும்
+  const _CNA_REASONS=[
+    'The items have been discontinued by the manufacturer and are no longer obtainable from any local source.',
+    'The items are not presently available with any of our regular suppliers, nor in the open market.',
+    'The vehicles concerned are of an obsolete model, and spares therefor are no longer in production.',
+    'The items are obtainable only against direct importation, which cannot be effected within the delivery period stipulated.',
+    ''
+  ];
+  // தமிழ் (U+0B80–U+0BFF) / சிங்களம் (U+0D80–U+0DFF) எழுத்து இருக்கா?
+  function _hasLocalScript(s){return /[஀-௿඀-෿]/.test(String(s||''));}
+  function _cnaList(){
+    return orders.filter(o=>_isAllNA(o)&&!o.paid)
+      .sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||''));
+  }
+  function renderCampNA(){
+    const wrap=$('repNAWrap');
+    const all=_cnaList();
+    const camps=Array.from(new Set(all.map(o=>_campOf(o)))).sort();
+    if(!_cnaCamp||camps.indexOf(_cnaCamp)<0)_cnaCamp=camps[0]||'';
+    const inCamp=all.filter(o=>_campOf(o)===_cnaCamp);
+    // Order No / File No-la தேடு. last-4 digit போட்டாலும் கிடைக்கும்.
+    const q=_cnaQ.trim().toLowerCase();
+    const list=q?inCamp.filter(o=>((o.order_no||'')+' '+(o.file_no||'')).toLowerCase().indexOf(q)>=0):inCamp;
+    const showVal=can('value');
+    // company வாரியா பிரி — letterhead வேற வேற
+    const byCo={};list.forEach(o=>{const c=_companyOf(o);(byCo[c]||(byCo[c]=[])).push(o);});
+    // tick ஆனது முழு camp-la இருந்து — தேடல் filter letter-ஐ பாதிக்கக்கூடாது
+    const chosen=inCamp.filter(o=>_cnaSel.has(o.id));
+    const chosenCo=Array.from(new Set(chosen.map(o=>_companyOf(o))));
+    const rows=list.map(o=>{
+      const sent=_naLetterDone(o);
+      const val=Number(o.sell)||0;
+      return `<tr${_cnaSel.has(o.id)?' style="background:#eef7ef"':''}>
+        <td style="text-align:center"><input type="checkbox" data-cna="${esc(o.id)}" ${_cnaSel.has(o.id)?'checked':''}></td>
+        <td style="font-size:11.5px;font-weight:600">${esc(o.order_no||'')}</td>
+        <td style="font-size:10.5px;color:var(--muted)">${esc(o.file_no||'—')}</td>
+        <td style="font-size:10.5px">${esc(o.order_date||'—')}</td>
+        <td style="font-size:10.5px">${(c=>c==='Puspha Motors'?'<b style="color:#6b2d8a">Puspha</b>':c==='NGRD Motors'?'<b style="color:#0b5d6b">NGRD</b>':'<span style="color:#b00;font-weight:700" title="company field காலி — letterhead தெரியாது">⚠️ company இல்ல</span>')(_companyOf(o))}</td>
+        <td class="num" style="font-size:10.5px">${(o.items||[]).length}</td>
+        ${showVal?`<td class="num" style="font-size:10.5px">${fmt(val)}</td>`:''}
+        <td style="font-size:10px">${sent?'<span style="color:var(--green)">✅ அனுப்பியாச்சு</span>':'<span style="color:var(--red)">⏳ இன்னும் இல்ல</span>'}</td></tr>`;
+    }).join('');
+    wrap.innerHTML=`<div class="dpanel" style="padding:12px 13px">
+      <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:3px">🚫 Camp-wise N/A Letter <span style="font-weight:400;color:var(--muted);font-size:11px">— ஒரே letter-ல பல order cancel கேட்க</span></div>
+      <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px">இங்க <b>எல்லா item-um N/A</b> ஆன order மட்டும் வரும். பாதி supply ஆனதுக்கு order card-la இருக்கிற N/A Letter use பண்ணு — அதுல item list வேணும்.</div>
+      ${camps.length?`<div class="fld"><label>Camp</label><select id="cnaCamp">${camps.map(c=>`<option ${c===_cnaCamp?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      <div class="fld"><label>🔍 Order No / File No தேடு <span style="color:var(--muted);font-weight:400">— last 4 digit போட்டாலும் போதும்</span></label><input id="cnaQ" value="${esc(_cnaQ)}" placeholder="உதा: 0814" autocomplete="off"></div>
+      ${q?`<div style="font-size:11px;color:#0b6b4a;margin:-2px 0 6px">🔍 "${esc(_cnaQ)}" — ${list.length}/${inCamp.length} order${_cnaSel.size?` · tick ஆனது ${_cnaSel.size} (தேடல் மாறினாலும் tick போகாது)`:''}</div>`:''}
+      <div style="display:flex;gap:8px;margin-bottom:6px"><button class="btn" id="cnaAll" style="margin:0;width:auto;padding:5px 10px;font-size:11px;background:#0b2a4a">${q?'இந்த '+list.length+' result-ஐ tick':'எல்லாம் tick'}</button><button class="btn" id="cnaNone" style="margin:0;width:auto;padding:5px 10px;font-size:11px;background:#8a8f98">Clear</button></div>
+      <div class="tablewrap"><table><thead><tr><th style="width:28px"></th><th>Order No</th><th>File No</th><th>Order date</th><th>Co</th><th class="num">Items</th>${showVal?'<th class="num">Value</th>':''}<th>N/A letter</th></tr></thead><tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:10px">இந்த camp-ல இல்ல</td></tr>'}</tbody></table></div>
+      <div class="fld" style="margin-top:9px"><label>Reason — letter-ல அப்படியே அச்சாகும் (English மட்டும்)</label>
+        <select id="cnaReasonSel">${_CNA_REASONS.map((r,i)=>`<option value="${i}">${esc(r||'— (reason வேணாம்)')}</option>`).join('')}<option value="x">✏️ வேற reason — நானே type பண்றேன்</option></select></div>
+      <div class="fld hide" id="cnaReasonBox"><label>Custom reason (English only)</label><input id="cnaReason" placeholder="e.g. obsolete model, no longer manufactured"></div>
+      <div style="font-size:10px;color:#a35a00;margin:-2px 0 6px">⚠️ Navy letter — தமிழ் எழுத்து ஒண்ணு இருந்தாலும் print ஆகாது. English மட்டும் bro.</div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaLD" checked> ⏱️ <b>LD waiver</b> கேட்கும் பத்தி சேர் <span style="color:var(--muted);font-size:10px">(delivery period முடிஞ்சிருந்தா கண்டிப்பா)</span></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaAlt" checked> 🔄 "equivalent part இருந்தா சொல்லுங்க, quote பண்றேன்" வரி சேர்</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaCopies" checked> 📑 <b>ஒவ்வொரு file-kum தனி copy</b> print பண்ணு <span style="color:var(--muted);font-size:10px">(File No footer-oda)</span></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaSeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
+      <div style="font-size:10px;color:var(--muted);margin:2px 0 4px">📋 Annexure-ல <b>Order No · File No · Order Date</b> மட்டும். Item count-um value-um letter-ல வராது.</div>
+      <div id="cnaPrev" style="font-size:11px;color:#0b6b4a;margin:7px 0"></div>
+      <button class="btn gold" id="cnaGen" style="margin-top:4px">📄 Letter உருவாக்கு / Print</button>`
+      :'<div class="empty" style="padding:12px">முழு order-um N/A ஆனது இப்ப இல்ல 🎉</div>'}
+    </div>`;
+    if(!camps.length)return;
+    // tick ஆனது முழு camp-la இருந்து — தேடல் filter letter-ஐ பாதிக்கக்கூடாது
+    const prev=()=>{const ch=inCamp.filter(o=>_cnaSel.has(o.id));
+      const cos=Array.from(new Set(ch.map(o=>_companyOf(o))));
+      const cp=wrap.querySelector('#cnaCopies');
+      const copies=cp&&cp.checked?ch.length:0;
+      const bad=ch.filter(o=>['Puspha Motors','NGRD Motors'].indexOf(_companyOf(o))<0);
+      wrap.querySelector('#cnaPrev').innerHTML=ch.length
+        ?`📄 <b>${cos.length}</b> letter உருவாகும் — ${cos.map(c=>`<b>${esc(c)}</b> letterhead-ல ${ch.filter(o=>_companyOf(o)===c).length} order`).join(' · ')}${copies?` &nbsp;+&nbsp; <b>${copies}</b> file copy`:''}`
+          +(bad.length?`<div style="color:#b00;font-weight:700;margin-top:3px">⚠️ ${bad.length} order-ku company இல்ல — letter உருவாகாது</div>`:'')
+        :'<span style="color:var(--red)">ஒரு order-avadhu tick பண்ணு</span>';};
+    wrap.querySelector('#cnaCamp').onchange=e=>{_cnaCamp=e.target.value;_cnaSel=new Set();_cnaQ='';renderCampNA();};
+    const _q=wrap.querySelector('#cnaQ');
+    // தேடும்போது tick போகக்கூடாது — தேடி tick, மறுபடி தேடி tick பண்ணனும்
+    _q.oninput=()=>{const v=_q.value,p=_q.selectionStart;_cnaQ=v;renderCampNA();
+      const n=$('repNAWrap').querySelector('#cnaQ');if(n){n.focus();try{n.setSelectionRange(p,p);}catch(e){}}};
+    wrap.querySelector('#cnaAll').onclick=()=>{list.forEach(o=>_cnaSel.add(o.id));renderCampNA();};
+    wrap.querySelector('#cnaNone').onclick=()=>{_cnaSel=new Set();_cnaQ='';renderCampNA();};
+    wrap.querySelectorAll('[data-cna]').forEach(cb=>cb.onchange=()=>{
+      if(cb.checked)_cnaSel.add(cb.dataset.cna);else _cnaSel.delete(cb.dataset.cna);
+      cb.closest('tr').style.background=cb.checked?'#eef7ef':'';prev();});
+    wrap.querySelector('#cnaCopies').onchange=prev;
+    const _rs=wrap.querySelector('#cnaReasonSel'),_rb=wrap.querySelector('#cnaReasonBox');
+    _rs.onchange=()=>_rb.classList.toggle('hide',_rs.value!=='x');
+    prev();
+    wrap.querySelector('#cnaGen').onclick=async()=>{
+      const ch=inCamp.filter(o=>_cnaSel.has(o.id));   // தேடல் filter-a மீறி, tick ஆனது எல்லாம்
+      if(!ch.length){showInfoModal('Order இல்ல','ஒரு order-avadhu tick பண்ணு bro.');return;}
+      // company தெரியாத order — எந்த letterhead-la போடுறது-னு தெரியாது. நிறுத்து.
+      const unk=ch.filter(o=>['Puspha Motors','NGRD Motors'].indexOf(_companyOf(o))<0);
+      if(unk.length){showInfoModal('Company இல்ல','இந்த order-ku <b>company</b> போடல — NGRD-a Puspha-va-னு தெரியல, letterhead தப்பா போயிடும்:<br><br><b>'+unk.map(o=>esc(o.order_no||'')).join('<br>')+'</b><br><br>Order edit-ல company போட்டுட்டு வா bro. இல்லேனா அந்த order-a untick பண்ணு.');return;}
+      const reason=(_rs.value==='x'?(wrap.querySelector('#cnaReason').value||''):_CNA_REASONS[+_rs.value]||'').trim();
+      // Navy-க்கு போற letter — தமிழ்/சிங்கள எழுத்து இருந்தா நிறுத்து
+      if(_hasLocalScript(reason)){showInfoModal('English மட்டும் bro','Reason-ல <b>தமிழ் எழுத்து</b> இருக்கு. இது Navy-க்கு போற government letter — முழுக்க English-ல தான் இருக்கணும். மேல இருக்கிற ready-made reason-ல ஒண்ணு தேர்ந்தெடு, இல்ல English-ல type பண்ணு.');return;}
+      const opt={ld:wrap.querySelector('#cnaLD').checked,alt:wrap.querySelector('#cnaAlt').checked,
+        copies:wrap.querySelector('#cnaCopies').checked,seal:wrap.querySelector('#cnaSeal').checked};
+      // log — order card-la "அனுப்பியாச்சு" nu theriyanum
+      const stamp={date:(_todayKey?_todayKey():new Date().toISOString().slice(0,10)),by:(CURRENT&&(CURRENT.name||CURRENT.u))||'',reason,combined:true,camp:_cnaCamp};
+      for(const o of ch){o.na_reason=reason;o.na_letter=Object.assign({},stamp,{items:(o.items||[]).map(x=>x.description||'')});
+        o.na_letter_log=(o.na_letter_log||[]).concat([Object.assign({},o.na_letter,{ts:Date.now()})]);
+        try{await window.storage.set(o.id,JSON.stringify(o));}catch(e){}}
+      _genCampNALetter(ch,_cnaCamp,reason,opt);
+      renderCampNA();
+    };
+  }
+  function _genCampNALetter(list,camp,reason,opt){
+    opt=opt||{};
+    const today=new Date().toLocaleDateString('en-GB');
+    // Government letter — item count-um value-um வேணாம். Order No + File No + Date மட்டும்.
+    const _dmy=s=>{const d=parseDate(s);return d?d.toLocaleDateString('en-GB'):(s||'—');};
+    const byCo={};list.forEach(o=>{const c=_companyOf(o);(byCo[c]||(byCo[c]=[])).push(o);});
+    const pages=[];
+    Object.keys(byCo).forEach(co=>{
+      const ors=byCo[co];const ci=_coInfo(co);
+      const n=ors.length,plural=n>1;
+      const annex=ors.map((o,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(o.order_no||'')}</td><td>${esc(o.file_no||'—')}</td><td style="text-align:center">${esc(_dmy(o.order_date))}</td></tr>`).join('');
+      const head=`<div class="hd"><h1>${ci.name}</h1><div class="sub">Importers &amp; General Merchants, Dealers in Motor Spares, Estate Suppliers &amp; Government Contractors</div><div class="a">${ci.addr} &middot; ${ci.tel} &middot; ${ci.email}</div></div>`;
+      const theOrders=plural?'the said Purchase Orders':'the said Purchase Order';
+      // Navy correspondence — number போட்ட paragraph. optional para இருந்தா number தானா சரியாகும்.
+      const paras=[
+        `We have the honour to refer to the Purchase Order${plural?'s':''} placed upon us by your good office, the particulars of which are set out in the Annexure to this letter.`,
+        `We regret to inform you that the items ordered thereunder are not available in the market.${reason?' '+esc(reason):''} The position affects <b>the entire quantity ordered under ${plural?'each of the said orders':'the said order'}</b>, and we are accordingly unable to effect <b>any supply whatsoever</b> against ${plural?'them':'it'}.`,
+        `We wish to place on record that this position has arisen solely from the non-availability of the said items in the market, and not from any default, delay or negligence on our part. Every endeavour was made to procure the items from all sources available to us, without success.`,
+        `In the circumstances, we respectfully request that ${theOrders} be <b>closed and cancelled</b>, and that this letter be treated as our formal intimation for that purpose.`
+      ];
+      if(opt.alt)paras.push(`Should an equivalent or alternative item be acceptable to your good office in respect of any of the orders listed, we shall be pleased to submit a fresh quotation upon being so advised.`);
+      if(opt.ld)paras.push(`We further request that <b>liquidated damages, if any, be waived</b> in respect of ${theOrders}, the non-supply having arisen from causes entirely beyond our control.`);
+      paras.push(`We should be grateful if a copy of this letter could kindly be acknowledged and returned to us for our records, and a copy placed in each of the relevant files.`);
+      paras.push(`We regret the inconvenience occasioned, and assure your good office of our best attention and service at all times.`);
+      const body=`${head}
+      <div class="meta"><div>To,<br>The Officer in Charge / Superintendent Logistics,<br>Sri Lanka Navy &mdash; ${esc(camp)}</div><div style="text-align:right"><b>Date:</b> ${today}</div></div>
+      <div class="sub2">NON-AVAILABILITY OF ORDERED ITEMS AND REQUEST FOR CLOSURE OF ${plural?'PURCHASE ORDERS':'PURCHASE ORDER'}</div>
+      <div style="margin-bottom:2px">Sir,</div>
+      ${paras.map((p,i)=>`<p class="np"><span class="pn">${i+1}.</span>${p}</p>`).join('')}
+      <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Yours faithfully,<br><b>For ${ci.name}</b><div class="line">Proprietor / Authorized Signatory</div></div>${opt.seal?`<img src="${_extStamp(co)}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
+      <div class="encl"><b>Encl:</b> Annexure &mdash; particulars of ${theOrders}</div>
+      <div class="ann">ANNEXURE</div>
+      <div class="annsub">Particulars of the Purchase Order${plural?'s':''} referred to herein</div>
+      <table><thead><tr><th style="width:36px">No</th><th>Purchase Order No</th><th>File No</th><th style="width:100px">Order Date</th></tr></thead>
+      <tbody>${annex}</tbody></table>`;
+      pages.push(body);
+      // ஒவ்வொரு file-kum தனி copy — camp-la file வாரியா போடுவாங்க
+      if(opt.copies)ors.forEach(o=>pages.push(body+`<div class="cpy">Copy filed under &mdash; Purchase Order No: <b>${esc(o.order_no||'')}</b>${o.file_no?' &nbsp;&middot;&nbsp; File No: <b>'+esc(o.file_no)+'</b>':''}</div>`));
+    });
+    const html=`<html><head><meta charset="utf-8"><title>N/A Letter — ${esc(camp)}</title>
+    <style>*{font-family:Georgia,'Times New Roman',serif;box-sizing:border-box}body{margin:0;padding:34px 40px;color:#111;font-size:13.5px;line-height:1.55}
+    .hd{text-align:center;border-bottom:3px double #0b2a4a;padding-bottom:10px;margin-bottom:6px}.hd h1{margin:0;color:#0b2a4a;font-size:28px;letter-spacing:1px}.hd .sub{color:#a33;font-size:11.5px;margin-top:2px}.hd .a{font-size:11px;color:#333;margin-top:4px}
+    .meta{display:flex;justify-content:space-between;margin:14px 0 6px;font-size:12.5px}
+    .sub2{text-align:center;font-weight:bold;text-decoration:underline;margin:14px 0 8px;font-size:14px}
+    .ann{text-align:center;font-weight:bold;font-size:13px;letter-spacing:2px;margin:26px 0 2px;color:#0b2a4a;text-decoration:underline}
+    .annsub{text-align:center;font-size:11.5px;color:#444;margin-bottom:6px;font-style:italic}
+    .np{margin:9px 0;text-align:justify;position:relative;padding-left:26px}
+    .pn{position:absolute;left:0;font-weight:bold}
+    .encl{margin-top:22px;font-size:12px}
+    table{width:100%;border-collapse:collapse;margin:6px 0;page-break-inside:auto}th,td{border:1px solid #444;padding:6px 8px;font-size:12.5px}th{background:#eef2f8}
+    tr{page-break-inside:avoid;break-inside:avoid}thead{display:table-header-group}
+    p{orphans:2;widows:2}
+    .sign{margin-top:40px}.line{border-top:1px solid #000;width:230px;margin-top:34px;padding-top:3px;font-size:12px}
+    .cpy{margin-top:16px;border-top:1px dashed #888;padding-top:6px;font-size:11.5px;color:#444}
+    .pg{page-break-after:always}.pg:last-child{page-break-after:auto}
+    @media print{body{padding:20px}}</style></head><body>
+    ${pages.map(p=>`<div class="pg">${p}</div>`).join('')}
+    </body></html>`;
+    const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
+    w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
   }
   // ===== Return tracker (Order System only — no Busy) =====
   let _retOrder=null;
@@ -3595,10 +3811,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const rb=$('tRetry2');if(rb)rb.onclick=()=>renderTender(true);
   }
   function setRepMode(m){
-    ['Report','Pending','Daily','Cal','Out','Pay','Comm','Sum','Sales','Tender','Busy','Return','Bill'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
-    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',pay:'Pay',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy',return:'Return',bill:'Bill'};
+    ['Report','Pending','Daily','Cal','Out','Pay','Comm','Sum','Sales','Tender','Busy','Return','NA','Bill'].forEach(x=>{const b=$('rm'+x);if(b)b.classList.remove('on');});
+    const map={report:'Report',pending:'Pending',daily:'Daily',cal:'Cal',out:'Out',pay:'Pay',comm:'Comm',sum:'Sum',sales:'Sales',tender:'Tender',busy:'Busy',return:'Return',na:'NA',bill:'Bill'};
     const b=$('rm'+(map[m]||'Report'));if(b)b.classList.add('on');
-    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repPayWrap').classList.toggle('hide',m!=='pay');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');$('repReturnWrap').classList.toggle('hide',m!=='return');$('repBillWrap').classList.toggle('hide',m!=='bill');
+    $('repNormal').classList.toggle('hide',m!=='report');$('repPendingWrap').classList.toggle('hide',m!=='pending');$('repDailyWrap').classList.toggle('hide',m!=='daily');$('repCalWrap').classList.toggle('hide',m!=='cal');$('repOutWrap').classList.toggle('hide',m!=='out');$('repPayWrap').classList.toggle('hide',m!=='pay');$('repCommWrap').classList.toggle('hide',m!=='comm');$('repSumWrap').classList.toggle('hide',m!=='sum');$('repSalesWrap').classList.toggle('hide',m!=='sales');$('repTenderWrap').classList.toggle('hide',m!=='tender');$('repBusyWrap').classList.toggle('hide',m!=='busy');$('repReturnWrap').classList.toggle('hide',m!=='return');$('repNAWrap').classList.toggle('hide',m!=='na');$('repBillWrap').classList.toggle('hide',m!=='bill');
   }
   let _dailyBasis='bill';
   function renderDaily(){
@@ -4894,8 +5110,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   }
   // ---- end sales register ----
   function renderPending(){
-    const supPend=orders.filter(o=>!o.supplied);
-    const payPend=orders.filter(o=>(o.supplied||o.bill_no)&&!o.paid);
+    const supPend=orders.filter(o=>!o.supplied&&!_naClosed(o));
+    const payPend=orders.filter(o=>(o.supplied||o.bill_no)&&!o.paid&&!_naClosed(o));
     const ldRisk=orders.filter(o=>{const a=deliveryAlert(o);return a&&a.lvl===0;});
     const supVal=supPend.reduce((a,o)=>a+(Number(o.sell)||0),0);
     const payVal=payPend.reduce((a,o)=>a+(Number(o.sell)||0),0);
@@ -5552,8 +5768,9 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     const st={p:0,i:0,d:0};const comp={},camp={};
     orders.forEach(o=>{
       value+=Number(o.sell)||0;const pv=profitVal(o);if(pv!==null){profit+=pv;costedVal+=Number(o.sell)||0;}
-      if(!o.paid){pend++;pendAmt+=Number(o.sell)||0;const pa=paymentAlert(o);if(pa&&pa.c==='al-urgent')payLate++;}
-      if(o.paid)st.d++;else if(o.supplied||o.bill_no)st.i++;else st.p++;
+      const _cl=_naClosed(o);  // N/A letter அனுப்பியாச்சு → pending இல்ல
+      if(!o.paid&&!_cl){pend++;pendAmt+=Number(o.sell)||0;const pa=paymentAlert(o);if(pa&&pa.c==='al-urgent')payLate++;}
+      if(o.paid)st.d++;else if(_cl)st.na=(st.na||0)+1;else if(o.supplied||o.bill_no)st.i++;else st.p++;
       const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;else if(a&&a.lvl===1)soon++;
       const sup=(o.supplier||'').toLowerCase();const c=sup.indexOf('puspha')>=0?'Puspha Motors':sup.indexOf('ngrd')>=0?'NGRD Motors':'Other';
       comp[c]=comp[c]||{n:0,v:0,p:0};comp[c].n++;comp[c].v+=Number(o.sell)||0;if(pv!==null)comp[c].p+=pv;
