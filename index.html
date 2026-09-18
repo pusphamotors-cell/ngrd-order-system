@@ -1287,7 +1287,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   // sample letter anuppi ethana naal aachu — Navy badhil illatti LD clock odudhu
   function sampleAlert(o){
     const sl=o&&o.sample_letter;if(!sl||!sl.date)return null;
-    if(o.paid||o.bill_no||o.supplied)return null;
+    if(o.paid||o.bill_no||o.supplied||_naClosed(o))return null;
     const d=daysSince(sl.date);
     if(d<0)return null;
     const base='📋 Sample letter '+esc(sl.ref||'')+' · '+d+' நாள்';
@@ -1920,7 +1920,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(f.t==='camp')return _campOf(o)===f.v;
     if(f.t==='status')return statusKey(o)===f.v;
     if(f.t==='ld'){const a=deliveryAlert(o);return a&&a.lvl===0;}
-    if(f.t==='paypend')return !o.paid;
+    if(f.t==='paypend')return !o.paid&&!_naClosed(o);
     if(f.t==='paylate'){const a=paymentAlert(o);return a&&a.c==='al-urgent';}
     if(f.t==='paid')return !!o.paid;
     return true;}
@@ -1941,7 +1941,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     _fillCampFilter();_fillVehFilter();_renderCampPend();
     if(orders.length===0){lc.innerHTML='<div class="empty">இன்னும் order இல்ல.<br>"புது Order" tab-ல PO upload பண்ணு ✨</div>';$('gCount').textContent='0';$('gProfit').textContent='0';$('gPending').textContent='0';$('gLD').textContent='0';return;}
     let tp=0,pend=0,ld=0;
-    orders.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid)pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
+    orders.forEach(o=>{const pv=profitVal(o);if(pv!==null)tp+=pv;if(!o.paid&&!_naClosed(o))pend++;const a=deliveryAlert(o);if(a&&a.lvl===0)ld++;});
     $('gCount').textContent=orders.length;$('gProfit').textContent=fmt(tp);$('gPending').textContent=pend;$('gLD').textContent=ld;
     const q=(($('searchBox')||{}).value||'').trim().toLowerCase();
     const campSel=(($('campFilter')||{}).value)||'all';
@@ -1957,8 +1957,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(_listFilter)list=list.filter(({o})=>_matchFilter(o));
     // filtered total (count · value · pending)
     const tl=$('listTotal');
-    if(tl){let val=0,pend=0,inv=0,paidn=0;list.forEach(({o})=>{val+=Number(o.sell)||0;if(o.paid)paidn++;else if(o.supplied||o.bill_no)inv++;else pend++;});
-      tl.innerHTML=`📋 ${list.length} order · <span class="puProfit">Rs ${fmt(val)}</span> · 🔵 ${pend} pending · 🟠 ${inv} invoiced · 🟢 ${paidn} paid`;}
+    if(tl){let val=0,pend=0,inv=0,paidn=0,nacl=0;list.forEach(({o})=>{val+=Number(o.sell)||0;if(o.paid)paidn++;else if(_naClosed(o))nacl++;else if(o.supplied||o.bill_no)inv++;else pend++;});
+      tl.innerHTML=`📋 ${list.length} order · <span class="puProfit">Rs ${fmt(val)}</span> · 🔵 ${pend} pending · 🟠 ${inv} invoiced · 🟢 ${paidn} paid${nacl?' · 🚫 '+nacl+' cancel':''}`;}
     const chip=_listFilter?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px">${esc(_filterLabel())} · ${list.length}</span><span id="fltClear" style="cursor:pointer;color:var(--red);font-size:12px;font-weight:700">✕ clear</span></div>`:'';
     const rk=x=>x.al?x.al.lvl:9;
     list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
@@ -5473,10 +5473,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     out.innerHTML='<div style="font-size:12px;color:var(--muted)"><span class="spin"></span> Business Advisor யோசிக்கிறது…</div>';
     // full business snapshot
     const today=_todayKey();
-    let totVal=0,totProfit=0,costedVal=0,pend=0,inv=0,paid=0,ldLate=0,noItem=0;
+    let totVal=0,totProfit=0,costedVal=0,pend=0,inv=0,paid=0,ldLate=0,noItem=0,naCl=0;
     const camp={},veh={},comp={},sup={};
     orders.forEach(o=>{const sell=Number(o.sell)||0;totVal+=sell;const pv=profitVal(o);if(pv!==null){totProfit+=pv;costedVal+=sell;}
-      if(o.paid)paid++;else if(o.supplied||o.bill_no)inv++;else pend++;
+      if(o.paid)paid++;else if(_naClosed(o))naCl++;else if(o.supplied||o.bill_no)inv++;else pend++;
       const a=deliveryAlert(o);if(a&&a.lvl===0&&!(o.paid||o.bill_no||o.supplied))ldLate++;
       if(!(o.items||[]).length)noItem++;
       const c=_campOf(o);camp[c]=camp[c]||{n:0,v:0,p:0};camp[c].n++;camp[c].v+=sell;if(pv!==null)camp[c].p+=pv;
@@ -5512,7 +5512,7 @@ Think deep like a real business advisor, use the numbers, don't invent. Snapshot
     const out=$('aiStaffOut');if(!out)return;
     out.innerHTML='<div style="font-size:12px;color:var(--muted)"><span class="spin"></span> AI யோசிக்கிறது…</div>';
     const today=_todayKey();
-    const pend=orders.filter(o=>!o.paid&&!o.bill_no&&!o.supplied);
+    const pend=orders.filter(o=>!o.paid&&!o.bill_no&&!o.supplied&&!_naClosed(o));
     if(!pend.length){out.innerHTML='<div class="empty">Pending order இல்ல 🎉</div>';return;}
     const rows=pend.map(o=>{const dd=o.delivery_date||'';const ds=daysSince(dd);return{no:o.order_no,camp:_campOf(o),veh:o.model||'',naha:o.naha_no||'',items:(o.items||[]).length,delivery:dd,days_left:ds==null?null:-ds,staff:o.assignee_name||o.assignee||'',stage:_stageOf(o)};})
       .sort((a,b)=>((a.days_left==null?9999:a.days_left)-(b.days_left==null?9999:b.days_left))).slice(0,60);
@@ -5945,7 +5945,7 @@ Pending orders (JSON, sorted by urgency, max 60): ${JSON.stringify(rows)}`;
     const box=$('campPendStrip');if(!box)return;
     const compSel=(($('compFilter')||{}).value)||'all';
     const camp={},co={'NGRD Motors':{n:0,v:0},'Puspha Motors':{n:0,v:0}};
-    orders.forEach(o=>{if(o.paid||o.bill_no||o.supplied)return;
+    orders.forEach(o=>{if(o.paid||o.bill_no||o.supplied||_naClosed(o))return;   // cancel கேட்டாச்சு → pending இல்ல
       const cm=_companyOf(o),val=Number(o.sell)||0;
       if(co[cm]){co[cm].n++;co[cm].v+=val;}
       if(compSel!=='all'&&cm!==compSel)return;   // chips follow the company filter
