@@ -1303,9 +1303,12 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   function _isAllNA(o){const its=(o.items||[]);return its.length>0&&its.every(it=>it.na);}
   // முழு order-um N/A + N/A letter அனுப்பியாச்சு → order முடிஞ்சது.
   // supply பண்ண ஒண்ணும் இல்ல, வர பணமும் இல்ல — எந்த pending list-lum காட்டக்கூடாது.
-  // na_full = item row இல்லாத order-a "ஒண்ணுமே supply ஆகல"-னு Siva உறுதி பண்ணினது
-  function _naClosed(o){return (_isAllNA(o)||!!(o&&o.na_full))&&_naLetterDone(o);}
-  function statusOf(o){if(o.paid)return{t:'Paid 🟢',c:'b-paid'};if(_isAllNA(o))return{t:_naLetterDone(o)?'N/A 🚫 Letter ✓':'N/A 🚫 Letter ⏳',c:_naLetterDone(o)?'b-na':'b-nawarn'};if(o.supplied||o.bill_no)return{t:'Invoiced 🟠',c:'b-inv'};return{t:'Pending 🔵',c:'b-pend'};}
+  // "இந்த order-la ஒண்ணுமே supply ஆகாது" — item-la N/A tick பண்ணியிருக்கலாம்,
+  // இல்ல camp N/A letter போடும்போது na_full-னு உறுதி பண்ணியிருக்கலாம். ரெண்டும் ஒண்ணே.
+  // status, LD risk, payment due, VAT — எல்லாம் இத தான் பாக்கணும், _isAllNA-வ இல்ல.
+  function _naAll(o){return _isAllNA(o)||!!(o&&o.na_full);}
+  function _naClosed(o){return _naAll(o)&&_naLetterDone(o);}
+  function statusOf(o){if(o.paid)return{t:'Paid 🟢',c:'b-paid'};if(_naAll(o))return{t:_naLetterDone(o)?'N/A 🚫 Letter ✓':'N/A 🚫 Letter ⏳',c:_naLetterDone(o)?'b-na':'b-nawarn'};if(o.supplied||o.bill_no)return{t:'Invoiced 🟠',c:'b-inv'};return{t:'Pending 🔵',c:'b-pend'};}
 
   function parseDate(s){
     if(!s)return null;s=String(s).trim();
@@ -1319,7 +1322,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   function daysLeft(o){const d=parseDate(o.delivery_date);if(!d)return null;const t=new Date();t.setHours(0,0,0,0);d.setHours(0,0,0,0);return Math.round((d-t)/86400000);}
   function deliveryAlert(o){
-    if(o.supplied||_isAllNA(o))return null; // supply ஆச்சு / முழுக N/A — LD risk இல்ல
+    if(o.supplied||_naAll(o))return null; // supply ஆச்சு / முழுக N/A — LD risk இல்ல
     const dl=daysLeft(o);if(dl===null)return null;
     if(dl<0)return{lvl:0,c:'al-urgent',t:'🔴 Delivery '+(-dl)+' நாள் தாண்டிடுச்சு — LD risk!'};
     if(dl<=3)return{lvl:0,c:'al-urgent',t:'🔴 இன்னும் '+dl+' நாள் — சீக்கிரம் supply! LD risk'};
@@ -1329,7 +1332,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   function daysSince(s){const d=parseDate(s);if(!d)return null;const t=new Date();t.setHours(0,0,0,0);d.setHours(0,0,0,0);return Math.round((t-d)/86400000);}
   function paymentAlert(o){
     if(o.paid)return null; // பணம் வந்தாச்சு
-    if(_isAllNA(o))return null; // எல்லாம் N/A — payment due இல்ல
+    if(_naAll(o))return null; // எல்லாம் N/A — payment due இல்ல
     if(!(o.supplied||o.bill_no))return null; // supply ஆகல, payment due இல்ல
     const base=o.bill_date||o.delivery_date;const ds=daysSince(base);if(ds===null)return null;
     const left=45-ds; // Navy 45 நாள்ல cheque
@@ -1961,7 +1964,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     list.sort((a,b)=>(rk(a)-rk(b))||((b.o.savedAt||'').localeCompare(a.o.savedAt||'')));
     if(!list.length){lc.innerHTML=chip+'<div class="empty">'+(q?'🔍 "'+esc(q)+'" — match ஆகல':'இந்த filter-க்கு order இல்ல')+'</div>';const fc=$('fltClear');if(fc)fc.onclick=()=>{_listFilter=null;renderList();};return;}
     lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
-      const overdue=!(o.paid||o.bill_no||o.supplied||_isAllNA(o))&&o.delivery_date&&daysSince(o.delivery_date)>0;
+      const overdue=!(o.paid||o.bill_no||o.supplied||_naAll(o))&&o.delivery_date&&daysSince(o.delivery_date)>0;
       return `<div class="orow"${overdue?' style="border-left:4px solid #c2452f"':''}><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${overdue?' <span class="badge" style="background:#fdecec;color:#c2452f">⏰ Overdue '+daysSince(o.delivery_date)+'d</span>':''}${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
           <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}${o.model?' · 🚗 '+esc(o.model):''}${o.naha_no?' · '+esc(o.naha_no):''}</div>
@@ -1977,7 +1980,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       else{box.classList.add('hide');box.innerHTML='';}
     }));
   }
-  function statusKey(o){return o.paid?'paid':_isAllNA(o)?'na':(o.supplied||o.bill_no)?'invoiced':'pending';}
+  function statusKey(o){return o.paid?'paid':_naAll(o)?'na':(o.supplied||o.bill_no)?'invoiced':'pending';}
   let repFiltered=[];
   function initReport(){
     const sel=$('repCamp');const camps=Array.from(new Set(orders.map(o=>_campOf(o)))).sort();
@@ -3051,7 +3054,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   // bill date VAT registration date-க்கு அப்பறமா இருந்தா மட்டும் VAT letter
   function _vatEligible(o){
     const v=_vatCfg(o);if(!v)return false;
-    if(_isAllNA(o))return false;   // ஒரு item-um supply ஆகல → VAT letter இல்ல
+    if(_naAll(o))return false;   // ஒரு item-um supply ஆகல → VAT letter இல்ல
     const d=(o.bill_date||o.supply_date||'').slice(0,10);
     if(!d)return false;
     return d>=v.from;
@@ -3068,7 +3071,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(billed)return billed;
     const ba=Number(o.bill_amt)||0;
     if(!its.some(x=>x.na))return ba||Number(o.sell)||0;
-    if(_isAllNA(o))return 0;                 // supply-ஏ இல்ல → VAT இல்ல
+    if(_naAll(o))return 0;                 // supply-ஏ இல்ல → VAT இல்ல
     const eff=_effVal(o);
     if(!eff)return ba||Number(o.sell)||0;    // N/A-ku value இல்ல → கையால போடணும்
     return ba?Math.min(ba,eff):eff;
@@ -3379,7 +3382,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   function _vatModal(o){
     const v=_vatCfg(o);
     if(!v){showInfoModal('VAT இல்ல','இந்த order <b>NGRD Motors</b>. NGRD non-VAT — VAT letter அனுப்பக்கூடாது bro.');return;}
-    if(_isAllNA(o)){showInfoModal('Supply-ஏ இல்ல','இந்த order-ல <b>எல்லா item-um N/A</b>. ஒண்ணும் supply ஆகல, invoice-um இல்ல — அதனால VAT letter கிடையாது bro. <b>N/A Letter</b> அனுப்பி order cancel பண்ண சொல்லு.');return;}
+    if(_naAll(o)){showInfoModal('Supply-ஏ இல்ல','இந்த order-ல <b>எல்லா item-um N/A</b>. ஒண்ணும் supply ஆகல, invoice-um இல்ல — அதனால VAT letter கிடையாது bro. <b>N/A Letter</b> அனுப்பி order cancel பண்ண சொல்லு.');return;}
     if(!_vatEligible(o)){showInfoModal('VAT date-க்கு முன்னாடி','Bill date <b>'+esc(o.bill_date||'—')+'</b>. VAT registration <b>'+esc(v.fromTxt)+'</b>-ல இருந்து தான். அதுக்கு முன்னாடி supply-க்கு VAT சேர்க்கக்கூடாது.');return;}
     const dl=_vatCertDaysLeft(o);
     const _amt=_vatBase(o);
@@ -5330,8 +5333,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       :sk==='na'?'<span class="sb" style="background:'+(_naLetterDone(o)?'#f2f2f4;color:#6b6b76':'#fff4e5;color:#a35a00')+'">🚫 N/A '+(_naLetterDone(o)?'· Letter ✓':'· Letter ⏳')+'</span>'
       :sk==='invoiced'?'<span class="sb" style="background:var(--amber-bg);color:var(--amber)">🟠 Invoiced</span>'
       :'<span class="sb" style="background:#e8f0fb;color:#2563b5">🔵 Pending</span>';
-    const supLine=_isAllNA(o)
-      ? `<div class="supL no">🚫 எல்லா item-ும் N/A — supply இல்ல${_naLetterDone(o)?' · Navy letter ✅ '+esc(o.na_letter.date):' · <b>Navy letter இன்னும் குடுக்கல</b>'}</div>`
+    const supLine=_naAll(o)
+      ? `<div class="supL no">🚫 ${_isAllNA(o)?'எல்லா item-ும் N/A':'Supply பண்ண முடியல'} — cancel கேட்டாச்சு${_naLetterDone(o)?' · Navy letter ✅ '+esc((o.na_letter&&o.na_letter.date)||''):' · <b>Navy letter இன்னும் குடுக்கல</b>'}</div>`
       : supplied
       ? `<div class="supL ok">✅ Supply ஆச்சு${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''}</div>`
       : `<div class="supL no">⏳ இன்னும் supply ஆகல</div>`;
