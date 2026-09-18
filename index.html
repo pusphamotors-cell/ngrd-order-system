@@ -4672,6 +4672,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(!_cpRatesLoaded)_cpLoadRates().then(()=>renderCommission());
   }
   async function _cpSaveRates(){try{await window.storage.set('cfg:commRates',JSON.stringify(_cpRates));}catch(e){}}
+  function _cpDMY(d){if(!d)return '';const x=new Date(d);return isNaN(x)?String(d):x.toLocaleDateString('en-GB');}
   function _cpRate(o){const r=(_cpRates||_CP_DEF)[_cpAg]||{};return Number(_isEgp(o)?r.egp:r.non)||0;}
   function _cpComm(o){return (Number(o.sell)||0)*_cpRate(o)/100;}
   function _cpMonthOf(o){return (String(o.bill_date||o.order_date||'').match(/\d{4}-\d{2}/)||[''])[0];}
@@ -4773,7 +4774,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       const t=sel.reduce((a,o)=>a+_cpComm(o),0);
       // PDF-la சரியான % தெரியணும் — order-la இப்ப போட்ட rate-a வெச்சு காட்டு
       sel.forEach(o=>{if(_cpAg==='apo')o.apo_pct=_cpRate(o);else o.clark_pct=_cpRate(o);});
-      openCommissionPDF(agL(),sel,_cpCamp,{agKey:_cpAg,subTitle:sel.length+' order · Rs '+fmt(t),paidTo:(q('cpTo').value||'').trim()});
+      const md=q('cpMode').value||'cash';
+      openCommissionPDF(agL(),sel,'all',{agKey:_cpAg,subTitle:sel.length+' order · Rs '+fmt(t),
+        paidTo:(q('cpTo').value||'').trim(),paidDate:_cpDMY(q('cpDate').value),
+        paidModeLabel:(_CP_MODES.find(m=>m[0]===md)||['',''])[1].replace(/^\S+\s/,''),paidRef:(q('cpRef').value||'').trim()});
     };
     if(q('cpPay'))q('cpPay').onclick=async()=>{
       const sel=picked();
@@ -4799,7 +4803,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       }
       _cpSel={};
       if(failed.length)showInfoModal('⚠️ சில save ஆகல',failed.length+' order save ஆகல — internet check பண்ணி மறுபடி பண்ணு bro:<br><br>'+failed.slice(0,8).map(esc).join('<br>'));
-      openCommissionPDF(agL(),sel,_cpCamp,{agKey:_cpAg,subTitle:sel.length+' order · Rs '+fmt(t),paidTo:to});
+      openCommissionPDF(agL(),sel,'all',{agKey:_cpAg,subTitle:sel.length+' order · Rs '+fmt(t),paidTo:to,
+        paidDate:_cpDMY(dt),paidModeLabel:modeL.replace(/^\S+\s/,''),paidRef:ref});
       renderCommission();
     };
   }
@@ -4937,7 +4942,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const page=`<div style="padding:24px 28px;font-family:Arial,sans-serif;color:#111">
       ${head}
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:12px">
-        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)} &nbsp;·&nbsp; Month: <b>${esc(monTxt)}</b><br><span style="font-size:10px;color:#666">${opts.agKey?'Order-wise saved %':'Non-eGP '+nonPct+'% · eGP '+egpPct+'%'}</span>${opts.subTitle?'<br><span style="font-size:10px;color:#0b6b4a;font-weight:700">'+esc(opts.subTitle)+'</span>':''}</div>
+        <div><span style="font-size:15px;font-weight:800">COMMISSION STATEMENT</span><br>Agent: <b>${esc(name)}</b><br>Camp: ${esc(campTxt)} &nbsp;·&nbsp; Month: <b>${esc(monTxt)}</b><br><span style="font-size:10px;color:#666">${opts.agKey?'Order-wise saved %':'Non-eGP '+nonPct+'% · eGP '+egpPct+'%'}</span>${opts.subTitle?'<br><span style="font-size:10px;color:#0b6b4a;font-weight:700">'+esc(opts.subTitle)+'</span>':''}${opts.paidDate?'<br><span style="font-size:11px;font-weight:700">Paid: '+esc(opts.paidDate)+' &middot; '+esc(opts.paidModeLabel||'')+(opts.paidRef?' &middot; '+esc(opts.paidRef):'')+'</span>':''}</div>
         <div style="text-align:right">Date: ${today}<br>Orders: ${list.length}${naL.length?' <span style="font-size:10px;color:#b00">+ '+naL.length+' N/A</span>':''}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
@@ -4955,8 +4960,17 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         </tr></thead><tbody>${rows}</tbody>
         <tfoot><tr><td colspan="7" style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">Total Value / Commission (Rs)</td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(gvalue)}</td><td style="border:1px solid #ccc"></td><td style="border:1px solid #ccc;padding:8px;text-align:right;font-weight:800">${fmt(total)}</td></tr></tfoot>
       </table>
-      <div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px">
-        <div>__________________________<br>Received by${opts.paidTo?': <b>'+esc(opts.paidTo)+'</b> <span style="font-size:10px;color:#666">(for '+esc(name)+')</span>':' ('+esc(name)+')'}</div>
+      ${opts.paidDate?`<table style="margin-top:20px;border-collapse:collapse;font-size:12px">
+        <tr>
+          <td style="border:1px solid #0b2a4a;padding:6px 12px;background:#eef2f8;font-weight:700">Paid on</td>
+          <td style="border:1px solid #0b2a4a;padding:6px 12px;font-weight:700">${esc(opts.paidDate)}</td>
+          <td style="border:1px solid #0b2a4a;padding:6px 12px;background:#eef2f8;font-weight:700">Paid by</td>
+          <td style="border:1px solid #0b2a4a;padding:6px 12px;font-weight:700">${esc(opts.paidModeLabel||'')}</td>
+          ${opts.paidRef?`<td style="border:1px solid #0b2a4a;padding:6px 12px;background:#eef2f8;font-weight:700">Ref</td>
+          <td style="border:1px solid #0b2a4a;padding:6px 12px">${esc(opts.paidRef)}</td>`:''}
+        </tr></table>`:''}
+      <div style="margin-top:${opts.paidDate?'34':'44'}px;display:flex;justify-content:space-between;font-size:12px">
+        <div>__________________________<br>Received by${opts.paidTo?': <b>'+esc(opts.paidTo)+'</b> <span style="font-size:10px;color:#666">(for '+esc(name)+')</span>':' ('+esc(name)+')'}${opts.paidDate?'<br><span style="font-size:10px;color:#666">Date: '+esc(opts.paidDate)+'</span>':''}</div>
         <div style="text-align:right;padding-top:18px">For N.G.R.D. MOTORS</div>
       </div>
       <div style="margin-top:16px;font-size:10px;color:#777;border-top:1px solid #ccc;padding-top:6px">Commission statement</div>
