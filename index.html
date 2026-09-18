@@ -3603,7 +3603,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Yours faithfully,<br><b>For ${ci.name}</b><div class="line">Proprietor / Authorized Signatory</div></div>${opt.seal?`<img src="${_extStamp(co)}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
       <div class="encl"><b>Encl:</b> Annexure &mdash; particulars of ${theOrders}</div>
       <div class="ann">ANNEXURE</div>
-      <div class="annsub">Particulars of the Purchase Order${plural?'s':''} referred to herein</div>
+      <div class="annsub">Particulars of the Purchase Order${plural?'s':''} referred to in our letter dated ${today},<br>addressed to Sri Lanka Navy &mdash; ${esc(camp)}, by ${ci.name}</div>
       <table><thead><tr><th style="width:36px">No</th><th>Purchase Order No</th><th>File No</th><th style="width:100px">Order Date</th></tr></thead>
       <tbody>${annex}</tbody></table>`;
       pages.push(body);
@@ -3615,7 +3615,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     .hd{text-align:center;border-bottom:3px double #0b2a4a;padding-bottom:10px;margin-bottom:6px}.hd h1{margin:0;color:#0b2a4a;font-size:28px;letter-spacing:1px}.hd .sub{color:#a33;font-size:11.5px;margin-top:2px}.hd .a{font-size:11px;color:#333;margin-top:4px}
     .meta{display:flex;justify-content:space-between;margin:14px 0 6px;font-size:12.5px}
     .sub2{text-align:center;font-weight:bold;text-decoration:underline;margin:14px 0 8px;font-size:14px}
-    .ann{text-align:center;font-weight:bold;font-size:13px;letter-spacing:2px;margin:26px 0 2px;color:#0b2a4a;text-decoration:underline}
+    /* Annexure தனி தாள்-ல. letter ஒரு தாள், annexure ஒரு தாள் —
+       table page நடுவுல ஒடையாது, camp-la file பண்றதுக்கும் சுலபம். */
+    .ann{text-align:center;font-weight:bold;font-size:13px;letter-spacing:2px;margin:0 0 2px;color:#0b2a4a;text-decoration:underline;page-break-before:always;break-before:page;padding-top:6px}
     .annsub{text-align:center;font-size:11.5px;color:#444;margin-bottom:6px;font-style:italic}
     ol.np{margin:10px 0;padding-left:28px}
     ol.np li{margin:9px 0;text-align:justify;padding-left:4px;page-break-inside:avoid;break-inside:avoid}
