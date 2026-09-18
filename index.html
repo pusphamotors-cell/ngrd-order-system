@@ -4699,11 +4699,28 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const billed=orders.filter(o=>o.bill_no&&inScope(o));
     return {
       billed:billed.length,
+      // தேடல் இல்லாம, இந்த camp/month-la எத்தன கொடுக்கலாம் — தேடல் இத மாத்தக்கூடாது
+      open:_cpBase().filter(inScope).length,
       paid:billed.filter(o=>_agPaid(o,_cpAg)).length,
       na:billed.filter(o=>!_agPaid(o,_cpAg)&&_agNA(o,_cpAg)).length,
       closed:billed.filter(o=>_naClosed(o)).length,
       noBill:orders.filter(o=>!o.bill_no&&inScope(o)).length
     };
+  }
+  // தேடின order list-la வரலைனா, அது எங்க போச்சு-னு சொல்லு
+  function _cpMissing(){
+    const q=_cpQ.trim().toLowerCase();if(!q)return [];
+    const hay=o=>((o.order_no||'')+' '+(o.bill_no||'')+' '+_campOf(o)).toLowerCase();
+    return orders.filter(o=>hay(o).indexOf(q)>=0).map(o=>{
+      let why='';
+      if(!o.bill_no)why='bill இன்னும் போடல — bill போட்டா தான் commission';
+      else if(_naClosed(o))why='N/A letter குடுத்து cancel ஆன order';
+      else if(_agPaid(o,_cpAg))why=(_cpAg==='apo'?'Apo':'Clark')+'-ku ஏற்கனவே குடுத்தாச்சு'+((_cpAg==='apo'?o.apo_paid_date:o.clark_paid_date)?' ('+esc(_cpAg==='apo'?o.apo_paid_date:o.clark_paid_date)+')':'');
+      else if(_agNA(o,_cpAg))why='இந்த agent-ku 🚫 N/A mark பண்ணியிருக்கு — கீழ tick பண்ணா வரும்';
+      else if(_cpCamp!=='all'&&_campOf(o)!==_cpCamp)why='வேற camp — '+_campOf(o);
+      else if(_cpMonth!=='all'&&_cpMonthOf(o)!==_cpMonth)why='வேற month — '+(_cpMonthOf(o)||'date இல்ல');
+      return why?{o,why}:null;
+    }).filter(Boolean);
   }
   function _cpList(){
     const q=_cpQ.trim().toLowerCase();
@@ -4728,7 +4745,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const offScreen=sel.length-list.filter(o=>_cpSel[o.id]).length;   // தெரியாம tick ஆகி இருக்கிறது
     const egpN=list.filter(_isEgp).length,nonN=list.length-egpN;
     const noRate=sel.filter(o=>_cpRate(o)<=0);
-    const why=_cpWhy();
+    const why=_cpWhy(),miss=_cpMissing();
     const rows=list.map(o=>{
       const eg=_isEgp(o),rt=_cpRate(o),cm=_cpComm(o);
       return `<label class="cpk ${_cpSel[o.id]?'on':''}">
@@ -4751,9 +4768,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       </div>
       <div class="fld"><label>🔍 Order No / Bill No தேடு</label><input id="cpQ" value="${esc(_cpQ)}" placeholder="உதा: 1680" autocomplete="off"></div>
       <div style="font-size:11px;background:#f3f6fb;border-radius:8px;padding:7px 10px;margin-bottom:7px">
-        <b>${why.billed}</b> order-ku bill போட்டாச்சு ${_cpCamp==='all'&&_cpMonth==='all'?'':'(இந்த filter-ல)'} —
-        <span style="color:var(--green);font-weight:700">${list.length}</span> குடுக்கலாம்${why.paid?` &nbsp;·&nbsp; <span style="color:var(--muted)">${why.paid} ஏற்கனவே குடுத்தாச்சு</span>`:''}${why.na?` &nbsp;·&nbsp; <span style="color:#a35a00">${why.na} 🚫 N/A mark</span>`:''}${why.closed?` &nbsp;·&nbsp; <span style="color:var(--muted)">${why.closed} cancel</span>`:''}
+        <b>${why.billed}</b> order-ku bill போட்டாச்சு ${_cpCamp==='all'&&_cpMonth==='all'?'':'(இந்த camp/month-ல)'} —
+        <span style="color:var(--green);font-weight:700">${why.open}</span> குடுக்கலாம்${why.paid?` &nbsp;·&nbsp; <span style="color:var(--muted)">${why.paid} ஏற்கனவே குடுத்தாச்சு</span>`:''}${why.na?` &nbsp;·&nbsp; <span style="color:#a35a00">${why.na} 🚫 N/A mark</span>`:''}${why.closed?` &nbsp;·&nbsp; <span style="color:var(--muted)">${why.closed} cancel</span>`:''}
         ${why.noBill?`<div style="color:var(--muted);margin-top:2px">${why.noBill} order-ku இன்னும் bill இல்ல — bill போட்டா தான் commission</div>`:''}
+        ${_cpQ.trim()?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--line)">🔍 "<b>${esc(_cpQ.trim())}</b>" — <b>${list.length}</b> கிடைச்சது${miss.length?`<div style="color:#a35a00;margin-top:2px">${miss.map(m=>'<b>'+esc(m.o.order_no)+'</b> — '+m.why).join('<br>')}</div>`:(list.length?'':'<div style="color:var(--muted);margin-top:2px">இந்த number-la order எதுவும் இல்ல</div>')}</div>`:''}
         ${why.na?`<label style="display:flex;align-items:center;gap:5px;margin-top:4px;color:#a35a00"><input type="checkbox" id="cpShowNA" ${_cpShowNA?'checked':''}> 🚫 N/A mark பண்ண ${why.na} order-um காட்டு</label>`:''}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:6px"><button class="btn" id="cpAll" style="margin:0;width:auto;padding:5px 10px;font-size:11px;background:#0b2a4a">இந்த ${list.length} order tick</button><button class="btn" id="cpNone" style="margin:0;width:auto;padding:5px 10px;font-size:11px;background:#8a8f98">Clear</button></div>
