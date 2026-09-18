@@ -4694,8 +4694,13 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const base=_cpBase(),list=_cpList();
     const camps=Array.from(new Set(base.map(o=>_campOf(o)))).sort();
     const months=Array.from(new Set(base.map(_cpMonthOf).filter(Boolean))).sort().reverse();
-    const sel=list.filter(o=>_cpSel[o.id]);
+    // tick ஆனது முழு list-la இருந்து — camp/month/தேடல் மாறினாலும் போகாது.
+    // ஒரே payment-la பல camp, ரெண்டு company எல்லாம் சேர்க்கலாம்.
+    const sel=base.filter(o=>_cpSel[o.id]);
     const selT=sel.reduce((a,o)=>a+_cpComm(o),0);
+    const selCo=Array.from(new Set(sel.map(o=>_companyOf(o)))).sort();
+    const selCamps=Array.from(new Set(sel.map(o=>_campOf(o)))).sort();
+    const offScreen=sel.length-list.filter(o=>_cpSel[o.id]).length;   // தெரியாம tick ஆகி இருக்கிறது
     const egpN=list.filter(_isEgp).length,nonN=list.length-egpN;
     const noRate=sel.filter(o=>_cpRate(o)<=0);
     const rows=list.map(o=>{
@@ -4723,6 +4728,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div class="dpanel" style="margin:0 0 8px;padding:0;overflow:hidden"><div style="max-height:260px;overflow-y:auto">${rows||'<div style="padding:12px 13px;font-size:12px;color:var(--muted)">இந்த filter-ல குடுக்க வேண்டியது இல்ல 🎉</div>'}</div></div>
       <div style="background:#eef7ef;border:1px solid #bcd9c0;border-radius:9px;padding:8px 10px;margin-bottom:8px;font-size:12px">
         Tick ஆனது <b>${sel.length}</b> order · <b style="color:var(--navy);font-size:14px">Rs ${fmt(selT)}</b>
+        ${sel.length?`<div style="color:#555;font-size:10.5px;margin-top:3px">${selCo.map(c=>esc(c.replace(' Motors',''))+' '+sel.filter(o=>_companyOf(o)===c).length).join(' · ')}${selCamps.length?' &nbsp;|&nbsp; '+selCamps.map(c=>esc(c.replace(/\s*\(.*\)/,''))+' '+sel.filter(o=>_campOf(o)===c).length).join(' · '):''}</div>`:''}
+        ${offScreen?`<div style="color:#0b6b4a;font-size:10.5px;margin-top:3px">✔️ இந்த filter-ல தெரியாத <b>${offScreen}</b> order-um tick ஆகி இருக்கு — அதுவும் இதே payment-la வரும்</div>`:''}
         ${noRate.length?`<div style="color:#b00;font-weight:700;margin-top:3px">⚠️ ${noRate.length} order-ku % 0 — மேல % போடு</div>`:''}
       </div>
       <div class="grid2">
@@ -4756,7 +4763,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(q('cpNone'))q('cpNone').onclick=()=>{_cpSel={};renderCommission();};
     wrap.querySelectorAll('[data-cpp]').forEach(cb=>cb.onchange=()=>{
       const id=cb.dataset.cpp;if(cb.checked)_cpSel[id]=true;else delete _cpSel[id];renderCommission();});
-    const picked=()=>_cpList().filter(o=>_cpSel[o.id]);
+    const picked=()=>_cpBase().filter(o=>_cpSel[o.id]);   // filter-a மீறி, tick ஆனது எல்லாம்
     const agL=()=>_cpAg==='apo'?'Apo':'Clark';
     if(q('cpPdf'))q('cpPdf').onclick=()=>{
       const sel=picked();if(!sel.length){showInfoModal('Order இல்ல','ஒரு order-avadhu tick பண்ணு bro.');return;}
