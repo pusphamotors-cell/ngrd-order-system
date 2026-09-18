@@ -3422,12 +3422,14 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   let _cnaCamp='',_cnaSel=new Set(),_cnaQ='';
   // Navy letter — English மட்டும். ready-made reason, தமிழ் வர வாய்ப்பே இல்ல.
   // முழு வாக்கியமா இருக்கணும் — letter-ல தனி sentence-a அச்சாகும்
+  // [0] = காலி, இதுவே default. para 2-ஏ "stock-lyum இல்ல market-lyum இல்ல"-னு
+  // சொல்லிடுது — extra காரணம் சொன்னா அது நிரூபிக்க வேண்டிய claim ஆயிடும்.
   const _CNA_REASONS=[
-    'The items have been discontinued by the manufacturer and are no longer obtainable from any local source.',
-    'The items are not presently available with any of our regular suppliers, nor in the open market.',
+    '',
+    'The items have been discontinued by the manufacturer and are no longer in production.',
+    'The items are not held by any supplier in the local trade at present.',
     'The vehicles concerned are of an obsolete model, and spares therefor are no longer in production.',
-    'The items are obtainable only against direct importation, which cannot be effected within the delivery period stipulated.',
-    ''
+    'The items are obtainable only against direct importation, which cannot be effected within the delivery period stipulated.'
   ];
   // தமிழ் (U+0B80–U+0BFF) / சிங்களம் (U+0D80–U+0DFF) எழுத்து இருக்கா?
   function _hasLocalScript(s){return /[஀-௿඀-෿]/.test(String(s||''));}
@@ -3504,8 +3506,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ${q?`<div style="font-size:11px;color:#0b6b4a;margin:-2px 0 6px">🔍 "${esc(_cnaQ)}" — ${list.length}/${inCamp.length} order${_cnaSel.size?` · tick ஆனது ${_cnaSel.size} (தேடல் மாறினாலும் tick போகாது)`:''}</div>`:''}
       <div style="display:flex;gap:8px;margin-bottom:6px"><button class="btn" id="cnaAll" style="margin:0;width:auto;padding:5px 10px;font-size:11px;background:#0b2a4a">${q?'இந்த '+list.length+' result-ஐ tick':'எல்லாம் tick'}</button><button class="btn" id="cnaNone" style="margin:0;width:auto;padding:5px 10px;font-size:11px;background:#8a8f98">Clear</button></div>
       <div class="tablewrap"><table><thead><tr><th style="width:28px"></th><th>Order No</th><th>File No</th><th>Order date</th><th>Co</th><th class="num">Items</th>${showVal?'<th class="num">Value</th>':''}<th>N/A letter</th></tr></thead><tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:10px">இந்த camp-ல இல்ல</td></tr>'}</tbody></table></div>
-      <div class="fld" style="margin-top:9px"><label>Reason — letter-ல அப்படியே அச்சாகும் (English மட்டும்)</label>
-        <select id="cnaReasonSel">${_CNA_REASONS.map((r,i)=>`<option value="${i}">${esc(r||'— (reason வேணாம்)')}</option>`).join('')}<option value="x">✏️ வேற reason — நானே type பண்றேன்</option></select></div>
+      <div class="fld" style="margin-top:9px"><label>Extra reason (option) — letter-ல அப்படியே அச்சாகும் (English மட்டும்)</label>
+        <select id="cnaReasonSel">${_CNA_REASONS.map((r,i)=>`<option value="${i}">${esc(r||'— வேணாம் (பரிந்துரை)')}</option>`).join('')}<option value="x">✏️ வேற reason — நானே type பண்றேன்</option></select></div>
+      <div style="font-size:10px;color:var(--muted);margin:-2px 0 4px">💡 letter-ஏ "stock-lyum இல்ல, market-lyum இல்ல"-னு சொல்லிடும். "manufacturer discontinued" மாதிரி ஒரு காரணம் சேர்த்தா, Navy அத நிரூபிக்க சொல்லலாம் — உறுதியா தெரிஞ்சா மட்டும் சேர்.</div>
       <div class="fld hide" id="cnaReasonBox"><label>Custom reason (English only)</label><input id="cnaReason" placeholder="e.g. obsolete model, no longer manufactured"></div>
       <div style="font-size:10px;color:#a35a00;margin:-2px 0 6px">⚠️ Navy letter — தமிழ் எழுத்து ஒண்ணு இருந்தாலும் print ஆகாது. English மட்டும் bro.</div>
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaLD" checked> ⏱️ <b>LD waiver</b> கேட்கும் பத்தி சேர் <span style="color:var(--muted);font-size:10px">(delivery period முடிஞ்சிருந்தா கண்டிப்பா)</span></label>
@@ -3584,9 +3587,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       // Navy correspondence — number போட்ட paragraph. optional para இருந்தா number தானா சரியாகும்.
       const paras=[
         `We have the honour to refer to the Purchase Order${plural?'s':''} placed upon us by your good office, the particulars of which are set out in the Annexure to this letter.`,
-        `We regret to inform you that the items ordered thereunder are not available in the market.${reason?' '+esc(reason):''} The position affects <b>the entire quantity ordered under ${plural?'each of the said orders':'the said order'}</b>, and we are accordingly unable to effect <b>any supply whatsoever</b> against ${plural?'them':'it'}.`,
-        `We wish to place on record that this position has arisen solely from the non-availability of the said items in the market, and not from any default, delay or negligence on our part. Every endeavour was made to procure the items from all sources available to us, without success.`,
-        `In the circumstances, we respectfully request that ${theOrders} be <b>closed and cancelled</b>, and that this letter be treated as our formal intimation for that purpose.`
+        `We regret to inform you that the items ordered thereunder are <b>neither available in our stocks nor obtainable in the market</b> at present.${reason?' '+esc(reason):''} The position affects <b>the entire quantity ordered under ${plural?'each of the said orders':'the said order'}</b>, and we are accordingly unable to effect <b>any supply whatsoever</b> against ${plural?'them':'it'}.`,
+        `We wish to place on record that this position has arisen solely from the non-availability of the said items, and not from any default, delay or negligence on our part. Every endeavour was made to procure the items from all sources available to us, including our regular suppliers and the open market, without success.`,
+        `As the said items cannot be supplied, we respectfully request that ${theOrders} be <b>closed and cancelled</b>, and that this letter be treated as our formal intimation for that purpose.`
       ];
       if(opt.alt)paras.push(`Should an equivalent or alternative item be acceptable to your good office in respect of any of the orders listed, we shall be pleased to submit a fresh quotation upon being so advised.`);
       if(opt.ld)paras.push(`We further request that <b>liquidated damages, if any, be waived</b> in respect of ${theOrders}, the non-supply having arisen from causes entirely beyond our control.`);
@@ -3596,7 +3599,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div class="meta"><div>To,<br>The Officer in Charge / Superintendent Logistics,<br>Sri Lanka Navy &mdash; ${esc(camp)}</div><div style="text-align:right"><b>Date:</b> ${today}</div></div>
       <div class="sub2">NON-AVAILABILITY OF ORDERED ITEMS AND REQUEST FOR CLOSURE OF ${plural?'PURCHASE ORDERS':'PURCHASE ORDER'}</div>
       <div style="margin-bottom:2px">Sir,</div>
-      ${paras.map((p,i)=>`<p class="np"><span class="pn">${i+1}.</span>${p}</p>`).join('')}
+      <ol class="np">${paras.map(p=>`<li>${p}</li>`).join('')}</ol>
       <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Yours faithfully,<br><b>For ${ci.name}</b><div class="line">Proprietor / Authorized Signatory</div></div>${opt.seal?`<img src="${_extStamp(co)}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
       <div class="encl"><b>Encl:</b> Annexure &mdash; particulars of ${theOrders}</div>
       <div class="ann">ANNEXURE</div>
@@ -3614,8 +3617,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     .sub2{text-align:center;font-weight:bold;text-decoration:underline;margin:14px 0 8px;font-size:14px}
     .ann{text-align:center;font-weight:bold;font-size:13px;letter-spacing:2px;margin:26px 0 2px;color:#0b2a4a;text-decoration:underline}
     .annsub{text-align:center;font-size:11.5px;color:#444;margin-bottom:6px;font-style:italic}
-    .np{margin:9px 0;text-align:justify;position:relative;padding-left:26px}
-    .pn{position:absolute;left:0;font-weight:bold}
+    ol.np{margin:10px 0;padding-left:28px}
+    ol.np li{margin:9px 0;text-align:justify;padding-left:4px;page-break-inside:avoid;break-inside:avoid}
     .encl{margin-top:22px;font-size:12px}
     table{width:100%;border-collapse:collapse;margin:6px 0;page-break-inside:auto}th,td{border:1px solid #444;padding:6px 8px;font-size:12.5px}th{background:#eef2f8}
     tr{page-break-inside:avoid;break-inside:avoid}thead{display:table-header-group}
