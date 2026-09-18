@@ -3431,22 +3431,22 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   ];
   // தமிழ் (U+0B80–U+0BFF) / சிங்களம் (U+0D80–U+0DFF) எழுத்து இருக்கா?
   function _hasLocalScript(s){return /[஀-௿඀-෿]/.test(String(s||''));}
-  // இந்த order-ku letter போடலாமா?
-  //  'all'  = item row இருக்கு, எல்லாமே N/A tick ஆயிருக்கு → கண்டிப்பா சரி
-  //  'none' = item row-ஏ இல்ல (eGP import order). supply/bill ஆகல-னா letter போடலாம்,
-  //           ஆனா "இது முழுசா supply ஆகல" -னு Siva உறுதி சொல்லணும்
-  //  'part' = கொஞ்சம் item மட்டும் N/A → இங்க வேணாம், order card-la தனி letter
-  //  'no'   = supply/bill/paid ஆயிடுச்சு
+  // இந்த order-ku cancel letter போடலாமா?
+  //  'no'   = supply/bill/paid ஆயிடுச்சு → இங்க வரவே கூடாது
+  //  'all'  = item எல்லாமே N/A tick ஆயிருக்கு → உறுதி
+  //  'part' = கொஞ்சம் item மட்டும் N/A → order card-la தனி letter (item list வேணும்)
+  //  'open' = supply ஆகல, ஆனா N/A mark பண்ணல (item row இல்லாததும் இதுல).
+  //           எது supply பண்ண முடியாது-னு Siva-ku தான் தெரியும், app-ku இல்ல.
+  //           அதனால இதுவும் காட்டணும் — ஆனா tick பண்ணி உறுதி சொன்னா தான் letter.
   function _cnaKind(o){
-    if(o.paid)return 'no';
+    if(o.paid||o.supplied||o.bill_no)return 'no';
     const its=o.items||[];
     if(its.length&&its.every(it=>it.na))return 'all';
     if(its.some(it=>it.na))return 'part';
-    if(!its.length&&!o.supplied&&!o.bill_no)return 'none';
-    return 'no';
+    return 'open';
   }
   function _cnaList(){
-    return orders.filter(o=>{const k=_cnaKind(o);return k==='all'||k==='none';})
+    return orders.filter(o=>{const k=_cnaKind(o);return k==='all'||k==='open';})
       .sort((a,b)=>(b.order_date||'').localeCompare(a.order_date||''));
   }
   function renderCampNA(){
@@ -3460,7 +3460,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     // இந்த camp-la எத்தனை order எந்த நிலையில-னு எண்ணிக்கை
     const campAll=orders.filter(o=>_campOf(o)===_cnaCamp);
     const nPart=campAll.filter(o=>_cnaKind(o)==='part').length;
-    const nNone=inCamp.filter(o=>_cnaKind(o)==='none').length;
+    const nNone=inCamp.filter(o=>_cnaKind(o)==='open').length;
     const nFull=inCamp.length-nNone;
     // Order No / File No-la தேடு. last-4 digit போட்டாலும் கிடைக்கும்.
     const q=_cnaQ.trim().toLowerCase();
@@ -3483,7 +3483,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <td style="font-size:10.5px">${(c=>c==='Puspha Motors'?'<b style="color:#6b2d8a">Puspha</b>':c==='NGRD Motors'?'<b style="color:#0b5d6b">NGRD</b>':'<span style="color:#b00;font-weight:700" title="company field காலி — letterhead தெரியாது">⚠️ company இல்ல</span>')(_companyOf(o))}</td>
         <td style="font-size:10px">${kind==='all'
           ?'<span style="color:var(--green);font-weight:700">✅ எல்லா item-um N/A</span> <span style="color:var(--muted)">('+(o.items||[]).length+')</span>'
-          :'<span style="color:#a35a00;font-weight:700" title="இந்த order-la item row-ஏ போடல. supply-um bill-um ஆகல, அதனால letter போடலாம் — ஆனா நீ உறுதி பண்ணு.">⚠️ item row இல்ல</span>'}</td>
+          :'<span style="color:#a35a00;font-weight:700" title="Supply ஆகல. ஆனா N/A mark பண்ணல — எது கிடைக்கல-னு app-ku தெரியாது, நீ தான் சொல்லணும்.">⏳ Pending</span> <span style="color:var(--muted)">'+((o.items||[]).length?(o.items||[]).length+' item':'item row இல்ல')+'</span>'}</td>
         ${showVal?`<td class="num" style="font-size:10.5px">${fmt(val)}</td>`:''}
         <td style="font-size:10px">${sent?'<span style="color:var(--green)">✅ அனுப்பியாச்சு</span>':'<span style="color:var(--red)">⏳ இன்னும் இல்ல</span>'}</td></tr>`;
     }).join('');
@@ -3494,9 +3494,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div style="font-size:11px;background:#f3f6fb;border-radius:8px;padding:7px 10px;margin-bottom:7px">
         <b>${esc(_cnaCamp)}</b> — மொத்தம் ${campAll.length} order<br>
         <span style="color:var(--green)">✅ ${nFull}</span> எல்லா item-um N/A &nbsp;·&nbsp;
-        <span style="color:#a35a00">⚠️ ${nNone}</span> item row இல்ல &nbsp;·&nbsp;
+        <span style="color:#a35a00">⏳ ${nNone}</span> Pending (supply ஆகல) &nbsp;·&nbsp;
         <span style="color:var(--muted)">${nPart} பாதி N/A (இங்க வராது)</span> &nbsp;·&nbsp;
         <span style="color:var(--muted)">${campAll.length-nFull-nNone-nPart} supply/paid</span>
+        <div style="color:var(--navy);margin-top:3px">👉 <b>${nFull+nNone}</b> order-ல இருந்து, supply பண்ண முடியாதத மட்டும் தேடி tick பண்ணு.</div>
         ${nPart?`<div style="color:#a35a00;margin-top:3px">பாதி N/A order-ku order card-la தனி N/A Letter போடு — item list வேணும்.</div>`:''}
       </div>
       <div class="fld"><label>🔍 Order No / File No தேடு <span style="color:var(--muted);font-weight:400">— last 4 digit போட்டாலும் போதும்</span></label><input id="cnaQ" value="${esc(_cnaQ)}" placeholder="உதा: 0814" autocomplete="off"></div>
@@ -3511,7 +3512,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaAlt" checked> 🔄 "equivalent part இருந்தா சொல்லுங்க, quote பண்றேன்" வரி சேர்</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaCopies" checked> 📑 <b>ஒவ்வொரு file-kum தனி copy</b> print பண்ணு <span style="color:var(--muted);font-size:10px">(File No footer-oda)</span></label>
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:5px 0"><input type="checkbox" id="cnaSeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
-      <label style="display:flex;align-items:flex-start;gap:6px;font-size:11.5px;margin:5px 0;padding:6px 9px;background:#fff8e8;border:1px solid #e8d6a8;border-radius:8px"><input type="checkbox" id="cnaOkNone" style="margin-top:2px"> <span>⚠️ <b>item row இல்லாத order-um சேர்</b><br><span style="color:#7a5a00;font-size:10.5px">அந்த order-la ஒண்ணுமே supply ஆகல-னு நான் உறுதியா சொல்றேன்</span></span></label>
+      <label style="display:flex;align-items:flex-start;gap:6px;font-size:11.5px;margin:5px 0;padding:6px 9px;background:#fff8e8;border:1px solid #e8d6a8;border-radius:8px"><input type="checkbox" id="cnaOkNone" style="margin-top:2px"> <span>⚠️ <b>N/A mark பண்ணாத Pending order-um சேர்</b><br><span style="color:#7a5a00;font-size:10.5px">நான் tick பண்ணின order-la ஒண்ணுமே supply பண்ண முடியாது-னு உறுதியா சொல்றேன்</span></span></label>
       <div style="font-size:10px;color:var(--muted);margin:2px 0 4px">📋 Annexure-ல <b>Order No · File No · Order Date</b> மட்டும். Item count-um value-um letter-ல வராது.</div>
       <div id="cnaPrev" style="font-size:11px;color:#0b6b4a;margin:7px 0"></div>
       <button class="btn gold" id="cnaGen" style="margin-top:4px">📄 Letter உருவாக்கு / Print</button>`
@@ -3549,9 +3550,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       const unk=ch.filter(o=>['Puspha Motors','NGRD Motors'].indexOf(_companyOf(o))<0);
       if(unk.length){showInfoModal('Company இல்ல','இந்த order-ku <b>company</b> போடல — NGRD-a Puspha-va-னு தெரியல, letterhead தப்பா போயிடும்:<br><br><b>'+unk.map(o=>esc(o.order_no||'')).join('<br>')+'</b><br><br>Order edit-ல company போட்டுட்டு வா bro. இல்லேனா அந்த order-a untick பண்ணு.');return;}
       // item row இல்லாத order — app-ku "எல்லாம் N/A" -னு உறுதியா தெரியாது. Siva சொல்லணும்.
-      const noIt=ch.filter(o=>_cnaKind(o)==='none');
+      const noIt=ch.filter(o=>_cnaKind(o)==='open');
       if(noIt.length&&!wrap.querySelector('#cnaOkNone').checked){
-        showInfoModal('உறுதி பண்ணு bro','இந்த order-la <b>item row-ஏ போடல</b> — அதனால முழுசா supply ஆகலயா-னு app-ku உறுதியா தெரியாது:<br><br><b>'+noIt.map(o=>esc(o.order_no||'')).join('<br>')+'</b><br><br>இந்த order-la <b>ஒண்ணுமே supply ஆகல</b>-னு நிஜமாவே உறுதியா? அப்படினா கீழ இருக்கிற <b>"item row இல்லாத order-um சேர்" tick box</b>-ஐ tick பண்ணு. இல்லேனா அந்த order-a untick பண்ணு.');return;}
+        showInfoModal('உறுதி பண்ணு bro','இந்த order-a <b>N/A-னு mark பண்ணல</b> — supply பண்ண முடியுமா முடியாதா-னு app-ku தெரியாது:<br><br><b>'+noIt.map(o=>esc(o.order_no||'')).join('<br>')+'</b><br><br>இந்த order-la <b>ஒண்ணுமே supply பண்ண முடியாது</b>-னு நிஜமாவே உறுதியா? அப்படினா கீழ இருக்கிற மஞ்சள் tick box-ஐ tick பண்ணு.<br><br>⚠️ Navy-க்கு cancel letter போயிடும் — supply பண்ண முடியுற order-a தப்பா சேர்த்துடாத bro.');return;}
       const reason=(_rs.value==='x'?(wrap.querySelector('#cnaReason').value||''):_CNA_REASONS[+_rs.value]||'').trim();
       // Navy-க்கு போற letter — தமிழ்/சிங்கள எழுத்து இருந்தா நிறுத்து
       if(_hasLocalScript(reason)){showInfoModal('English மட்டும் bro','Reason-ல <b>தமிழ் எழுத்து</b> இருக்கு. இது Navy-க்கு போற government letter — முழுக்க English-ல தான் இருக்கணும். மேல இருக்கிற ready-made reason-ல ஒண்ணு தேர்ந்தெடு, இல்ல English-ல type பண்ணு.');return;}
