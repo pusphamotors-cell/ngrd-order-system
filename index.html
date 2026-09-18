@@ -4672,6 +4672,14 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(!_cpRatesLoaded)_cpLoadRates().then(()=>renderCommission());
   }
   async function _cpSaveRates(){try{await window.storage.set('cfg:commRates',JSON.stringify(_cpRates));}catch(e){}}
+  function _cpSub(sel,t){
+    const r=(_cpRates||_CP_DEF)[_cpAg]||{};
+    const eg=sel.filter(_isEgp).length,non=sel.length-eg;
+    const bits=[];
+    if(eg)bits.push('eGP '+eg+' @ '+(Number(r.egp)||0)+'%');
+    if(non)bits.push('Non-eGP '+non+' @ '+(Number(r.non)||0)+'%');
+    return sel.length+' order · '+bits.join(' · ')+' · Rs '+fmt(t);
+  }
   function _cpDMY(d){if(!d)return '';const x=new Date(d);return isNaN(x)?String(d):x.toLocaleDateString('en-GB');}
   function _cpRate(o){const r=(_cpRates||_CP_DEF)[_cpAg]||{};return Number(_isEgp(o)?r.egp:r.non)||0;}
   function _cpComm(o){return (Number(o.sell)||0)*_cpRate(o)/100;}
@@ -4713,7 +4721,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         <input type="checkbox" data-cpp="${esc(o.id)}" ${_cpSel[o.id]?'checked':''}>
         <span class="cpk-b"><span class="cpk-o">${esc(o.order_no)}</span>
           <span class="cpk-m">${esc(_campOf(o))}${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''} · ${eg?'<b style="color:#1f5bb5">🏛️ eGP</b>':'<b style="color:#7a5a00">Non-eGP</b>'}</span></span>
-        <span class="cpk-v">${rt>0?fmt(cm):'<span style="color:#b00">% இல்ல</span>'}<small>${rt}% · Rs ${fmt(o.sell)}</small></span></label>`;
+        <span class="cpk-v">${rt>0?fmt(cm):'<span style="color:#7a5a00">0.00</span>'}<small>${rt}%${rt>0?'':' — commission இல்ல'} · Rs ${fmt(o.sell)}</small></span></label>`;
     }).join('');
     return `<div class="dpanel" style="padding:12px 13px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:800;color:var(--navy);margin-bottom:6px">💵 Commission கொடு <span style="font-weight:400;color:var(--muted);font-size:11px">— % போட்டு, order tick பண்ணி, paid mark</span></div>
@@ -4734,7 +4742,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         Tick ஆனது <b>${sel.length}</b> order · <b style="color:var(--navy);font-size:14px">Rs ${fmt(selT)}</b>
         ${sel.length?`<div style="color:#555;font-size:10.5px;margin-top:3px">${selCo.map(c=>esc(c.replace(' Motors',''))+' '+sel.filter(o=>_companyOf(o)===c).length).join(' · ')}${selCamps.length?' &nbsp;|&nbsp; '+selCamps.map(c=>esc(c.replace(/\s*\(.*\)/,''))+' '+sel.filter(o=>_campOf(o)===c).length).join(' · '):''}</div>`:''}
         ${offScreen?`<div style="color:#0b6b4a;font-size:10.5px;margin-top:3px">✔️ இந்த filter-ல தெரியாத <b>${offScreen}</b> order-um tick ஆகி இருக்கு — அதுவும் இதே payment-la வரும்</div>`:''}
-        ${noRate.length?`<div style="color:#b00;font-weight:700;margin-top:3px">⚠️ ${noRate.length} order-ku % 0 — மேல % போடு</div>`:''}
+        ${noRate.length?`<div style="color:#7a5a00;margin-top:3px">ℹ️ ${noRate.length} order-ku % 0 — statement-la வரும், commission Rs 0</div>`:''}
       </div>
       <div class="grid2">
         <div class="fld"><label>Paid date</label><input type="date" id="cpDate" value="${esc(_todayKey?_todayKey():new Date().toISOString().slice(0,10))}"></div>
@@ -4775,15 +4783,21 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       // PDF-la சரியான % தெரியணும் — order-la இப்ப போட்ட rate-a வெச்சு காட்டு
       sel.forEach(o=>{if(_cpAg==='apo')o.apo_pct=_cpRate(o);else o.clark_pct=_cpRate(o);});
       const md=q('cpMode').value||'cash';
-      openCommissionPDF(agL(),sel,'all',{agKey:_cpAg,subTitle:sel.length+' order · Rs '+fmt(t),
+      openCommissionPDF(agL(),sel,'all',{agKey:_cpAg,subTitle:_cpSub(sel,t),
         paidTo:(q('cpTo').value||'').trim(),paidDate:_cpDMY(q('cpDate').value),
         paidModeLabel:(_CP_MODES.find(m=>m[0]===md)||['',''])[1].replace(/^\S+\s/,''),paidRef:(q('cpRef').value||'').trim()});
     };
     if(q('cpPay'))q('cpPay').onclick=async()=>{
       const sel=picked();
       if(!sel.length){showInfoModal('Order இல்ல','ஒரு order-avadhu tick பண்ணு bro.');return;}
+      // 0% order-um statement-la வரும் — commission Rs 0-னு அதுலயே தெரியும்.
+      // ஆனா % போட மறந்துட்டு paid mark பண்ணிடக்கூடாது, அதனால ஒரு தடவ உறுதி கேட்கும்.
       const bad=sel.filter(o=>_cpRate(o)<=0);
-      if(bad.length){showInfoModal('% போடல','<b>'+bad.length+'</b> order-ku % <b>0</b>-வா இருக்கு — commission Rs 0 ஆயிடும்:<br><br>'+bad.slice(0,8).map(o=>esc(o.order_no)).join('<br>')+(bad.length>8?'<br>…':'')+'<br><br>மேல eGP % / non-eGP % போட்டுட்டு வா bro.');return;}
+      if(bad.length&&!await showConfirm('0% order இருக்கு',
+        '<b>'+bad.length+'</b> order-ku % <b>0</b> — அதுக்கு commission <b>Rs 0</b>:<br><br>'
+        +bad.slice(0,6).map(o=>esc(o.order_no)).join('<br>')+(bad.length>6?'<br>… இன்னும் '+(bad.length-6):'')
+        +'<br><br>Statement-la அந்த order வரும், commission 0-னு காட்டும்.<br><b>இப்படியே போகட்டா?</b>'
+        +'<br><span style="color:#999;font-size:11px">% போட மறந்திருந்தா Cancel பண்ணி மேல போடு.</span>'))return;
       const dt=q('cpDate').value||(_todayKey?_todayKey():new Date().toISOString().slice(0,10));
       const mode=q('cpMode').value||'cash';
       const to=(q('cpTo').value||'').trim()||agL();
@@ -4803,7 +4817,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       }
       _cpSel={};
       if(failed.length)showInfoModal('⚠️ சில save ஆகல',failed.length+' order save ஆகல — internet check பண்ணி மறுபடி பண்ணு bro:<br><br>'+failed.slice(0,8).map(esc).join('<br>'));
-      openCommissionPDF(agL(),sel,'all',{agKey:_cpAg,subTitle:sel.length+' order · Rs '+fmt(t),paidTo:to,
+      openCommissionPDF(agL(),sel,'all',{agKey:_cpAg,subTitle:_cpSub(sel,t),paidTo:to,
         paidDate:_cpDMY(dt),paidModeLabel:modeL.replace(/^\S+\s/,''),paidRef:ref});
       renderCommission();
     };
