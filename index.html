@@ -3306,7 +3306,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const camp=_campOf(o);
     const bill=o.bill_no||'';
     const billDate=o.bill_date?new Date(o.bill_date).toLocaleDateString('en-GB'):'';
-    const amt=Number(o.bill_amt)||Number(o.sell)||0;
+    // VAT = supply பண்ணின items மட்டும் (N/A items தவிர) — order total இல்ல
+    const amt=_billedAmount(o);
+    const naItems=(o.items||[]).filter(it=>it.na);
+    const ordTot=Number(o.sell)||0;
     const vatAmt=amt*v.rate/100;
     const html=`<html><head><meta charset="utf-8"><title>VAT Letter ${esc(o.order_no)}</title>
     <style>*{font-family:Georgia,'Times New Roman',serif;box-sizing:border-box}body{margin:0;padding:34px 40px;color:#111;font-size:13.5px;line-height:1.6}
@@ -3325,8 +3328,12 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     <div>Dear Sir,</div>
     <p>We kindly inform you that we have supplied the items of the above referenced order (a) with the invoice referenced above. Further, we have newly registered under VAT with effect from <b>${esc(v.fromTxt)}</b>, and all supporting documents are attached herewith.</p>
     <p>Accordingly, we are required to include <b>VAT at ${v.rate}%</b> on the said invoice, as per the rules and regulations of the Inland Revenue Department of the Government of Sri Lanka. We therefore kindly request you to be good enough to arrange the <b>full invoice payment inclusive of VAT</b> in respect of the above referenced invoice.</p>
+    ${naItems.length?`<p>We respectfully bring to your notice that the following item${naItems.length>1?'s':''} of the above Purchase Order ${naItems.length>1?'were':'was'} <b>not supplied</b>, and ${naItems.length>1?'are':'is'} accordingly <b>excluded</b> from the invoice value and from the VAT computation set out below:</p>
+    <table><thead><tr><th style="width:36px;text-align:center">No</th><th>Item Description</th><th style="width:60px;text-align:center">Qty</th></tr></thead><tbody>${naItems.map((it,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(it.description)}</td><td style="text-align:center">${esc(it.qty)}</td></tr>`).join('')}</tbody></table>`:''}
     ${amt?`<table><tbody>
-      <tr><td>Invoice value (excluding VAT)</td><td style="text-align:right;width:150px">Rs ${fmt(amt)}</td></tr>
+      ${naItems.length&&ordTot?`<tr><td style="color:#555">Purchase Order value</td><td style="text-align:right;width:150px;color:#555">Rs ${fmt(ordTot)}</td></tr>
+      <tr><td style="color:#555">Less: item${naItems.length>1?'s':''} not supplied</td><td style="text-align:right;color:#555">(Rs ${fmt(Math.max(ordTot-amt,0))})</td></tr>`:''}
+      <tr><td><b>Invoice value &mdash; items supplied</b> (excluding VAT)</td><td style="text-align:right;width:150px">Rs ${fmt(amt)}</td></tr>
       <tr><td>VAT @ ${v.rate}%</td><td style="text-align:right">Rs ${fmt(vatAmt)}</td></tr>
       <tr><th style="text-align:left">Total payable</th><th style="text-align:right">Rs ${fmt(amt+vatAmt)}</th></tr>
     </tbody></table>`:''}
@@ -3342,12 +3349,23 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(!v){showInfoModal('VAT இல்ல','இந்த order <b>NGRD Motors</b>. NGRD non-VAT — VAT letter அனுப்பக்கூடாது bro.');return;}
     if(!_vatEligible(o)){showInfoModal('VAT date-க்கு முன்னாடி','Bill date <b>'+esc(o.bill_date||'—')+'</b>. VAT registration <b>'+esc(v.fromTxt)+'</b>-ல இருந்து தான். அதுக்கு முன்னாடி supply-க்கு VAT சேர்க்கக்கூடாது.');return;}
     const dl=_vatCertDaysLeft(o);
+    const _amt=_billedAmount(o);
+    const _na=(o.items||[]).filter(it=>it.na);
+    const _ord=Number(o.sell)||0;
+    const _vat=_amt*v.rate/100;
     const ov=document.createElement('div');ov.className='overlay';
     ov.innerHTML=`<div class="modalbox" style="max-width:480px;text-align:left"><h3>🧾 VAT Intimation Letter</h3>
       <div style="font-size:11.5px;background:#f3f6fb;border-radius:8px;padding:8px 10px;margin-bottom:8px">
         ${esc(o.order_no||'')} · ${esc(_campOf(o))}<br>
         Invoice <b>${esc(o.bill_no||'—')}</b> · ${esc(o.bill_date||'—')}<br>
         VAT Reg <b>${esc(v.vatno)}</b> · from ${esc(v.fromTxt)}</div>
+      <div style="font-size:11.5px;background:#eef7ef;border:1px solid #bcd9c0;border-radius:8px;padding:8px 10px;margin-bottom:8px">
+        ${_na.length?`<div style="color:#8a1c1c;margin-bottom:4px">🚫 <b>${_na.length}</b> item supply ஆகல — VAT-ல சேர்க்கல:<br><span style="color:#555">${_na.map(it=>esc(it.description)).join(' · ')}</span></div>
+        <div style="color:#555">Order total: Rs ${fmt(_ord)}</div>`:''}
+        Supply ஆனது (VAT இல்லாம): <b>Rs ${fmt(_amt)}</b><br>
+        VAT ${v.rate}%: Rs ${fmt(_vat)}<br>
+        <span style="color:var(--navy);font-weight:800">Letter-ல போகும் total: Rs ${fmt(_amt+_vat)}</span></div>
+      ${_na.length&&_amt===_ord?`<div style="font-size:11.5px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#7a5a00">⚠️ N/A item இருக்கு ஆனா supply total குறையல. Item-ku <b>Bill tick</b> பண்ணியிருக்கியா-னு order edit-ல பாரு — இல்லேனா order total-ஏ போகும்.</div>`:''}
       ${dl!==null&&dl<45?`<div style="font-size:11.5px;background:#fff3cd;border:1px solid #e0c060;border-radius:8px;padding:8px 10px;margin-bottom:8px;color:#7a5a00">⚠️ VAT certificate <b>${esc(v.certValidTxt)}</b> வரைக்கும் தான் valid — ${dl} நாள் மிச்சம். IRD-ல renew பண்ணு, இல்லேனா payment stuck ஆகும்.</div>`:''}
       <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin:6px 0"><input type="checkbox" id="vatSeal" checked> 🔴 Seal/Stamp சேர்க்கவா</label>
       <div style="display:flex;gap:8px;margin-top:10px"><button class="btn gold vatGen" style="flex:1;margin:0">📄 Letter உருவாக்கு / Print</button><button class="btn vatClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div></div>`;
