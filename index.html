@@ -4124,12 +4124,12 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   let _cpkNoPct=false,_cpkNaShow=false,_naPickSel={};
   // % podaadha supplied+billed order-um venum-na list-la sekkardhu
   function _cpkExtra(ag){if(!_cpkNoPct)return[];
-    return orders.filter(o=>o.supplied&&o.bill_no&&_agPct(o,ag)<=0&&!_agNA(o,ag)
+    return orders.filter(o=>o.bill_no&&!_naClosed(o)&&_agPct(o,ag)<=0&&!_agNA(o,ag)
       &&(_commCamp==='all'||_campOf(o)===_commCamp)
       &&(_commEgp==='all'||(_commEgp==='egp'?_isEgp(o):!_isEgp(o))));}
   // N/A-va mark panna order list (camp/eGP filter padi)
   function _cpkNaList(ag){
-    return orders.filter(o=>o.supplied&&o.bill_no&&_agNA(o,ag)
+    return orders.filter(o=>o.bill_no&&_agNA(o,ag)
       &&(_commCamp==='all'||_campOf(o)===_commCamp)
       &&(_commEgp==='all'||(_commEgp==='egp'?_isEgp(o):!_isEgp(o))));}
   function _cpkList(list,ag){
@@ -4146,7 +4146,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const campSel=`<div class="fld" style="margin:4px 13px 6px"><label>🏕️ Camp / Buyer</label><select id="cpkCamp"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>`;
     const egpBar=`<div class="modetoggle" style="margin:0 13px 6px"><button class="mbtn ${_commEgp==='all'?'on':''}" data-cpke="all" type="button">எல்லாம் (${bp.length})</button><button class="mbtn ${_commEgp==='egp'?'on':''}" data-cpke="egp" type="button">🏛️ eGP ${_pctLabel(eg,ag)} (${eg.length})</button><button class="mbtn ${_commEgp==='non'?'on':''}" data-cpke="non" type="button">Non-eGP ${_pctLabel(non,ag)} (${non.length})</button></div><div style="margin:0 13px 8px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between"><span>🏛️ eGP <b style=\"color:#1f5bb5\">Rs ${fmt(egT)}</b></span><span>Non-eGP <b style=\"color:#7a5a00\">Rs ${fmt(nonT)}</b></span></div>`;
     const pend=_cpkList(list,ag);
-    const noPctN=orders.filter(o=>o.supplied&&o.bill_no&&_agPct(o,ag)<=0&&!_agNA(o,ag)
+    const noPctN=orders.filter(o=>o.bill_no&&!_naClosed(o)&&_agPct(o,ag)<=0&&!_agNA(o,ag)
       &&(_commCamp==='all'||_campOf(o)===_commCamp)
       &&(_commEgp==='all'||(_commEgp==='egp'?_isEgp(o):!_isEgp(o)))).length;
     const naArr=_cpkNaList(ag),naN=naArr.length;
@@ -4209,9 +4209,9 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const naB=$('cpkNaBulk');if(naB)naB.onclick=async()=>{
       const agB=_commPayAgent,agBL=_agLabel(agB);
       // scope: current camp filter · eGP only · supplied+billed · already-paid-a thodakoodathu
-      const hit=orders.filter(o=>o.supplied&&o.bill_no&&_isEgp(o)&&!_agNA(o,agB)&&!_agPaid(o,agB)
+      const hit=orders.filter(o=>o.bill_no&&!_naClosed(o)&&_isEgp(o)&&!_agNA(o,agB)&&!_agPaid(o,agB)
         &&(_commCamp==='all'||_campOf(o)===_commCamp));
-      const skipped=orders.filter(o=>o.supplied&&o.bill_no&&_isEgp(o)&&_agPaid(o,agB)
+      const skipped=orders.filter(o=>o.bill_no&&_isEgp(o)&&_agPaid(o,agB)
         &&(_commCamp==='all'||_campOf(o)===_commCamp)).length;
       if(!hit.length){alert('இந்த filter-ல N/A பண்ண eGP order இல்ல bro'+(skipped?'\n\n('+skipped+' order ஏற்கனவே paid — அதை தொடல)':''));return;}
       const val=hit.reduce((a,o)=>a+(Number(o.sell)||0),0);
@@ -4677,7 +4677,10 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   function _cpMonthOf(o){return (String(o.bill_date||o.order_date||'').match(/\d{4}-\d{2}/)||[''])[0];}
   // இந்த agent-ku இன்னும் commission குடுக்காத, supply+bill ஆன order
   function _cpBase(){
-    return orders.filter(o=>o.supplied&&o.bill_no&&!_agPaid(o,_cpAg)&&!_agNA(o,_cpAg))
+    // bill போட்டாச்சா — அது தான் commission-ku அளவுகோல்.
+    // o.supplied என்பது தனி "Supply Mark" button; Bill Entry அத தொடாது, அதனால
+    // அத கேட்டா bill போட்ட order-um list-la வராது.
+    return orders.filter(o=>o.bill_no&&!_naClosed(o)&&!_agPaid(o,_cpAg)&&!_agNA(o,_cpAg))
       .sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||''));
   }
   function _cpList(){
@@ -4804,7 +4807,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
   function renderCommission(){
     _cpEnsureRates();
     const wrap=$('repCommWrap');
-    const all=orders.filter(o=>o.supplied&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
+    const all=orders.filter(o=>(o.bill_no||o.supplied)&&((o.apo_pct!=null&&o.apo_pct>0)||(o.clark_pct!=null&&o.clark_pct>0)));
     if(!all.length){wrap.innerHTML=_commPayHtml()+'<div class="empty" style="margin-top:12px">இன்னும் commission record இல்ல — மேல % போட்டு order tick பண்ணி paid mark பண்ணு.</div>';_wireCommPay();return;}
     const camps=Array.from(new Set(all.map(o=>_campOf(o)))).sort();
     const sup0=_commCamp==='all'?all:all.filter(o=>_campOf(o)===_commCamp);
@@ -4987,7 +4990,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     let sections=secOf('Non-eGP Orders',list.filter(o=>!_isEgp(o)),'#eef2f8','#0b2a4a')
                 +secOf('🏛️ eGP Orders',list.filter(_isEgp),'#e7f0ff','#0b2a4a');
     // N/A — no commission (with eGP Ref, excluded from total)
-    const naL=orders.filter(o=>o.supplied&&o.bill_no&&_agNA(o,ag)&&(!camp||camp==='all'||_campOf(o)===camp));
+    const naL=orders.filter(o=>o.bill_no&&_agNA(o,ag)&&(!camp||camp==='all'||_campOf(o)===camp));
     let naVal=0;
     if(naL.length){
       const naRows=naL.slice().sort((a,b)=>(a.bill_date||'').localeCompare(b.bill_date||'')).map(o=>{const v=Number(o.sell)||0;naVal+=v;
