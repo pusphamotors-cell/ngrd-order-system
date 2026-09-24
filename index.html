@@ -3323,7 +3323,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       ?`<p>${_one?'As the above item is the only item ordered under the said Purchase Order':'As all the items ordered under the said Purchase Order are affected as stated above'}, we regret that <b>no supply could be effected</b> against this order. We therefore kindly request you to arrange for the <b>cancellation / closure of the above order</b> accordingly.</p>`
       :`<p>We have supplied the remaining items against the above order${bills.length?' under Invoice No. <b>'+bills.map(esc).join(', ')+'</b>':''}${(function(){const s=(o.items||[]).filter(it=>it.bill).reduce((a,it)=>a+(Number(it.total)||0),0);return s?' (Total: <b>Rs '+(s.toLocaleString('en-US'))+'</b>)':'';})()}. We kindly request you to arrange the <b>payment for the supplied items</b> accordingly.</p>`}
     <p>We apologize for any inconvenience caused and assure you of our best service at all times.</p>
-    <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Thanking you,<br>Yours faithfully,<br><b>For ${comp}</b><div class="line">Authorized Signature</div></div>${withSeal?`<img src="${_extStamp(isP?'Puspha Motors':'NGRD Motors')}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
+    <div class="sign"><div>Thanking you,<br>Yours faithfully,<br><b>For ${comp}</b></div><div style="position:relative;height:${withSeal?88:34}px">${withSeal?`<img src="${_extStamp(isP?'Puspha Motors':'NGRD Motors')}" alt="Seal" style="position:absolute;left:16px;top:6px;width:132px;height:auto;opacity:0.92;transform:rotate(-3deg)"/>`:''}</div><div class="line" style="margin-top:0">Authorized Signature</div></div>
     </body></html>`;
     const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
     w.document.write(html);w.document.close();setTimeout(()=>{try{w.print();}catch(e){}},350);
@@ -3373,7 +3373,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <tr><th style="text-align:left">Total payable</th><th style="text-align:right">Rs ${fmt(amt+vatAmt)}</th></tr>
     </tbody></table>`:''}
     <p>We are much obliged for your kind attention in this regard.</p>
-    <div class="sign" style="display:flex;align-items:flex-end;justify-content:space-between"><div>Thanking you,<br>Yours faithfully,<br><b>For ${ci.name}</b><div class="line">${esc(v.prop)}<br>Proprietor</div></div>${withSeal?`<img src="${_extStamp(_companyOf(o))}" alt="Seal" style="width:130px;height:auto;opacity:0.92;margin-bottom:4px"/>`:''}</div>
+    <div class="sign"><div>Thanking you,<br>Yours faithfully,<br><b>For ${ci.name}</b></div><div style="position:relative;height:${withSeal?88:34}px">${withSeal?`<img src="${_extStamp(_companyOf(o))}" alt="Seal" style="position:absolute;left:16px;top:6px;width:132px;height:auto;opacity:0.92;transform:rotate(-3deg)"/>`:''}</div><div class="line" style="margin-top:0">${esc(v.prop)}<br>Proprietor</div></div>
     <div class="encl"><b>Encl:</b> 01. VAT Registration Certificate (copy) &nbsp;&middot;&nbsp; 02. Tax Invoice No. ${esc(bill||'—')} &nbsp;&middot;&nbsp; 03. Supporting documents</div>
     </body></html>`;
     const w=window.open('','_blank');if(!w){alert('Popup block ஆச்சு — allow பண்ணு bro');return;}
