@@ -421,6 +421,13 @@
     </label>
     <div id="chip"></div>
     <label class="btn" id="camLbl" style="margin-top:8px;text-align:center;cursor:pointer;background:#0b2a4a"><input type="file" id="camFile" accept="image/*" capture="environment" multiple hidden>📷 Camera-ல photo எடு / பல page சேர்</label>
+    <div id="scanBox" style="margin-top:8px;border:1.5px dashed #0b6b4a;border-radius:12px;padding:9px 11px;background:#f1faf5">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn" id="scanConnBtn" type="button" style="margin:0;width:auto;flex:1;background:#0b6b4a">🖨️ Scanner Folder Connect</button>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap"><input type="checkbox" id="scanAuto" checked> Auto Extract</label>
+      </div>
+      <div id="scanStat" style="font-size:11px;color:var(--muted);margin-top:6px">Scanner scan பண்ணி save பண்ற folder-ஐ ஒரு தடவை connect பண்ணு → புது scan வந்த உடனே இங்க தானா வரும், AI Extract-um தானா ஓடும்.</div>
+    </div>
     <textarea class="pastebox hide" id="pasteBox" placeholder="PO text paste பண்ணு... அல்லது image-ஐ Ctrl+V — பல page இருந்தா ஒவ்வொன்னா paste பண்ணு (5-6 வரை)"></textarea>
     <div id="pastePreview" class="hide"></div>
     <button class="btn" id="go" disabled>படி 2 — Extract பண்ணு (AI)</button>
@@ -766,6 +773,69 @@
     mode='paste';$('mPaste').classList.add('on');$('mFile').classList.remove('on');
     $('drop').classList.add('hide');$('chip').classList.add('hide');$('pasteBox').classList.remove('hide');$('pastePreview').classList.remove('hide');
     $('errbox').innerHTML='';renderPasteThumbs();updateGo();e.target.value='';});
+  // ===== 🖨️ Scanner Folder Watch =====
+  // Browser USB scanner-oda direct-aa pesa mudiyaadhu. Scanner scan-a oru folder-la save pannum —
+  // andha folder-a (Chrome/Edge File System Access) watch panni, pudhu file vandhaa New Order-la podrom.
+  const _scan={dir:null,seen:new Set(),timer:null,pend:[],pendT:null,waiting:null,busy:false};
+  const _scanIDB=(mode,val)=>new Promise(res=>{try{const r=indexedDB.open('ngrd_scan',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+    r.onsuccess=()=>{const tx=r.result.transaction('kv',mode==='get'?'readonly':'readwrite');const st=tx.objectStore('kv');
+      const q=mode==='get'?st.get('dir'):st.put(val,'dir');q.onsuccess=()=>res(mode==='get'?q.result:true);q.onerror=()=>res(null);};r.onerror=()=>res(null);}catch(e){res(null);}});
+  const _scanOk=n=>/\.(pdf|jpe?g|png|webp)$/i.test(n);
+  const _scanStat=(h,c)=>{const el=$('scanStat');if(el){el.innerHTML=h;el.style.color=c||'var(--muted)';}};
+  async function _scanList(){const out=[];for await(const [name,h] of _scan.dir.entries()){if(h.kind==='file'&&_scanOk(name))out.push(h);}return out;}
+  async function _scanStart(dir,fresh){
+    _scan.dir=dir;_scan.seen=new Set();
+    try{for(const h of await _scanList()){const f=await h.getFile();_scan.seen.add(h.name+'|'+f.lastModified);}}catch(e){_scanStat('⚠️ Folder படிக்க முடியல — மறுபடி connect பண்ணு','#b00');_scan.dir=null;return;}
+    $('scanConnBtn').textContent='🟢 '+dir.name+' — connected (மாத்த click)';
+    _scanStat('👀 <b>'+esc(dir.name)+'</b> folder-ஐ பாக்குறேன். Scanner-ல scan பண்ணு — புது file வந்த உடனே இங்க வரும்.','#0b6b4a');
+    if(fresh)_scanIDB('put',dir);
+    clearInterval(_scan.timer);_scan.timer=setInterval(_scanPoll,2500);
+  }
+  async function _scanPoll(){
+    if(!_scan.dir||_scan.busy)return;_scan.busy=true;
+    try{for(const h of await _scanList()){const f=await h.getFile();const k=h.name+'|'+f.lastModified;
+        if(_scan.seen.has(k))continue;
+        // scanner innum ezhudhikittu irukkaa? size 2 poll-ku maaralana ready
+        const sz=(_scan.sz=_scan.sz||{});
+        if(!f.size||sz[h.name]!==f.size){sz[h.name]=f.size;continue;}
+        delete sz[h.name];_scan.seen.add(k);_scan.pend.push(f);}
+      if(_scan.pend.length){clearTimeout(_scan.pendT);_scan.pendT=setTimeout(_scanFlush,3000);} // pala page JPG-aa vandhaa onna serkka
+    }catch(e){_scanStat('⚠️ Folder connection போச்சு — 🖨️ button-ஐ மறுபடி அழுத்து','#b00');clearInterval(_scan.timer);}
+    finally{_scan.busy=false;}
+  }
+  function _scanFlush(){
+    const files=_scan.pend.splice(0).sort((a,b)=>a.name.localeCompare(b.name));if(!files.length)return;
+    if(current){_scan.waiting=files;
+      _scanStat('📥 புது scan வந்திருக்கு ('+files.length+' file) — இப்ப இருக்கிற order save பண்ணாம இருக்கு. <a href="#" id="scanLoadNow" style="color:#0b6b4a;font-weight:800">இப்ப load பண்ணு</a>','#9a6b00');
+      const a=$('scanLoadNow');if(a)a.onclick=e=>{e.preventDefault();const w=_scan.waiting;_scan.waiting=null;current=null;$('result').innerHTML='';_scanLoad(w);};return;}
+    _scanLoad(files);
+  }
+  function _scanLoad(files){
+    if(typeof setTab==='function'&&$('viewNew').classList.contains('hide'))setTab('new');
+    $('errbox').innerHTML='';
+    if(files.length===1){mode='file';chosen=files[0];pastedImgs=[];
+      $('mFile').classList.add('on');$('mPaste').classList.remove('on');$('drop').classList.remove('hide');$('chip').classList.remove('hide');$('pasteBox').classList.add('hide');$('pastePreview').classList.add('hide');
+      $('drop').classList.add('has');$('dropbig').textContent='Scan ready ✓';$('chip').innerHTML='<span class="filechip">🖨️ '+esc(chosen.name)+'</span>';}
+    else{mode='paste';chosen=null;pastedImgs=files.slice();
+      $('mPaste').classList.add('on');$('mFile').classList.remove('on');$('drop').classList.add('hide');$('chip').classList.add('hide');$('pasteBox').classList.remove('hide');$('pastePreview').classList.remove('hide');renderPasteThumbs();}
+    updateGo();
+    _scanStat('✅ Scan வந்தாச்சு: <b>'+files.map(f=>esc(f.name)).join(', ')+'</b>'+($('scanAuto').checked?' — AI படிக்குது...':' — "Extract" அழுத்து'),'#0b6b4a');
+    if($('scanAuto').checked&&!$('go').disabled)extract();
+  }
+  $('scanConnBtn').addEventListener('click',async()=>{
+    if(!window.showDirectoryPicker){showInfoModal('இந்த browser-ல முடியாது','Scanner folder connect <b>Chrome</b> அல்லது <b>Edge</b> (computer-ல) மட்டும் தான் வேலை செய்யும். Phone-ல 📷 Camera use பண்ணு.');return;}
+    try{
+      // munnaadi connect panna folder irundhaa, permission mattum thirumba kelu
+      const old=_scan.dir?null:await _scanIDB('get');
+      if(old&&old.requestPermission){const p=await old.requestPermission({mode:'read'});if(p==='granted'){await _scanStart(old,false);return;}}
+      const d=await window.showDirectoryPicker({id:'ngrdScan',mode:'read'});await _scanStart(d,true);
+    }catch(e){if(e&&e.name!=='AbortError')_scanStat('⚠️ '+esc(e.message||e),'#b00');}
+  });
+  // page open aanadhum — permission already irundhaa thaanaa start
+  (async()=>{if(!window.showDirectoryPicker)return;const d=await _scanIDB('get');if(!d)return;
+    try{const p=d.queryPermission?await d.queryPermission({mode:'read'}):'prompt';
+      if(p==='granted')await _scanStart(d,false);
+      else{$('scanConnBtn').textContent='🖨️ '+d.name+' — மறுபடி connect பண்ண click';_scanStat('Browser மூடி திறந்ததால ஒரு click-ல permission கொடு.');}}catch(e){}})();
   const toB64=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('File படிக்க முடியல'));r.readAsDataURL(f);});
   // resize+compress images before upload (fix 413 payload-too-large from big camera photos)
   function _compressImg(file,maxDim,q){maxDim=maxDim||1600;q=q||0.72;
