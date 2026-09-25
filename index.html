@@ -1021,8 +1021,18 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
           </div>
           <button class="btn gold" id="poEditSave" style="margin:8px 0 0">✅ சரி பண்ணது சேமி</button>
         </div>
-        <div class="sec">📦 Items (${(p.items||[]).length})</div>
-        <div class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead><tbody>${rows||'<tr><td colspan=5 class=ctr style="padding:12px;color:#999">item இல்ல</td></tr>'}</tbody></table></div>
+        <div class="sec">📦 Items (${(p.items||[]).length}) <button class="copyprev" id="itEditBtn" style="width:auto;margin:0 0 0 8px;padding:5px 10px;font-size:11px;vertical-align:middle">✏️ Items திருத்து</button></div>
+        <div id="itView" class="tablewrap"><table><thead><tr><th>#</th><th>Item</th><th>Qty</th><th class="num">Unit</th><th class="num">Total</th></tr></thead><tbody>${rows||'<tr><td colspan=5 class=ctr style="padding:12px;color:#999">item இல்ல</td></tr>'}</tbody></table></div>
+        <div id="itEdit" class="hide" style="border:1.5px dashed var(--gold);border-radius:12px;padding:10px 12px;background:#fffdf6;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AI தப்பா படிச்ச item name / qty / விலை-ஐ இங்க சரி பண்ணு. Qty அல்லது Unit மாத்தினா Total தானா கணக்காகும். <b>PO paper-ஓட ஒப்பிட்டு பாரு.</b></div>
+          <div class="tablewrap"><table><thead><tr><th style="width:30px">#</th><th>Item Description</th><th style="width:70px">Qty</th><th style="width:105px" class="num">Unit (Rs)</th><th style="width:115px" class="num">Total (Rs)</th><th style="width:34px"></th></tr></thead><tbody id="itEditBody"></tbody></table></div>
+          <div id="itEditSum" style="font-size:12px;margin:6px 2px;color:var(--navy)"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="itAdd" type="button" style="margin:0;width:auto;padding:8px 12px;background:#0b2a4a">➕ Item சேர்</button>
+            <button class="btn gold" id="itSave" type="button" style="margin:0;flex:1">✅ Items சேமி</button>
+            <button class="btn" id="itCancel" type="button" style="margin:0;width:auto;padding:8px 12px;background:#8a8f98">✖ வேண்டாம்</button>
+          </div>
+        </div>
 
         <div class="sec">💰 லாபம்</div>
         <div class="sec">💰 லாபம்</div>
@@ -1077,6 +1087,65 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       if(keep.mode==='items'&&$('cmItems'))$('cmItems').click();
       recalc();
       showInfoModal('✅ திருத்தி ஆச்சு','PO Details update ஆயிடுச்சு.<br><b>'+esc(current.file_no||'—')+'</b><br><span style="color:#999;font-size:11px">இப்போ கீழ Save பண்ணு.</span>');
+    };
+    // ===== Items திருத்து — AI thappaa padicha item name/qty/price-a save-ku munnaadi sari pannu =====
+    let _itDraft=null;
+    const _n=v=>{const x=Number(String(v==null?'':v).replace(/,/g,''));return isFinite(x)?x:0;};
+    const _itRow=(it,i)=>`<tr data-itr="${i}">
+      <td class="ctr">${i+1}</td>
+      <td><textarea class="itD" rows="2" style="width:100%;min-width:180px;border:1.5px solid var(--line);border-radius:8px;padding:5px 7px;font-family:inherit;font-size:12px;resize:vertical">${esc(it.description||'')}</textarea></td>
+      <td><input class="itQ" type="number" inputmode="decimal" value="${esc(it.qty??'')}" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:5px"></td>
+      <td><input class="itU" type="number" inputmode="decimal" value="${esc(it.unit_price??'')}" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:5px;text-align:right"></td>
+      <td><input class="itT" type="number" inputmode="decimal" value="${esc(it.total??'')}" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:5px;text-align:right"></td>
+      <td class="ctr"><span class="itDel" title="இந்த row-ஐ நீக்கு" style="cursor:pointer;color:#b00;font-size:15px">🗑</span></td></tr>`;
+    const _itRead=()=>{const body=$('itEditBody');if(!body)return;
+      body.querySelectorAll('tr[data-itr]').forEach(tr=>{const it=_itDraft[+tr.dataset.itr];if(!it)return;
+        it.description=tr.querySelector('.itD').value.trim();it.qty=_n(tr.querySelector('.itQ').value);
+        it.unit_price=_n(tr.querySelector('.itU').value);it.total=_n(tr.querySelector('.itT').value);});};
+    const _itSum=()=>{const t=_itDraft.reduce((a,it)=>a+_n(it.total),0);
+      const el=$('itEditSum');if(el)el.innerHTML='📦 <b>'+_itDraft.length+'</b> item · மொத்தம் <b>Rs '+fmt(t)+'</b>';return t;};
+    const _itRender=()=>{const body=$('itEditBody');
+      body.innerHTML=_itDraft.length?_itDraft.map(_itRow).join(''):'<tr><td colspan="6" class="ctr" style="padding:10px;color:#999">item இல்ல — ➕ Item சேர் அழுத்து</td></tr>';
+      body.querySelectorAll('tr[data-itr]').forEach(tr=>{const i=+tr.dataset.itr;
+        const q=tr.querySelector('.itQ'),u=tr.querySelector('.itU'),t=tr.querySelector('.itT');
+        // Qty / Unit maathinaa Total thaanaa. Total-a direct-aa maathinaa adhu appadiye.
+        const auto=()=>{const qq=_n(q.value),uu=_n(u.value);if(qq&&uu)t.value=Math.round(qq*uu*100)/100;_itRead();_itSum();};
+        q.oninput=auto;u.oninput=auto;t.oninput=()=>{_itRead();_itSum();};tr.querySelector('.itD').oninput=_itRead;
+        tr.querySelector('.itDel').onclick=()=>{_itRead();const d=_itDraft[i];
+          if(!confirm('இந்த item-ஐ நீக்கட்டா?\n\n'+(d&&d.description||'(பெயர் இல்ல)')))return;
+          _itDraft.splice(i,1);_itRender();};});
+      _itSum();};
+    const _itOpen=open=>{$('itEdit').classList.toggle('hide',!open);$('itView').classList.toggle('hide',open);$('itEditBtn').textContent=open?'✖ மூடு':'✏️ Items திருத்து';};
+    $('itEditBtn').onclick=()=>{
+      if(!$('itEdit').classList.contains('hide')){_itDraft=null;_itOpen(false);return;}
+      // cost details already pottirundhaa kaanaama poga koodadhu — mudhalla merge
+      if(window._costMode&&window._costMode()==='items')current.items=readItemDetails($('costItems'),current.items);
+      _itDraft=(current.items||[]).map(it=>Object.assign({},it));
+      _itRender();_itOpen(true);};
+    $('itAdd').onclick=()=>{_itRead();_itDraft.push({sn:_itDraft.length+1,description:'',qty:1,unit_price:0,total:0});_itRender();
+      const ds=$('itEditBody').querySelectorAll('.itD');if(ds.length)ds[ds.length-1].focus();};
+    $('itCancel').onclick=()=>{_itDraft=null;_itOpen(false);};
+    $('itSave').onclick=()=>{
+      _itRead();
+      const bad=_itDraft.findIndex(it=>!it.description);
+      if(bad>=0){showInfoModal('Item பெயர் இல்ல','Row <b>'+(bad+1)+'</b>-ல item description காலியா இருக்கு. பெயர் போடு, இல்ல 🗑 வெச்சு நீக்கு.');return;}
+      const oldSum=(current.items||[]).reduce((a,it)=>a+_n(it.total),0);
+      _itDraft.forEach((it,i)=>{it.sn=i+1;});
+      current.items=_itDraft;_itDraft=null;
+      const newSum=current.items.reduce((a,it)=>a+_n(it.total),0);
+      // sell = PO total. Munnaadi items total-um sell-um ore amount-aa irundhaa, pudhu total-ku maathu.
+      const sellNow=_n($('sellIn').value);
+      const keepSell=(sellNow&&Math.abs(sellNow-oldSum)>0.5)?sellNow:newSum;
+      current.total_amount=keepSell;
+      const keep={buy:$('buyIn')?$('buyIn').value:'',mode:window._costMode?window._costMode():'total'};
+      showForm();
+      if($('sellIn'))$('sellIn').value=keepSell;
+      if($('buyIn')&&keep.buy&&keep.mode!=='items')$('buyIn').value=keep.buy;
+      if(keep.mode==='items'&&$('cmItems'))$('cmItems').click();
+      recalc();
+      showInfoModal('✅ Items சரி பண்ணியாச்சு','<b>'+current.items.length+'</b> item · மொத்தம் <b>Rs '+fmt(newSum)+'</b>'
+        +(keepSell!==newSum?'<br><span style="color:#a35a00;font-size:11.5px">⚠️ விற்ற விலை (Rs '+fmt(keepSell)+') நீ தனியா மாத்தியிருந்ததால அப்படியே வெச்சேன் — items total-ஓட ஒத்துப்போகுதா பாரு.</span>':'')
+        +'<br><span style="color:#999;font-size:11px">இப்போ கீழ Save பண்ணு.</span>');
     };
     $('buyIn').addEventListener('input',recalc);$('sellIn').addEventListener('input',recalc);
     wireItemCost($('costItems'),recalc);
