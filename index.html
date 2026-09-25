@@ -1736,7 +1736,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         if(on){o.order_no=on;o.order_temp=(on===fn||on.replace(/ · (NGRD|Puspha)$/,'')===fn);} // real Order No vandhaachu → Temp auto remove
         else{o.order_no=(wasTemp&&oldKey)?oldKey:(fn||oldKey);o.order_temp=!!(o.order_no);}
         if(_armyWorkNo(o.file_no)||_armyWorkNo(o.order_no))o.service='army';}
-      const _cn=box.querySelector('#e_campName');if(_cn)o.camp_name=_cn.value.trim();
+      const _cn=box.querySelector('#e_campName');if(_cn){o.camp_name=_cn.value.trim();_armyCampMemo.n=-1;}
       const _nh=box.querySelector('#e_naha');if(_nh)o.naha_no=_nh.value.trim();
       const _cv=box.querySelector('#e_civil');if(_cv)o.civil_no=_cv.value.trim();
       const _md=box.querySelector('#e_model');if(_md)o.model=_md.value.trim();
@@ -1772,11 +1772,21 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     if(o.order_temp===true)return true;if(o.order_temp===false)return false;
     return _armyWorkNo(o.order_no)&&(!o.file_no||o.file_no===o.order_no);
   }
+  // Army unit prefix (2BN-12DIV) — ore unit-oda order ellam ore camp-la varanum
+  function _armyPre(o){const w=[o.file_no,o.order_no].find(_armyWorkNo)||'';return w.split('-').slice(0,2).join('-').toUpperCase();}
+  // oru order-la camp name pottaa, adhe unit-oda matha order-kum adhe camp (NGRD + Puspha split aagaama)
+  var _armyCampMemo={n:-1,m:{}};
+  function _armyCampMap(){
+    const list=(typeof orders!=='undefined'&&orders)||[];
+    if(!_armyCampMemo)_armyCampMemo={n:-1,m:{}};
+    if(_armyCampMemo.n===list.length)return _armyCampMemo.m;
+    const m={};list.forEach(x=>{if(x&&x.camp_name){const p=_armyPre(x);if(p&&!m[p])m[p]=x.camp_name;}});
+    _armyCampMemo={n:list.length,m};return m;
+  }
   function _armyCampOf(o){
     if(o.camp_name)return 'Army · '+o.camp_name;
-    const w=[o.file_no,o.order_no].find(_armyWorkNo)||'';
-    const pre=w.split('-').slice(0,2).join('-').toUpperCase();
-    return 'Army · '+(pre||'Camp ?');
+    const pre=_armyPre(o);const cn=pre&&_armyCampMap()[pre];
+    return 'Army · '+(cn||pre||'Camp ?');
   }
   function _campOf(o){
     if(_isArmy(o))return _armyCampOf(o);
