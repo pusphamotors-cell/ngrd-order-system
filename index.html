@@ -797,8 +797,8 @@
 
 IDENTIFIERS — read character-by-character, keep EVERY slash, never shorten or guess:
 - order_no = the PURCHASE ORDER number. Navy format like WNA/APOW/PO/2026/0949 — it contains "/PO/". Labelled "Order No" / "P.O. No".
-- ARMY / POLICE / STF JOB ORDER: order_no = the "වැඩ අංකය" (Work No / Job No) value, e.g. 2BN-12DIV-LV-26-LP-237 — keep every dash exactly. It never contains "/PO/"; that is normal, do NOT leave order_no empty.
-  For a Job Order: naha_no = the "වාහන/උපකරණ අංකය" (Vehicle/Equipment No) value, keeping any Sinhala prefix (e.g. "යුහ 8975"); model = the "ජාතිය/මාදිලිය" value translated to English (e.g. "Land Rover Defender Jeep"); buyer = the issuing unit at the top-right (e.g. "2 (V) SLLI HQ, Diyatalawa" — translate to English); po_date = the letter date only if filled in (blank "2026/ /" → ""); file_no = "" unless a separate file number is printed; items come from the attached table (අමතර කොටස් / Amount), keeping the printed item number as sn.
+- ARMY / POLICE / STF JOB ORDER (temporary order): the "වැඩ අංකය" (Work No / Job No) value, e.g. 2BN-12DIV-LV-26-LP-237, is the FILE number → put it in file_no, keeping every dash exactly. A Job Order has NO purchase order number → order_no = "".
+  For a Job Order: naha_no = the "වාහන/උපකරණ අංකය" (Vehicle/Equipment No) value, keeping any Sinhala prefix (e.g. "යුහ 8975"); model = the "ජාතිය/මාදිලිය" value translated to English (e.g. "Land Rover Defender Jeep"); buyer = the issuing unit at the top-right (e.g. "2 (V) SLLI HQ, Diyatalawa" — translate to English); po_date = the letter date only if filled in (blank "2026/ /" → ""); items come from the attached table (අමතර කොටස් / Amount), keeping the printed item number as sn.
 - file_no = the FILE number. Format like WNA/APO/FO/MT/2026/0974 — it contains "/FO/" and/or "/MT/". Labelled "File No".
 - order_no and file_no are DIFFERENT — never copy one into the other's field.
 - Digits are critical: watch 0-vs-O, 1-vs-7, 5-vs-6, 8-vs-B, 3-vs-8. Copy EXACTLY as printed. If a character is unclear, transcribe the single most-likely character but NEVER add or drop digits.
@@ -846,6 +846,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       const text=(data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');
       const rec=_parseAIjson(text);
       rec.items=Array.isArray(rec.items)?rec.items:[];
+      _applyTempOrder(rec);
       current=rec;showForm();
       chosen=null;pastedImgs=[];$('file').value='';$('pasteBox').value='';$('pastePreview').innerHTML='';$('drop').classList.remove('has');$('dropbig').textContent='PO file தேர்ந்தெடு';$('chip').innerHTML='';
     }catch(err){$('errbox').innerHTML='<div class="err">⚠️ '+esc(err.message)+'</div>';}
@@ -853,14 +854,23 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   $('go').addEventListener('click',extract);
 
+  // Army/Police/STF temporary Job Order-ku Order No kidaiyaadhu, File No (வேலை எண்) mattum dhaan.
+  // System-la ellam order_no vechu thedudhu, adhanaala File No-ve key-aa vechu order_temp flag podrom.
+  function _applyTempOrder(r){
+    const on=(r.order_no||'').trim(),fn=(r.file_no||'').trim();
+    if(!on&&fn){r.order_no=fn;r.order_temp=true;}
+    else if(on&&fn&&on===fn)r.order_temp=true;
+    else r.order_temp=false;
+    return r;
+  }
   function _manualOrderModal(){
     const ov=document.createElement('div');ov.className='modal';
     ov.innerHTML=`<div class="modalbox" style="max-width:480px;text-align:left">
       <h3>✍️ Manual Order Add</h3>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px">PO file/AI இல்லாம நேரடியா Order details போடு. Items பிறகு Purchasing tab-ல add பண்ணலாம்.</div>
       <div class="fld full"><label>🏢 Company</label><select id="mo_company"><option value="NGRD Motors">NGRD Motors</option><option value="Puspha Motors">Puspha Motors</option></select></div>
-      <div class="fld"><label>Order No *</label><input id="mo_order_no" placeholder="உதा: WNA/APOW/PO/2026/0949"></div>
-      <div class="fld"><label>File No</label><input id="mo_file_no" placeholder="உதा: WNA/APO/FO/MT/2026/0974"></div>
+      <div class="fld"><label>Order No <span style="color:var(--muted);font-weight:400">— Army temp order-னா காலியா விடு</span></label><input id="mo_order_no" placeholder="உதा: WNA/APOW/PO/2026/0949"></div>
+      <div class="fld"><label>File No <span style="color:var(--muted);font-weight:400">— Army: வැඩ අංකය</span></label><input id="mo_file_no" placeholder="உதா: WNA/APO/FO/MT/2026/0974 / 2BN-12DIV-LV-26-LP-237"></div>
       <div class="grid2"><div class="fld"><label>NAHA No</label><input id="mo_naha_no" placeholder="NAHA2175"></div><div class="fld"><label>Civil No</label><input id="mo_civil_no" placeholder="WP KQ-2647"></div></div>
       <div class="fld"><label>Vehicle / Model</label><input id="mo_model" placeholder="உதा: SX4 ZXI Suzuki Car"></div>
       <div class="fld"><label>Buyer / Command</label><input id="mo_buyer" placeholder="உதा: Southern Naval Command"></div>
@@ -882,12 +892,13 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     });
     ov.querySelector('.moGo').addEventListener('click',()=>{
       const order_no=(ov.querySelector('#mo_order_no').value||'').trim();
-      if(!order_no){ov.querySelector('#mo_err').innerHTML='<div class="err">⚠️ Order No போடு bro</div>';return;}
       const g=id=>(ov.querySelector('#'+id).value||'').trim();
+      if(!order_no&&!g('mo_file_no')){ov.querySelector('#mo_err').innerHTML='<div class="err">⚠️ Order No அல்லது File No போடு bro (Army temp order-னா File No மட்டும் போதும்)</div>';return;}
       current={company:g('mo_company'),order_no,file_no:g('mo_file_no'),naha_no:g('mo_naha_no'),civil_no:g('mo_civil_no'),
         chassis_no:'',engine_no:'',model:g('mo_model'),quotation_date:'',buyer:g('mo_buyer'),supplier:'',
         po_date:g('mo_po_date'),delivery_date:g('mo_delivery_date'),
         total_amount:Number(g('mo_sell'))||0,items:[]};
+      _applyTempOrder(current);
       ov.remove();showForm();
     });
   }
@@ -908,7 +919,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         <div class="chead"><span class="ono">${esc(p.order_no||'PO')}</span>${p.buyer?'<span class="pill">'+esc(p.buyer)+'</span>':''}</div>
         <div class="sec">🤖 PO Details (AI எடுத்தது) <button class="copyprev" id="poEditBtn" style="width:auto;margin:0 0 0 8px;padding:5px 10px;font-size:11px;vertical-align:middle">✏️ திருத்து</button></div>
         <div class="metarow" id="poView">
-          <div class="mc"><div class="l">Order No</div><div class="d">${esc(p.order_no||'—')}</div></div>
+          <div class="mc"><div class="l">Order No</div><div class="d">${p.order_temp?'<span style="color:#9a6b00">🪖 Temp order — Order No இல்ல</span>':esc(p.order_no||'—')}</div></div>
           <div class="mc"><div class="l">File No</div><div class="d">${esc(p.file_no||'—')}</div></div>
           <div class="mc"><div class="l">Vehicle No (NAHA)</div><div class="d">${esc(p.naha_no||'—')}</div></div>
           <div class="mc"><div class="l">Civil No</div><div class="d">${esc(p.civil_no||'—')}</div></div>
@@ -922,7 +933,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         <div id="poEdit" class="hide" style="border:1.5px dashed var(--gold);border-radius:12px;padding:10px 12px;background:#fffdf6;margin-bottom:10px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AI தப்பா படிச்சா இங்கயே சரி பண்ணு — photo மறுபடி போட வேணாம். <b>0/O, 1/7, 4/9</b> கவனி.</div>
           <div class="grid2">
-            <div class="fld"><label>Order No</label><input id="pe_order_no" value="${esc(p.order_no||'')}"></div>
+            <div class="fld"><label>Order No</label><input id="pe_order_no" value="${esc(p.order_temp?'':(p.order_no||''))}" placeholder="Army temp order-னா காலியா விடு"></div>
             <div class="fld"><label>File No</label><input id="pe_file_no" value="${esc(p.file_no||'')}"></div>
             <div class="fld"><label>Vehicle No (NAHA)</label><input id="pe_naha_no" value="${esc(p.naha_no||'')}"></div>
             <div class="fld"><label>Civil No</label><input id="pe_civil_no" value="${esc(p.civil_no||'')}"></div>
@@ -984,6 +995,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       if(open){const f=$('pe_file_no');if(f){f.focus();f.select();}}};
     $('poEditSave').onclick=()=>{
       PEF.forEach(k=>{const el=$('pe_'+k);if(el)current[k]=(el.value||'').trim();});
+      _applyTempOrder(current);
       window._partModel=current.model||'';
       const keep={sell:$('sellIn').value,buy:$('buyIn')?$('buyIn').value:'',mode:window._costMode?window._costMode():'total'};
       showForm();
@@ -1256,7 +1268,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
 
   async function saveOrder(){
     const order_no=(current.order_no||'').trim();
-    if(!order_no){alert('Order No இல்ல — save பண்ண முடியாது');return;}
+    if(!order_no){alert('Order No-um File No-um இல்ல — ✏️ திருத்து-ல ஒன்னு போடு (Army temp order-னா File No போதும்)');return;}
     // duplicate check — block save, offer to view existing
     const dup=orders.find(o=>(o.order_no||'').trim().toLowerCase()===order_no.toLowerCase());
     if(dup){
@@ -1267,7 +1279,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     }
     const sell=Number($('sellIn').value)||0,buy=currentBuy();
     const items=(window._costMode&&window._costMode()==='items')?readItemDetails($('costItems'),current.items):(current.items||[]);
-    const o={id:'order:'+Date.now(),order_no,file_no:current.file_no||'',proc_ref:current.proc_ref||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
+    const o={id:'order:'+Date.now(),order_no,order_temp:!!current.order_temp,file_no:current.file_no||'',proc_ref:current.proc_ref||'',naha_no:current.naha_no||'',civil_no:current.civil_no||'',
       chassis_no:current.chassis_no||'',engine_no:current.engine_no||'',company:current.company||'',
       model:current.model||'',quotation_date:current.quotation_date||'',buyer:current.buyer||'',supplier:current.supplier||'',
       items,sell,buy,profit:(buy>0?sell-buy:null),
@@ -1628,7 +1640,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       if(_apd){o.apo_paid=_apd.checked;if(o.apo_paid){o.apo_paid_date=box.querySelector('#e_apoPaidDate').value||o.apo_paid_date||new Date().toISOString().slice(0,10);o.apo_paid_mode=box.querySelector('#e_apoPaidMode').value||'cash';o.apo_paid_to=(box.querySelector('#e_apoPaidTo').value||'').trim()||'Apo';o.apo_paid_ref=(box.querySelector('#e_apoPaidRef').value||'').trim();o.apo_paid_amt=_agComm(o,'apo');}else{o.apo_paid_date='';o.apo_paid_mode='';o.apo_paid_to='';o.apo_paid_ref='';o.apo_paid_amt=0;}}
       const _cpd=box.querySelector('#e_clarkPaid');
       if(_cpd){o.clark_paid=_cpd.checked;if(o.clark_paid){o.clark_paid_date=box.querySelector('#e_clarkPaidDate').value||o.clark_paid_date||new Date().toISOString().slice(0,10);o.clark_paid_mode=box.querySelector('#e_clarkPaidMode').value||'cash';o.clark_paid_to=(box.querySelector('#e_clarkPaidTo').value||'').trim()||'Clark';o.clark_paid_ref=(box.querySelector('#e_clarkPaidRef').value||'').trim();o.clark_paid_amt=_agComm(o,'clark');}else{o.clark_paid_date='';o.clark_paid_mode='';o.clark_paid_to='';o.clark_paid_ref='';o.clark_paid_amt=0;}}
-      const _on=box.querySelector('#e_orderNo');if(_on)o.order_no=_on.value.trim();
+      const _on=box.querySelector('#e_orderNo');if(_on){o.order_no=_on.value.trim()||o.file_no||'';o.order_temp=!!(o.file_no&&o.order_no===o.file_no);}
       const _nh=box.querySelector('#e_naha');if(_nh)o.naha_no=_nh.value.trim();
       const _cv=box.querySelector('#e_civil');if(_cv)o.civil_no=_cv.value.trim();
       const _md=box.querySelector('#e_model');if(_md)o.model=_md.value.trim();
@@ -1968,7 +1980,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     lc.innerHTML=chip+list.map(({o,idx,al})=>{const s=statusOf(o);
       const overdue=!(o.paid||o.bill_no||o.supplied||_naAll(o))&&o.delivery_date&&daysSince(o.delivery_date)>0;
       return `<div class="orow"${overdue?' style="border-left:4px solid #c2452f"':''}><div class="ohead" data-i="${idx}">
-        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${overdue?' <span class="badge" style="background:#fdecec;color:#c2452f">⏰ Overdue '+daysSince(o.delivery_date)+'d</span>':''}${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
+        <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${o.order_temp?' <span class="badge" style="background:#fff4d6;color:#9a6b00">🪖 Temp · File No மட்டும்</span>':''}${overdue?' <span class="badge" style="background:#fdecec;color:#c2452f">⏰ Overdue '+daysSince(o.delivery_date)+'d</span>':''}${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
           <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}${o.model?' · 🚗 '+esc(o.model):''}${o.naha_no?' · '+esc(o.naha_no):''}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}
