@@ -792,11 +792,13 @@
     setTimeout(updateGo,0);});
   $('pasteBox').addEventListener('input',updateGo);
 
-  const PROMPT=`Extract details from this Sri Lanka Navy purchase order (PO). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
+  const PROMPT=`Extract details from this Sri Lanka government purchase order — either a Navy PO, or an Army / Police / STF "JOB ORDER" (කාර්ය නියෝගය, often in Sinhala). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
 {"order_no":"","file_no":"","proc_ref":"","naha_no":"","civil_no":"","chassis_no":"","engine_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
 
 IDENTIFIERS — read character-by-character, keep EVERY slash, never shorten or guess:
-- order_no = the PURCHASE ORDER number. Format like WNA/APOW/PO/2026/0949 — it contains "/PO/". Labelled "Order No" / "P.O. No".
+- order_no = the PURCHASE ORDER number. Navy format like WNA/APOW/PO/2026/0949 — it contains "/PO/". Labelled "Order No" / "P.O. No".
+- ARMY / POLICE / STF JOB ORDER: order_no = the "වැඩ අංකය" (Work No / Job No) value, e.g. 2BN-12DIV-LV-26-LP-237 — keep every dash exactly. It never contains "/PO/"; that is normal, do NOT leave order_no empty.
+  For a Job Order: naha_no = the "වාහන/උපකරණ අංකය" (Vehicle/Equipment No) value, keeping any Sinhala prefix (e.g. "යුහ 8975"); model = the "ජාතිය/මාදිලිය" value translated to English (e.g. "Land Rover Defender Jeep"); buyer = the issuing unit at the top-right (e.g. "2 (V) SLLI HQ, Diyatalawa" — translate to English); po_date = the letter date only if filled in (blank "2026/ /" → ""); file_no = "" unless a separate file number is printed; items come from the attached table (අමතර කොටස් / Amount), keeping the printed item number as sn.
 - file_no = the FILE number. Format like WNA/APO/FO/MT/2026/0974 — it contains "/FO/" and/or "/MT/". Labelled "File No".
 - order_no and file_no are DIFFERENT — never copy one into the other's field.
 - Digits are critical: watch 0-vs-O, 1-vs-7, 5-vs-6, 8-vs-B, 3-vs-8. Copy EXACTLY as printed. If a character is unclear, transcribe the single most-likely character but NEVER add or drop digits.
@@ -836,8 +838,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         content=[];
         for(const f of pastedImgs){const c=await _compressImg(f);
           content.push(c.pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:c.b64}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.b64}});}
-        content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
-      } else {content=[{type:'text',text:'Sri Lanka Navy PO text:\n\n'+pasteText+'\n\n'+PROMPT}];}
+        content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO or Army/Police/STF Job Order. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
+      } else {content=[{type:'text',text:'Sri Lanka Navy PO / Army Job Order text:\n\n'+pasteText+'\n\n'+PROMPT}];}
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+'). மறுபடி try பண்ணு.');
       const data=await resp.json();
