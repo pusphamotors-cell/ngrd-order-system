@@ -798,7 +798,7 @@
 IDENTIFIERS — read character-by-character, keep EVERY slash, never shorten or guess:
 - order_no = the PURCHASE ORDER number. Navy format like WNA/APOW/PO/2026/0949 — it contains "/PO/". Labelled "Order No" / "P.O. No".
 - ARMY / POLICE / STF JOB ORDER (temporary order): the "වැඩ අංකය" (Work No / Job No) value, e.g. 2BN-12DIV-LV-26-LP-237, is the FILE number → put it in file_no, keeping every dash exactly. A Job Order has NO purchase order number → order_no = "".
-  For a Job Order: naha_no = the "වාහන/උපකරණ අංකය" (Vehicle/Equipment No) value, keeping any Sinhala prefix (e.g. "යුහ 8975"); model = the "ජාතිය/මාදිලිය" value translated to English (e.g. "Land Rover Defender Jeep"); buyer = the issuing unit at the top-right (e.g. "2 (V) SLLI HQ, Diyatalawa" — translate to English); po_date = the letter date only if filled in (blank "2026/ /" → ""); items come from the attached table (අමතර කොටස් / Amount), keeping the printed item number as sn; camp = just the town/camp name of the issuing unit in English (e.g. "Diyatalawa"). For a Navy PO leave camp "".
+  For a Job Order: naha_no = the "වාහන/උපකරණ අංකය" (Vehicle/Equipment No) value, keeping any Sinhala prefix (e.g. "යුහ 8975"); model = the "ජාතිය/මාදිලිය" value translated to English (e.g. "Land Rover Defender Jeep"); buyer = the issuing unit at the top-right (e.g. "2 (V) SLLI HQ, Diyatalawa" — translate to English); po_date = the letter date only if filled in (blank "2026/ /" → ""); items come from the attached table (අමතර කොටස් / Amount), keeping the printed item number as sn; camp = just the town/camp name of the issuing unit in English (e.g. "Diyatalawa"); supplier = the company the Job Order is addressed to, written in English as exactly "NGRD Motors" (එන්ජීආර්ඩී මෝටර්ස්, 202/17B) or "Puspha Motors" (පුෂ්පා මෝටර්ස්, 202/19A). For a Navy PO leave camp "".
 - file_no = the FILE number. Format like WNA/APO/FO/MT/2026/0974 — it contains "/FO/" and/or "/MT/". Labelled "File No".
 - order_no and file_no are DIFFERENT — never copy one into the other's field.
 - Digits are critical: watch 0-vs-O, 1-vs-7, 5-vs-6, 8-vs-B, 3-vs-8. Copy EXACTLY as printed. If a character is unclear, transcribe the single most-likely character but NEVER add or drop digits.
@@ -918,7 +918,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const rows=(p.items||[]).map(it=>`<tr><td class="ctr">${esc(it.sn)}</td><td>${esc(it.description)}</td><td class="ctr">${esc(it.qty)}</td><td class="num">${fmt(it.unit_price)}</td><td class="num">${fmt(it.total)}</td></tr>`).join('');
     $('result').innerHTML=`
       <div class="card">
-        <div class="chead"><span class="ono">${esc(p.order_no||'PO')}</span>${p.buyer?'<span class="pill">'+esc(p.buyer)+'</span>':''}</div>
+        <div class="chead"><span class="ono">${esc(p.order_no||'PO')}</span><span class="pill" style="background:${_companyOf(p)==='Puspha Motors'?'#f3e8f8;color:#6b2d8a':'#e3f3f5;color:#0b5d6b'}">🏢 ${esc(_companyOf(p)==='Other'?'Company ?':_companyOf(p))}</span>${p.buyer?'<span class="pill">'+esc(p.buyer)+'</span>':''}</div>
         <div class="sec">🤖 PO Details (AI எடுத்தது) <button class="copyprev" id="poEditBtn" style="width:auto;margin:0 0 0 8px;padding:5px 10px;font-size:11px;vertical-align:middle">✏️ திருத்து</button></div>
         <div class="metarow" id="poView">
           <div class="mc"><div class="l">Order No</div><div class="d">${p.order_temp?'<span style="color:#9a6b00">🪖 Temp order — Order No இல்ல</span>':esc(p.order_no||'—')}</div></div>
@@ -935,6 +935,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         <div id="poEdit" class="hide" style="border:1.5px dashed var(--gold);border-radius:12px;padding:10px 12px;background:#fffdf6;margin-bottom:10px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:8px">AI தப்பா படிச்சா இங்கயே சரி பண்ணு — photo மறுபடி போட வேணாம். <b>0/O, 1/7, 4/9</b> கவனி.</div>
           <div class="grid2">
+            <div class="fld"><label>🏢 Company</label><select id="pe_company">${['NGRD Motors','Puspha Motors'].map(c=>`<option ${_companyOf(p)===c?'selected':''}>${c}</option>`).join('')}</select></div>
             <div class="fld"><label>Order No</label><input id="pe_order_no" value="${esc(p.order_temp?'':(p.order_no||''))}" placeholder="Army temp order-னா காலியா விடு"></div>
             <div class="fld"><label>File No</label><input id="pe_file_no" value="${esc(p.file_no||'')}"></div>
             <div class="fld"><label>Vehicle No (NAHA)</label><input id="pe_naha_no" value="${esc(p.naha_no||'')}"></div>
@@ -990,7 +991,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('cmItems').onclick=()=>{costMode='items';$('cmItems').classList.add('on');$('cmTotal').classList.remove('on');$('costItems').classList.remove('hide');$('buyIn').readOnly=true;recalc();};
     window._costMode=()=>costMode;
     // AI thappa padichaa inga-ye thiruththalaam — photo marubadi poda thevaila
-    const PEF=['order_no','file_no','naha_no','civil_no','chassis_no','engine_no','model','buyer','camp_name','quotation_date','po_date','delivery_date','egp_ref'];
+    const PEF=['company','order_no','file_no','naha_no','civil_no','chassis_no','engine_no','model','buyer','camp_name','quotation_date','po_date','delivery_date','egp_ref'];
     $('poEditBtn').onclick=()=>{const ed=$('poEdit'),vw=$('poView'),open=ed.classList.contains('hide');
       ed.classList.toggle('hide',!open);vw.classList.toggle('hide',open);
       $('poEditBtn').textContent=open?'✖ மூடு':'✏️ திருத்து';
@@ -1269,10 +1270,22 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('pbProf').classList.toggle('neg',buy>0&&(sell-buy)<0);}
 
   async function saveOrder(){
-    const order_no=(current.order_no||'').trim();
+    let order_no=(current.order_no||'').trim();
     if(!order_no){alert('Order No-um File No-um இல்ல — ✏️ திருத்து-ல ஒன்னு போடு (Army temp order-னா File No போதும்)');return;}
-    // duplicate check — block save, offer to view existing
-    const dup=orders.find(o=>(o.order_no||'').trim().toLowerCase()===order_no.toLowerCase());
+    // duplicate check — same No + same company = block. Army Job Order ore File No-la
+    // NGRD-kum Puspha-kum thani-thaniyaa varum → company vera-na allow.
+    const _myCo=_companyOf(current);
+    const _same=orders.filter(o=>{const k=(o.order_no||'').trim().toLowerCase(),b=order_no.toLowerCase();
+      return k===b||(_isTemp(o)&&(o.file_no||'').trim().toLowerCase()===b)||k.replace(/ · (ngrd|puspha)$/,'')===b;});
+    let dup=_same.find(o=>_companyOf(o)===_myCo);
+    if(!dup&&_same.length){
+      if(['NGRD Motors','Puspha Motors'].indexOf(_myCo)<0){alert('இந்த No ஏற்கனவே '+_companyOf(_same[0])+'-ல save ஆயிருக்கு. இது எந்த company order-னு தெரியல — ✏️ திருத்து-ல இல்ல Manual Add-ல Company தேர்ந்தெடு bro.');return;}
+      // key vera-vera aaganum — search/bill/purchasing ellam order_no vechu thedudhu
+      order_no=order_no+' · '+(_myCo==='Puspha Motors'?'Puspha':'NGRD');
+      if(!current.file_no)current.file_no=(current.order_no||'').trim();
+      current.order_no=order_no;
+      dup=orders.find(o=>(o.order_no||'').trim().toLowerCase()===order_no.toLowerCase());
+    }
     if(dup){
       if(confirm('⚠️ இந்த PO Number ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\n\nஅந்த order-ஐ இப்போ பாக்கணுமா?\n(OK = அந்த order-ஐ பாரு · Cancel = வேண்டாம், திரும்ப check பண்ணு)')){
         current=null;try{_openOrderEdit(dup.id);}catch(e){setTab('list');renderList();}
@@ -1650,8 +1663,8 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         if(wasTemp&&!fn)fn=oldKey; // File No kaanaama poga koodadhu
         const on=_on.value.trim();
         o.file_no=fn;
-        if(on){o.order_no=on;o.order_temp=(on===fn);} // real Order No vandhaachu → Temp auto remove
-        else{o.order_no=fn||oldKey;o.order_temp=!!(o.order_no);}
+        if(on){o.order_no=on;o.order_temp=(on===fn||on.replace(/ · (NGRD|Puspha)$/,'')===fn);} // real Order No vandhaachu → Temp auto remove
+        else{o.order_no=(wasTemp&&oldKey)?oldKey:(fn||oldKey);o.order_temp=!!(o.order_no);}
         if(_armyWorkNo(o.file_no)||_armyWorkNo(o.order_no))o.service='army';}
       const _cn=box.querySelector('#e_campName');if(_cn)o.camp_name=_cn.value.trim();
       const _nh=box.querySelector('#e_naha');if(_nh)o.naha_no=_nh.value.trim();
