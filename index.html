@@ -3086,14 +3086,14 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     </div>`;
     $('billFile').addEventListener('change',e=>{[...e.target.files].forEach(f=>_billImgs.push(f));_billThumbs();e.target.value='';});
     $('billRead').onclick=_billRead;
-    const bob=$('billOrdBtn');if(bob)bob.onclick=()=>{const q=($('billOrdSearch').value||'').trim().toLowerCase();if(!q)return;const o=orders.find(x=>(x.order_no||'').toLowerCase()===q)||orders.find(x=>(x.order_no||'').toLowerCase().endsWith(q))||orders.find(x=>(x.order_no||'').toLowerCase().includes(q));if(!o){$('billOut').innerHTML='<div class="empty">Order கிடைக்கல</div>';return;}_billRenderOrder(o,'',o.bill_no||'',o.bill_date||'');};
+    const bob=$('billOrdBtn');if(bob)bob.onclick=()=>{const q=($('billOrdSearch').value||'').trim();if(!q)return;_billPick(_billFind(q),'','','');};
   }
   function _billThumbs(){const t=$('billThumbs');if(!t)return;t.innerHTML=_billImgs.map((f,i)=>`<div style="position:relative"><div style="width:54px;height:54px;border-radius:8px;background:#eef1f6;display:flex;align-items:center;justify-content:center;font-size:20px">${f.type==='application/pdf'?'📄':'🖼️'}</div><span data-brm="${i}" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer">✕</span></div>`).join('');t.querySelectorAll('[data-brm]').forEach(b=>b.onclick=()=>{_billImgs.splice(+b.dataset.brm,1);_billThumbs();});}
   async function _billRead(){
     const out=$('billOut');const paste=($('billPaste').value||'').trim();
     if(!_billImgs.length&&!paste){alert('Invoice photo illa text கொடு bro');return;}
     out.innerHTML='<div style="font-size:12px;color:var(--muted)"><span class="spin"></span> AI படிக்கிறது…</div>';
-    const PROMPT='Read this Sri Lanka Navy supplier INVOICE (from NGRD Motors or Puspha Motors to a Navy camp). Return ONLY JSON, no markdown: {"order_no":"","bill_no":"","bill_date":"YYYY-MM-DD","amount":0}. order_no = the "Customer Order No" or "Order No" printed on the invoice (example WNA/APOW/PO/2026/0949). bill_no = the Invoice No / bill number (example RAG/0250 or 4253). bill_date = invoice date as YYYY-MM-DD. amount = grand total as a number (no commas). If a field is missing use "" or 0. Keep order_no and bill_no exactly as written.';
+    const PROMPT='Read this Sri Lanka Navy supplier INVOICE (from NGRD Motors or Puspha Motors to a Navy camp). Return ONLY JSON, no markdown: {"order_no":"","company":"","bill_no":"","bill_date":"YYYY-MM-DD","amount":0}. company = "NGRD Motors" or "Puspha Motors" from the invoice letterhead. order_no = the "Customer Order No" or "Order No" printed on the invoice (example WNA/APOW/PO/2026/0949). bill_no = the Invoice No / bill number (example RAG/0250 or 4253). bill_date = invoice date as YYYY-MM-DD. amount = grand total as a number (no commas). If a field is missing use "" or 0. Keep order_no and bill_no exactly as written.';
     let content;
     try{
       if(_billImgs.length){content=[];for(const f of _billImgs){const c=await _compressImg(f);content.push(c.pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:c.b64}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.b64}});}content.push({type:'text',text:PROMPT});}
@@ -3106,11 +3106,34 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       _billShow(j);
     }catch(e){out.innerHTML='<div class="err">⚠️ படிக்க முடியல ('+esc(e.message)+'). திரும்ப try பண்ணு illa clear photo எடு.</div>';}
   }
+  // Order No / File No-la thedu. Army Job Order ore File No-la NGRD + Puspha rendum irukkalaam —
+  // appo ellaa match-um thirupi kudu, "எந்த company?" nu kekkalaam.
+  function _billFind(q){
+    const b=String(q||'').trim().toLowerCase();if(!b)return [];
+    const base=x=>(x.order_no||'').trim().toLowerCase().replace(/ · (ngrd|puspha)$/,'');
+    const tiers=[x=>(x.order_no||'').toLowerCase()===b||base(x)===b||(x.file_no||'').trim().toLowerCase()===b,
+      x=>base(x).endsWith(b)||(x.file_no||'').toLowerCase().endsWith(b),
+      x=>(x.order_no||'').toLowerCase().includes(b)||(x.file_no||'').toLowerCase().includes(b)];
+    for(const t of tiers){const m=orders.filter(t);if(m.length)return m;}
+    return [];
+  }
+  function _billPick(list,head,billNo,billDate){
+    const out=$('billOut');
+    if(!list.length){out.innerHTML=(head||'')+'<div class="err">⚠️ இந்த Order No system-ல கிடைக்கல.</div>';return;}
+    if(list.length===1){const o=list[0];_billRenderOrder(o,head,billNo||o.bill_no||'',billDate||o.bill_date||'');return;}
+    out.innerHTML=(head||'')+'<div class="dpanel" style="padding:9px 11px"><div style="font-weight:800;color:var(--navy);margin-bottom:6px">🔀 '+list.length+' order match ஆச்சு — எந்த company?</div>'
+      +list.map((o,i)=>{const c=_companyOf(o);return `<button class="btn" data-bpick="${i}" style="margin:0 0 6px;background:${c==='Puspha Motors'?'#6b2d8a':'#0b5d6b'};text-align:left">🏢 <b>${esc(c)}</b> · ${esc(o.order_no||'')} · ${esc(_campOf(o))} · ${(o.items||[]).length} item</button>`;}).join('')+'</div>';
+    out.querySelectorAll('[data-bpick]').forEach(b=>b.onclick=()=>{const o=list[+b.dataset.bpick];_billRenderOrder(o,head,billNo||o.bill_no||'',billDate||o.bill_date||'');});
+  }
   function _billShow(j){
     const out=$('billOut');const ono=(j.order_no||'').trim();
-    const o=orders.find(x=>(x.order_no||'').toLowerCase()===ono.toLowerCase())||orders.find(x=>ono&&(x.order_no||'').toLowerCase().endsWith(ono.toLowerCase()))||orders.find(x=>ono&&(x.order_no||'').toLowerCase().includes(ono.toLowerCase()));
+    let _m=_billFind(ono);
+    // invoice-la company theriyum na (NGRD/Puspha) adhai vechu pirichu edu
+    const _co=/puspha/i.test(j.company||'')?'Puspha Motors':/ngrd/i.test(j.company||'')?'NGRD Motors':'';
+    if(_m.length>1&&_co){const f=_m.filter(x=>_companyOf(x)===_co);if(f.length)_m=f;}
+    const o=_m.length===1?_m[0]:null;
     const read=`<div style="font-size:11.5px;background:#f3f6fb;border-radius:8px;padding:8px 10px;margin-bottom:8px">📄 AI படிச்சது:<br>Order No: <b>${esc(ono||'—')}</b><br>Bill No: <b>${esc(j.bill_no||'—')}</b> · Date: <b>${esc(j.bill_date||'—')}</b>${j.amount?' · Rs '+fmt(j.amount):''}</div>`;
-    if(!o){out.innerHTML=read+'<div class="err">⚠️ இந்த Order No system-ல கிடைக்கல. Order No சரியா படிச்சதா பாரு.</div>';return;}
+    if(!o){if(_m.length>1){_billPick(_m,read,j.bill_no||'',j.bill_date||'');return;}out.innerHTML=read+'<div class="err">⚠️ இந்த Order No system-ல கிடைக்கல. Order No சரியா படிச்சதா பாரு.</div>';return;}
     _billRenderOrder(o,read,j.bill_no||'',j.bill_date||'');
   }
   function _billRenderOrder(o,head,billNo,billDate){
