@@ -4784,6 +4784,52 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       showInfoModal('↩️ Undo ஆச்சு',hit.length-failed.length+' order paid mark திரும்ப எடுத்தாச்சு'+(failed.length?'<br><span style="color:#b00">'+failed.length+' order save ஆகல — மறுபடி பண்ணு</span>':''));
     }));
   }
+  // ===== 📅 Paid History — ovvoru paid date-um, click → andha naal ella order + PDF =====
+  let _phAgent='apo';
+  function _pdLabel(d){if(!/^\d{4}-\d{2}-\d{2}$/.test(d||''))return d||'— (date இல்ல)';const p=d.split('-');return new Date(+p[0],p[1]-1,+p[2]).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});}
+  function _paidDays(ag){const m={};
+    orders.forEach(o=>{if(!_agPaid(o,ag))return;const d=_agPaidDate(o,ag)||'';
+      const g=m[d]||(m[d]={d,list:[],amt:0,to:new Set(),mode:new Set(),camps:new Set()});
+      g.list.push(o);g.amt+=_agComm(o,ag);const t=ag==='apo'?o.apo_paid_to:o.clark_paid_to;if(t)g.to.add(t);
+      g.mode.add((ag==='apo'?o.apo_paid_mode:o.clark_paid_mode)||'cash');g.camps.add(_campOf(o));});
+    return Object.values(m).sort((a,b)=>String(b.d).localeCompare(String(a.d)));}
+  function _paidHistHtml(){
+    const ag=_phAgent,agL=_agLabel(ag);const days=_paidDays(ag);
+    const tot=days.reduce((a,g)=>a+g.amt,0),n=days.reduce((a,g)=>a+g.list.length,0);
+    let lastM='';
+    const rows=days.map(g=>{const mk=(g.d||'').slice(0,7);let head='';
+      if(mk!==lastM){lastM=mk;const mDays=days.filter(x=>(x.d||'').slice(0,7)===mk);
+        head=`<div style="background:#eef2f8;padding:6px 11px;font-size:11.5px;font-weight:800;color:var(--navy)">🗓️ ${esc(mk?_mLab(mk):'Date இல்லாதது')} — ${mDays.reduce((a,x)=>a+x.list.length,0)} order · Rs ${fmt(mDays.reduce((a,x)=>a+x.amt,0))}</div>`;}
+      return head+`<div class="cpk" data-pday="${ag}|${esc(g.d)}" style="cursor:pointer">
+        <span class="cpk-b"><span class="cpk-o">📅 ${esc(_pdLabel(g.d))} · ${g.list.length} order</span><span class="cpk-m">${esc([...g.camps].join(', '))}${g.to.size?' · '+esc([...g.to].join(', ')):''} · ${[...g.mode].map(x=>x==='bank'?'🏦':'💵').join('')}</span></span>
+        <span class="cpk-v">${fmt(g.amt)}<small><span data-pdaypdf="${ag}|${esc(g.d)}" style="cursor:pointer;color:#0b2a4a;font-weight:700">📄 PDF</span> · 👁️ பாரு</small></span></div>`;}).join('');
+    return `<details class="egpbulk" open><summary>📅 Paid History — ${esc(agL)}-க்கு எப்போ எவ்வளவு கொடுத்தோம் (date click → orders + PDF)</summary>
+      <div class="modetoggle" style="margin:8px 13px 4px"><button class="mbtn ${ag==='apo'?'on':''}" data-phag="apo" type="button">🤝 Apo</button><button class="mbtn ${ag==='clark'?'on':''}" data-phag="clark" type="button">🤝 Clark</button></div>
+      <div style="font-size:11px;color:var(--muted);margin:2px 13px 6px">மொத்தம் ${days.length} தடவை · ${n} order · <b style="color:#1b6b2e">Rs ${fmt(tot)}</b> கொடுத்தாச்சு</div>
+      ${days.length?`<div class="dpanel" style="margin:0 13px 12px;padding:0;overflow:hidden"><div style="max-height:340px;overflow-y:auto">${rows}</div></div>`:'<div class="empty" style="margin:0 13px 12px">இன்னும் paid mark பண்ணல</div>'}
+    </details>`;}
+  function _paidDaySel(ag,d){return orders.filter(o=>_agPaid(o,ag)&&(_agPaidDate(o,ag)||'')===d);}
+  function _paidDayPdf(ag,d){const agL=_agLabel(ag);const sel=_paidDaySel(ag,d);if(!sel.length){alert('அந்த date-ல paid order இல்ல bro');return;}
+    const camps=[...new Set(sel.map(o=>_campOf(o)))];const t=sel.reduce((a,o)=>a+_agComm(o,ag),0);
+    const to=[...new Set(sel.map(o=>(ag==='apo'?o.apo_paid_to:o.clark_paid_to)||'').filter(Boolean))].join(', ')||agL;
+    openCommissionPDF(agL,sel,camps.length===1?camps[0]:'all',{agKey:ag,paidTo:to,subTitle:'Paid '+_pdLabel(d)+' · '+sel.length+' order · Rs '+fmt(t)});}
+  function _openPaidDay(ag,d){const agL=_agLabel(ag);const sel=_paidDaySel(ag,d).sort((a,b)=>_campOf(a).localeCompare(_campOf(b))||(a.bill_date||'').localeCompare(b.bill_date||''));
+    if(!sel.length){alert('அந்த date-ல paid order இல்ல bro');return;}
+    const t=sel.reduce((a,o)=>a+_agComm(o,ag),0),v=sel.reduce((a,o)=>a+(Number(o.sell)||0),0);
+    const to=[...new Set(sel.map(o=>(ag==='apo'?o.apo_paid_to:o.clark_paid_to)||'').filter(Boolean))].join(', ');
+    const rows=sel.map((o,i)=>`<tr><td class="ctr">${i+1}</td><td style="word-break:break-all">${esc(o.order_no)}${_isEgp(o)?' 🏛️':''}</td><td>${esc(_campOf(o))}</td><td>${esc(o.bill_no||'—')}</td><td class="num">${fmt(o.sell)}</td><td class="num">${_agPct(o,ag)}%</td><td class="num" style="font-weight:700">${fmt(_agComm(o,ag))}</td></tr>`).join('');
+    const ov=document.createElement('div');ov.className='modal';
+    ov.innerHTML=`<div class="modalbox" style="max-width:720px;text-align:left"><h3>📅 ${esc(agL)} — ${esc(_pdLabel(d))} Paid</h3>
+      <div style="font-size:12px;margin-bottom:8px"><b>${sel.length}</b> order · Value Rs ${fmt(v)} · <b style="color:#1b6b2e">Commission Rs ${fmt(t)}</b>${to?' · 👤 '+esc(to):''}</div>
+      <div class="dpanel" style="max-height:52vh;overflow:auto"><div class="tablewrap"><table><thead><tr><th>#</th><th>Order No</th><th>Camp</th><th>Bill</th><th class="num">Value</th><th class="num">%</th><th class="num">${esc(agL)}</th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4" style="text-align:right;font-weight:800">மொத்தம்</td><td class="num" style="font-weight:800">${fmt(v)}</td><td></td><td class="num" style="font-weight:800;color:#1b6b2e">${fmt(t)}</td></tr></tfoot></table></div></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="pdPdf" style="flex:1;margin:0;background:#0b2a4a">📄 PDF எடு</button><button class="btn" id="pdClose" style="margin:0;background:#8a8f98;width:auto;padding:9px 14px">மூடு</button></div></div>`;
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});document.body.appendChild(ov);
+    ov.querySelector('#pdClose').onclick=()=>ov.remove();ov.querySelector('#pdPdf').onclick=()=>_paidDayPdf(ag,d);}
+  function _wirePaidHist(wrap){
+    wrap.querySelectorAll('[data-phag]').forEach(el=>el.addEventListener('click',()=>{_phAgent=el.dataset.phag;renderCommission();}));
+    wrap.querySelectorAll('[data-pdaypdf]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();const i=el.dataset.pdaypdf.indexOf('|');_paidDayPdf(el.dataset.pdaypdf.slice(0,i),el.dataset.pdaypdf.slice(i+1));}));
+    wrap.querySelectorAll('[data-pday]').forEach(el=>el.addEventListener('click',()=>{const i=el.dataset.pday.indexOf('|');_openPaidDay(el.dataset.pday.slice(0,i),el.dataset.pday.slice(i+1));}));}
   function _commPaidHtml(){
     const ag=_commPayAgent,agL=_agLabel(ag);
     return `<details class="egpbulk"><summary>💵 Commission Paid — ${agL}-க்கு கொடுத்ததை mark பண்ணு (paper list)</summary>
@@ -4915,7 +4961,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
         const dates=new Set([...m.dates]);adjs.forEach(a=>{if(a.date)dates.add(a.date);});
         const tCell=fmt(fT)+(tAdj?`<br><span style="font-size:9px;color:#b06a00">auto ${fmt(m.total)} ${tAdj>0?'+':''}${fmt(tAdj)}</span>`:'');
         const pCell=fmt(fP)+(pAdj?`<br><span style="font-size:9px;color:#b06a00">auto ${fmt(m.paid)} ${pAdj>0?'+':''}${fmt(pAdj)}</span>`:'');
-        return `<tr><td>${esc(_mLab(mk))}</td><td class="num">${tCell}</td><td class="num" style="color:#1b6b2e">${pCell}</td><td class="num" style="color:${mp>0.5?'#c0392b':'#999'}">${fmt(mp)}</td><td style="font-size:10px">${[...dates].join(', ')||'—'}</td><td style="font-size:10px">${[...persons].map(esc).join(', ')||'—'}</td><td><button class="copyprev" data-ledadj="${ag}|${esc(camp)}|${esc(mk)}" style="margin:0;padding:4px 7px;width:auto">➕</button></td></tr>`;}).join('');
+        return `<tr><td>${esc(_mLab(mk))}</td><td class="num">${tCell}</td><td class="num" style="color:#1b6b2e">${pCell}</td><td class="num" style="color:${mp>0.5?'#c0392b':'#999'}">${fmt(mp)}</td><td style="font-size:10px">${[...dates].map(d=>m.dates.has(d)?`<span data-pday="${ag}|${esc(d)}" style="color:#0b2a4a;font-weight:700;text-decoration:underline;cursor:pointer">${esc(d)}</span>`:esc(d)).join(', ')||'—'}</td><td style="font-size:10px">${[...persons].map(esc).join(', ')||'—'}</td><td><button class="copyprev" data-ledadj="${ag}|${esc(camp)}|${esc(mk)}" style="margin:0;padding:4px 7px;width:auto">➕</button></td></tr>`;}).join('');
       return `<div class="dsec">🏕️ ${esc(camp)} — Total ${fmt(cTotal)} · ✓ ${fmt(cPaid)} · ⏳ ${fmt(pend)}</div>
         <div class="dpanel"><div class="tablewrap"><table><thead><tr><th>Month</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Pending</th><th>Paid date</th><th>Received</th><th></th></tr></thead><tbody>${mrows}</tbody></table></div></div>`;
     }).join('');
@@ -5262,6 +5308,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       <div class="fld" style="margin-bottom:10px"><label>Camp / Buyer</label><select id="commCampSel"><option value="all">எல்லா Camp</option>${camps.map(c=>`<option value="${esc(c)}" ${_commCamp===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
       ${egpBtns}
       ${_egpSuspectHtml()}
+      ${_paidHistHtml()}
       ${_commUndoHtml()}
       ${_commPaidHtml()}
       <div class="drow">
@@ -5310,7 +5357,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const _lpdf=$('ledPdf');if(_lpdf)_lpdf.onclick=()=>openLedgerPDF(_ledgerAgent);
     _wireEgpBulk();
     _wireCommPay();
-    _wireCommPaid();_wireEgpSuspect();_wireCommPick(sup);_wireCommUndo();
+    _wireCommPaid();_wireEgpSuspect();_wireCommPick(sup);_wireCommUndo();_wirePaidHist(wrap);
     wrap.querySelectorAll('[data-ccamp]').forEach(el=>el.addEventListener('click',()=>{_commCamp=el.dataset.ccamp;renderCommission();}));
     $('commApoPdf').onclick=()=>openCommissionPDF('Apo',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('apoNon').value)||0,egpPct:Number($('apoEgp').value)||0});
     $('commClarkPdf').onclick=()=>openCommissionPDF('Clark',sup0,_commCamp,{mFrom:$('commMonthFrom').value,mTo:$('commMonthTo').value,nonPct:Number($('clkNon').value)||0,egpPct:Number($('clkEgp').value)||0});
