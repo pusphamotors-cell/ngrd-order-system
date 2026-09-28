@@ -1535,7 +1535,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
       <div class="tablewrap"><table><thead><tr>${itemHead}</tr></thead><tbody>${itemRows}</tbody></table></div>
       ${st?'':`<div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?(fmt(o.buy)+_estTag(o)):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>`}
-      <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row(_vatCfg(o)?'Bill Amount (VAT இல்லாம)':'Bill Amount',fmt(o.bill_amt))}${(!st&&_vatCfg(o))?(()=>{const t=_orderVat(o);return row('VAT '+_vatCfg(o).rate+'%',t===null?'—':fmt(t))+row('Total (VAT சேர்த்து)',t===null?'—':fmt((Number(o.bill_amt)||_vatBase(o))+t));})():''}${row('Received By',o.received_by)}${row('Navy ID No',o.received_id)}${row('Contact No',o.received_tel)}</div>
+      <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',_billDateOf(o))}${st?'':row(_vatCfg(o)?'Bill Amount (VAT இல்லாம)':'Bill Amount',fmt(o.bill_amt))}${(!st&&_vatCfg(o))?(()=>{const t=_orderVat(o);return row('VAT '+_vatCfg(o).rate+'%',t===null?'—':fmt(t))+row('Total (VAT சேர்த்து)',t===null?'—':fmt((Number(o.bill_amt)||_vatBase(o))+t));})():''}${row('Received By',o.received_by)}${row('Navy ID No',o.received_id)}${row('Contact No',o.received_tel)}</div>
       ${showPay?`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
       ${(!st&&(o.apo_pct!=null||o.clark_pct!=null))?`<div class="sec">🤝 Commission</div><div class="metarow">${row('Apo',(o.apo_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.apo_pct||0)/100)+_agPaidInfo(o,'apo'))}${row('Clark',(o.clark_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.clark_pct||0)/100)+_agPaidInfo(o,'clark'))}</div>`:''}
@@ -2187,7 +2187,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       const overdue=!(o.paid||o.bill_no||o.supplied||_naAll(o))&&o.delivery_date&&daysSince(o.delivery_date)>0;
       return `<div class="orow"${overdue?' style="border-left:4px solid #c2452f"':''}><div class="ohead" data-i="${idx}">
         <div class="left"><div class="ono">${esc(o.order_no)} <span class="badge ${s.c}">${s.t}</span>${_isTemp(o)?' <span class="badge" style="background:#fff4d6;color:#9a6b00">🪖 Temp Order · File No மட்டும்</span>':(_isArmy(o)?' <span class="badge" style="background:#e9f1e4;color:#3d6b1f">🪖 Army Order</span>':'')}${overdue?' <span class="badge" style="background:#fdecec;color:#c2452f">⏰ Overdue '+daysSince(o.delivery_date)+'d</span>':''}${_isEgp(o)?' <span class="badge" style="background:#e7f0ff;color:#1f5bb5">🏛️ eGP</span>':''}${(o.busy_sales&&o.busy_sales.done)?' <span class="badge" style="background:#d9f5e3;color:#1a7f4b" title="Busy import ஆச்சு">🧾 Busy ✓</span>':''}${o.assignee?' <span class="badge b-pend">👷 '+esc(o.assignee_name||o.assignee)+'</span>':''}${(o.assignee&&!(o.bill_no||o.supplied))?(m=>' <span class="badge" style="background:'+m[2]+'22;color:'+m[2]+'">'+m[0]+' '+m[1]+'</span>')(_STG[_stageOf(o)]):''}</div>
-          <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}${o.model?' · 🚗 '+esc(o.model):''}${o.naha_no?' · '+esc(o.naha_no):''}</div>
+          <div class="meta">${esc(_campOf(o))} · ${(o.items||[]).length} items · Delivery ${esc(o.delivery_date||'—')}${o.model?' · 🚗 '+esc(o.model):''}${o.naha_no?' · '+esc(o.naha_no):''}${o.bill_no?' · 🧾 Bill <b>'+esc(o.bill_no)+'</b> · '+(_billDateOf(o)?esc(_billDateOf(o)):'<span style="color:var(--red)">date இல்ல</span>'):''}</div>
           ${al?'<div class="alert-line '+al.c+'">'+al.t+'</div>':''}
           ${paymentAlert(o)?'<div class="alert-line payalert '+paymentAlert(o).c+'" style="margin-left:6px">'+paymentAlert(o).t+'</div>':''}
           ${sampleAlert(o)?'<div class="alert-line '+sampleAlert(o).c+'" style="margin-left:6px">'+sampleAlert(o).t+'</div>':''}</div>
@@ -3320,6 +3320,8 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     return ba?Math.min(ba,eff):eff;
   }
   // order-ku VAT amount: கையால save பண்ணது இருந்தா அது, இல்ல eligible-னா auto 18%
+  // Bill date: order-la illana item bill tick date-ஐ எடு
+  function _billDateOf(o){if(o.bill_date)return o.bill_date;const it=(o.items||[]).find(x=>x&&x.bill&&x.bill_date);return it?it.bill_date:'';}
   function _orderVat(o){const v=_vatCfg(o);if(!v)return null;
     if(o.vat_amt!=null&&o.vat_amt!=='')return Number(o.vat_amt)||0;
     if(!_vatEligible(o))return null;
@@ -5827,7 +5829,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const supLine=_naAll(o)
       ? `<div class="supL no">🚫 ${_isAllNA(o)?'எல்லா item-ும் N/A':'Supply பண்ண முடியல'} — cancel கேட்டாச்சு${_naLetterDone(o)?' · Navy letter ✅ '+esc((o.na_letter&&o.na_letter.date)||''):' · <b>Navy letter இன்னும் குடுக்கல</b>'}</div>`
       : supplied
-      ? `<div class="supL ok">✅ Supply ஆச்சு${o.bill_no?' · Bill '+esc(o.bill_no):''}${o.bill_date?' · '+esc(o.bill_date):''}</div>`
+      ? `<div class="supL ok">✅ Supply ஆச்சு${o.bill_no?' · Bill '+esc(o.bill_no):''}${_billDateOf(o)?' · 📅 '+esc(_billDateOf(o)):' · <span style="color:var(--red)">⚠️ Bill Date போடல</span>'}</div>`
       : `<div class="supL no">⏳ இன்னும் supply ஆகல</div>`;
     // verify strip: AI extract must be checked against paper PO
     const itemsum=(o.items||[]).reduce((a,it)=>a+(Number(it.total)||0),0);
@@ -5837,7 +5839,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     const verifyStrip=vf
       ? `<div style="background:#e6f7ec;border-left:3px solid var(--green);border-radius:8px;padding:7px 10px;margin:6px 0;font-size:11.5px">✅ Verified — <b>${esc(vf.by||'')}</b>${vf.at?' · '+new Date(vf.at).toLocaleDateString('en-GB'):''} · ${(o.items||[]).length} item${valChk?' · '+valChk:''}</div>`
       : `<div style="background:#fff6e5;border-left:3px solid var(--amber);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:11.5px">⚠️ <b>AI படிச்சது — confirm பண்ணல.</b> Paper PO-ஓட item names compare பண்ணு (AI சில name தப்பா படிக்கலாம்). ${(o.items||[]).length} item${valChk?' · '+valChk:''}<div style="margin-top:6px"><button class="btn" data-verify="${esc(o.id||o.order_no)}" style="margin:0;width:auto;padding:5px 12px;font-size:11.5px;background:var(--green)">✅ Verify ஆச்சு (சரி)</button></div></div>`;
-    const meta=[['File No',o.file_no],['Vehicle / NAHA',o.naha_no],['Civil No',o.civil_no],['Model',o.model],['Camp',_campOf(o)],['Company',_companyOf(o)],['Order Date',o.order_date],['Delivery',o.delivery_date]].concat(_isEgp(o)?[['🏛️ eGP Ref',o.egp_ref||o.proc_ref||'—'],['🏛️ eGP Date',o.egp_date||'—']]:[]).concat([['Value','Rs '+fmt(o.sell)],['Paid',o.paid?('✅ '+(o.pay_date||'ஆச்சு')):'—']])
+    const meta=[['File No',o.file_no],['Vehicle / NAHA',o.naha_no],['Civil No',o.civil_no],['Model',o.model],['Camp',_campOf(o)],['Company',_companyOf(o)],['Order Date',o.order_date],['Delivery',o.delivery_date]].concat(supplied?[['🧾 Bill No',o.bill_no||'—'],['🧾 Bill Date',_billDateOf(o)||'⚠️ போடல']]:[]).concat(_isEgp(o)?[['🏛️ eGP Ref',o.egp_ref||o.proc_ref||'—'],['🏛️ eGP Date',o.egp_date||'—']]:[]).concat([['Value','Rs '+fmt(o.sell)],['Paid',o.paid?('✅ '+(o.pay_date||'ஆச்சு')):'—']])
       .filter(m=>m[1]!=null&&m[1]!=='').map(m=>`<div><div class="k">${m[0]}</div><div class="v">${esc(m[1])}</div></div>`).join('');
     const items=(o.items||[]);
     const rows=items.length?items.map((it,n)=>`<tr><td class="ctr">${n+1}</td><td>${esc(it.description||'—')}</td><td>${esc(it.brand||'—')}</td><td>${esc(it.partno||'—')}</td><td class="num">${esc(it.qty||'')}</td><td class="num">${it.unit_price?fmt(it.unit_price):'—'}</td><td class="num">${it.total?fmt(it.total):'—'}</td></tr>`).join('')
