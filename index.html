@@ -1535,7 +1535,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
       <div class="sec">📦 Items (${(o.items||[]).length})</div>
       <div class="tablewrap"><table><thead><tr>${itemHead}</tr></thead><tbody>${itemRows}</tbody></table></div>
       ${st?'':`<div class="sec">💰 லாபம்</div><div class="metarow">${row('விற்றது',fmt(o.sell))}${row('வாங்கியது',hasCost(o)?(fmt(o.buy)+_estTag(o)):'— (cost போடல)')}${row('லாபம்',profitVal(o)===null?'—':fmt(profitVal(o)))}${row('Margin',(profitVal(o)!==null&&o.sell>0)?((profitVal(o)/o.sell*100).toFixed(1)+'%'):'—')}</div>`}
-      <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row('Bill Amount',fmt(o.bill_amt))}</div>
+      <div class="sec">🚚 Supply</div><div class="metarow">${row('Supply ஆச்சா',o.supplied?'ஆம் ✓':'இல்ல')}${row('Bill No',o.bill_no)}${row('Bill Date',o.bill_date)}${st?'':row(_vatCfg(o)?'Bill Amount (VAT இல்லாம)':'Bill Amount',fmt(o.bill_amt))}${(!st&&_vatCfg(o))?(()=>{const t=_orderVat(o);return row('VAT '+_vatCfg(o).rate+'%',t===null?'—':fmt(t))+row('Total (VAT சேர்த்து)',t===null?'—':fmt((Number(o.bill_amt)||_vatBase(o))+t));})():''}${row('Received By',o.received_by)}${row('Navy ID No',o.received_id)}${row('Contact No',o.received_tel)}</div>
       ${showPay?`<div class="sec">💵 Payment</div><div class="metarow">${row('Payment வந்துச்சா',o.paid?'ஆம் ✓':'இல்ல')}${row('Cheque No',o.cheque_no)}${row('Payment Date',o.pay_date)}</div>
       ${paymentAlert(o)?'<div style="padding:8px 13px"><span class="alert-line '+paymentAlert(o).c+'">'+paymentAlert(o).t+'</span></div>':''}`:''}
       ${(!st&&(o.apo_pct!=null||o.clark_pct!=null))?`<div class="sec">🤝 Commission</div><div class="metarow">${row('Apo',(o.apo_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.apo_pct||0)/100)+_agPaidInfo(o,'apo'))}${row('Clark',(o.clark_pct||0)+'% → Rs '+fmt((Number(o.sell)||0)*(o.clark_pct||0)/100)+_agPaidInfo(o,'clark'))}</div>`:''}
@@ -1588,7 +1588,10 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         <div class="fld"><label>Bill No</label><input id="e_billNo" value="${v(o.bill_no)}"></div>
         <div class="fld"><label>Bill Date</label><input type="date" id="e_billDate" value="${v(o.bill_date)}"></div>
         <div class="fld full"><label>Goods Received By (யார் வாங்கினாங்க)</label><input id="e_recvBy" value="${v(o.received_by)}" placeholder="Navy person name / rank"></div>
-        ${showVal?'<div class="fld full"><label>Bill Amount (Rs)</label><input type="number" id="e_billAmt" inputmode="decimal" value="'+(o.bill_amt||'')+'"></div>':''}
+        <div class="fld"><label>Navy ID No</label><input id="e_recvId" value="${v(o.received_id)}" placeholder="Service / ID No"></div>
+        <div class="fld"><label>Contact No</label><input id="e_recvTel" type="tel" inputmode="tel" value="${v(o.received_tel)}" placeholder="07X XXX XXXX"></div>
+        ${showVal?'<div class="fld full"><label>Bill Amount'+(_vatCfg(o)?' — VAT இல்லாம':'')+' (Rs)</label><input type="number" id="e_billAmt" inputmode="decimal" value="'+(o.bill_amt||'')+'"></div>':''}
+        ${(showVal&&_vatCfg(o))?'<div class="fld"><label>VAT '+_vatCfg(o).rate+'% (Rs)</label><input type="number" id="e_vatAmt" inputmode="decimal" value="'+(o.vat_amt!=null?o.vat_amt:'')+'" placeholder="auto"></div><div class="fld"><label>Total — VAT சேர்த்து (Rs)</label><input id="e_vatTot" readonly style="font-weight:800;color:var(--navy)"></div><div class="full" id="e_vatHint" style="font-size:11px;color:var(--muted);margin-top:-4px"></div>':''}
       </div>`:''}
       ${showPay?`<label class="toggle"><input type="checkbox" id="e_paid" ${o.paid?'checked':''}><span>Payment வந்துடுச்சா? ✓</span></label>
       <div class="grid2">
@@ -1779,6 +1782,17 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const commCalc=()=>{const s=Number(o.sell)||0;
       if(_apoP){const a=Number(_apoP.value)||0;box.querySelector('#e_apoRs').textContent=fmt(s*a/100);}
       if(_clkP){const c=Number(_clkP.value)||0;box.querySelector('#e_clarkRs').textContent=fmt(s*c/100);}};
+    // 🧾 VAT (Puspha மட்டும்) — Bill Amount மேல 18% auto; கையால மாத்தினா அதுவே நிக்கும்
+    const _vI=box.querySelector('#e_vatAmt'),_vT=box.querySelector('#e_vatTot'),_vB=box.querySelector('#e_billAmt'),_vD=box.querySelector('#e_billDate'),_vH=box.querySelector('#e_vatHint');
+    if(_vI&&_vB){const _vc=_vatCfg(o);let _vMan=o.vat_amt!=null&&o.vat_amt!=='';
+      const _vOk=()=>{const d=(_vD&&_vD.value)||o.bill_date||'';return !d||d.slice(0,10)>=_vc.from;};
+      const vatCalc=()=>{const b=Number(_vB.value)||0;
+        if(!_vMan)_vI.value=(b&&_vOk())?Math.round(b*_vc.rate)/100:'';
+        const t=Number(_vI.value)||0;_vT.value=b?fmt(b+t):'';
+        _vH.innerHTML=!_vOk()?'⚠️ Bill date VAT registration ('+esc(_vc.fromTxt)+')-க்கு முன்னாடி — VAT போடக்கூடாது':(_vMan?'✏️ VAT கையால போட்டது — <a href="#" id="e_vatAuto">auto-க்கு மாத்து</a>':'Bill Amount × '+_vc.rate+'% auto');
+        const au=box.querySelector('#e_vatAuto');if(au)au.onclick=ev=>{ev.preventDefault();_vMan=false;vatCalc();};};
+      _vI.addEventListener('input',()=>{_vMan=_vI.value!=='';vatCalc();});
+      _vB.addEventListener('input',vatCalc);if(_vD)_vD.addEventListener('change',vatCalc);vatCalc();}
     if(_apoP)_apoP.addEventListener('input',commCalc);
     if(_clkP)_clkP.addEventListener('input',commCalc);
     commCalc();
@@ -1787,8 +1801,9 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         if(eMode==='items'){o.items=readItemDetails(box.querySelector('#e_costItems'),o.items);buy=o.items.reduce((a,it)=>a+(Number(it.cost)||0),0);}
         else{buy=Number(box.querySelector('#e_buy').value)||0;}
         o.buy=buy;o.profit=buy>0?((Number(o.sell)||0)-buy):null;if(buy>0)delete o.buy_est;}
-      const _sup=box.querySelector('#e_supplied');if(_sup){o.supplied=_sup.checked;o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';const _rb=box.querySelector('#e_recvBy');if(_rb)o.received_by=_rb.value||'';}
+      const _sup=box.querySelector('#e_supplied');if(_sup){o.supplied=_sup.checked;o.bill_no=box.querySelector('#e_billNo').value||'';o.bill_date=box.querySelector('#e_billDate').value||'';const _rb=box.querySelector('#e_recvBy');if(_rb)o.received_by=_rb.value||'';const _ri=box.querySelector('#e_recvId');if(_ri)o.received_id=_ri.value.trim();const _rt=box.querySelector('#e_recvTel');if(_rt)o.received_tel=_rt.value.trim();}
       const _ba=box.querySelector('#e_billAmt');if(_ba)o.bill_amt=Number(_ba.value)||0;
+      const _va=box.querySelector('#e_vatAmt');if(_va)o.vat_amt=_va.value===''?null:(Number(_va.value)||0);
       const _pd=box.querySelector('#e_paid');if(_pd){o.paid=_pd.checked;o.cheque_no=box.querySelector('#e_chequeNo').value||'';o.pay_date=box.querySelector('#e_payDate').value||'';}
       if(_apoP){const a=_apoP.value.trim();o.apo_pct=a===''?null:Number(a)||0;o.apo_comm=(Number(o.sell)||0)*(o.apo_pct||0)/100;}
       if(_clkP){const c=_clkP.value.trim();o.clark_pct=c===''?null:Number(c)||0;o.clark_comm=(Number(o.sell)||0)*(o.clark_pct||0)/100;}
@@ -3304,6 +3319,11 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
     if(!eff)return ba||Number(o.sell)||0;    // N/A-ku value இல்ல → கையால போடணும்
     return ba?Math.min(ba,eff):eff;
   }
+  // order-ku VAT amount: கையால save பண்ணது இருந்தா அது, இல்ல eligible-னா auto 18%
+  function _orderVat(o){const v=_vatCfg(o);if(!v)return null;
+    if(o.vat_amt!=null&&o.vat_amt!=='')return Number(o.vat_amt)||0;
+    if(!_vatEligible(o))return null;
+    const b=Number(o.bill_amt)||_vatBase(o);return b?Math.round(b*v.rate)/100:null;}
   function _vatSrc(o){
     const its=o.items||[];
     if(its.some(it=>it.bill))return 'item-ku bill tick (real invoice)';
@@ -5872,7 +5892,7 @@ function _coInfo(company){const isP=company==='Puspha Motors';return{
       (o.model?`Vehicle: ${o.model}${o.naha_no?' · '+o.naha_no:''}\n`:'')+
       amt+
       (o.bill_date?`Supplied/Billed: ${o.bill_date}\n`:'')+
-      (o.received_by?`Goods received by: ${o.received_by}\n`:'')+
+      (o.received_by?`Goods received by: ${o.received_by}${o.received_id?' (ID: '+o.received_id+')':''}${o.received_tel?' · '+o.received_tel:''}\n`:'')+
       `\nVanakkam bro 🙏 Indha order-ku payment innum varala`+(days&&days>0?` (${days} naal aachu)`:'')+`. Dhayavu senji arrange pannunga. Nandri.\n`+
       `${comp} · ${phone}`;
     window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
