@@ -430,6 +430,7 @@
     </div>
     <textarea class="pastebox hide" id="pasteBox" placeholder="PO text paste பண்ணு... அல்லது image-ஐ Ctrl+V — பல page இருந்தா ஒவ்வொன்னா paste பண்ணு (5-6 வரை)"></textarea>
     <div id="pastePreview" class="hide"></div>
+    <label id="multiLbl" style="display:flex;align-items:center;gap:7px;margin-top:8px;padding:8px 11px;border:1.5px solid #c9a227;border-radius:10px;background:#fffaf0;font-size:12.5px;font-weight:700;color:#7a5a00;cursor:pointer"><input type="checkbox" id="multiPO" style="width:17px;height:17px"> 📚 ஒரே scan-ல பல Order இருக்கு (6–10 PO) — AI தனித்தனியா பிரிக்கும்</label>
     <button class="btn" id="go" disabled>படி 2 — Extract பண்ணு (AI)</button>
     <div class="note">AI: Order No, File No, NAHA, Civil No, Model, items + விலை தானா எடுக்கும்</div>
     <div style="text-align:center;margin:10px 0;font-size:11px;color:var(--muted)">— illa —</div>
@@ -901,6 +902,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     const pasteText=$('pasteBox').value.trim();
     if(mode==='file'&&!chosen)return;
     if(mode==='paste'&&!pastedImgs.length&&!pasteText)return;
+    if($('multiPO')&&$('multiPO').checked&&(mode==='file'||pastedImgs.length))return _extractMulti();
     $('errbox').innerHTML='';$('go').disabled=true;$('go').innerHTML='<span class="spin"></span>PO படிக்கிறேன்...';
     try{
       let content;
@@ -925,6 +927,90 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     finally{$('go').innerHTML='படி 2 — Extract பண்ணு (AI)';updateGo();}
   }
   $('go').addEventListener('click',extract);
+
+  // ===== 📚 பல Order — ஒரே scan-ல 6-10 PO =====
+  // 1) AI: entha page entha order-nu pirikkum  2) ovvoru order-ayum thaniya (adhe PROMPT) padikkum
+  // 3) list-la ovvonna 👁️ paathu Save — AI thappu padicha save-ku munnaadi thiruthalaam
+  (function(){try{const m=$('multiPO');if(!m)return;m.checked=localStorage.getItem('ngrd_multiPO')==='1';
+    m.addEventListener('change',()=>{try{localStorage.setItem('ngrd_multiPO',m.checked?'1':'0');}catch(e){}});}catch(e){}})();
+  const _SPLIT_PROMPT=n=>`This scan contains SEVERAL separate Sri Lanka government purchase orders (Navy POs and/or Army/Police/STF Job Orders) scanned together, one after another${n?`. There are ${n} pages, numbered 1 to ${n} in order`:''}. Work out which pages belong to which order. A NEW order starts on a page that has its own letterhead / "PURCHASE ORDER" heading / a different Order No. Continuation pages (item table continued, vehicle block, signatures) belong to the order before them. Respond ONLY valid JSON, no markdown: {"orders":[{"pages":[1,2],"order_no":"WNA/APOW/PO/2026/0949"}]}. Every page must appear in exactly one order, in scan order. order_no = the PO number as printed (for an Army Job Order with no PO number use the Work No), "" if unreadable.`;
+  const _loadPdfLib=()=>window.PDFLib?Promise.resolve(window.PDFLib):new Promise((res,rej)=>{const sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';sc.onload=()=>window.PDFLib?res(window.PDFLib):rej(new Error('pdf-lib'));sc.onerror=()=>rej(new Error('pdf-lib load fail'));document.head.appendChild(sc);});
+  function _u8b64(u8){let t='';for(let i=0;i<u8.length;i+=0x8000)t+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(t);}
+  async function _aiCall(content){
+    const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
+    if(!resp.ok)throw new Error('AI fail ('+resp.status+')');
+    const data=await resp.json();return (data.content||[]).filter(i=>i.type==='text').map(i=>i.text).join('\n');}
+  async function _extractMulti(){
+    const go=$('go');const setP=t=>{go.innerHTML='<span class="spin"></span>'+t;};
+    $('errbox').innerHTML='';go.disabled=true;
+    try{
+      const src=mode==='file'?[chosen]:pastedImgs.slice();
+      let pdfBytes=null,srcDoc=null,PL=null,imgs=null,n=0;
+      if(src.length===1&&src[0].type==='application/pdf'){
+        pdfBytes=new Uint8Array(await src[0].arrayBuffer());
+        try{PL=await _loadPdfLib();srcDoc=await PL.PDFDocument.load(pdfBytes,{ignoreEncryption:true});n=srcDoc.getPageCount();}catch(e){PL=null;srcDoc=null;}
+      }else{
+        if(src.some(f=>f.type==='application/pdf'))throw new Error('பல Order mode-ல ஒரே ஒரு PDF, இல்ல page images மட்டும் போடு bro');
+        imgs=[];for(const f of src)imgs.push((await _compressImg(f)).b64);n=imgs.length;
+      }
+      const whole=pdfBytes?[{type:'document',source:{type:'base64',media_type:'application/pdf',data:_u8b64(pdfBytes)}}]
+        :imgs.flatMap((b,i)=>[{type:'text',text:'Page '+(i+1)+':'},{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b}}]);
+      setP('எத்தனை order இருக்கு-னு பாக்குறேன்'+(n?' ('+n+' page)':'')+'...');
+      const sp=_parseAIjson(await _aiCall(whole.concat([{type:'text',text:_SPLIT_PROMPT(n)}])));
+      const groups=((sp&&sp.orders)||[]).map(g=>({pages:[...new Set((g.pages||[]).map(Number))].filter(x=>x>=1&&(!n||x<=n)).sort((a,b)=>a-b),hint:String(g.order_no||'')})).filter(g=>g.pages.length);
+      if(!groups.length)throw new Error('Order பிரிக்க முடியல — 📚 tick எடுத்துட்டு single-ஆ try பண்ணு');
+      const subset=async pages=>{
+        if(imgs)return pages.map(pg=>({type:'image',source:{type:'base64',media_type:'image/jpeg',data:imgs[pg-1]}})).concat([{type:'text',text:'The above '+pages.length+' images are ALL pages of ONE single order. Combine every page into ONE order. '+PROMPT}]);
+        if(srcDoc){const nd=await PL.PDFDocument.create();(await nd.copyPages(srcDoc,pages.map(pg=>pg-1))).forEach(pg=>nd.addPage(pg));
+          return [{type:'document',source:{type:'base64',media_type:'application/pdf',data:_u8b64(await nd.save())}},{type:'text',text:PROMPT}];}
+        return whole.concat([{type:'text',text:'This PDF holds several separate orders. Extract ONLY the ONE order on page(s) '+pages.join(', ')+' and ignore every other page. '+PROMPT}]);};
+      const B=window._batch=groups.map(g=>({pages:g.pages,hint:g.hint,rec:null,st:'wait',err:''}));
+      window._batchIdx=null;let done=0;
+      const runOne=async b=>{b.st='run';_renderBatch();
+        try{const r=_parseAIjson(await _aiCall(await subset(b.pages)));r.items=Array.isArray(r.items)?r.items:[];_applyTempOrder(r);b.rec=r;b.st='ok';}
+        catch(e){b.st='err';b.err=e.message||String(e);}
+        _renderBatch();};
+      window._batchRetry=i=>{const b=B[i];if(b&&b.st==='err')runOne(b);};
+      _renderBatch();
+      const worker=async()=>{for(;;){const b=B.find(x=>x.st==='wait');if(!b)return;await runOne(b);done++;setP(done+'/'+B.length+' order படிச்சாச்சு...');}};
+      await Promise.all([worker(),worker(),worker()]);
+      chosen=null;pastedImgs=[];$('file').value='';$('pasteBox').value='';$('pastePreview').innerHTML='';$('drop').classList.remove('has');$('dropbig').textContent='PO file தேர்ந்தெடு';$('chip').innerHTML='';
+    }catch(err){$('errbox').innerHTML='<div class="err">⚠️ '+esc(err.message||err)+'</div>';}
+    finally{go.innerHTML='படி 2 — Extract பண்ணு (AI)';updateGo();}
+  }
+  function _batchDup(r){const k=(r&&r.order_no||'').trim().toLowerCase();if(!k)return null;
+    return orders.find(o=>{const ok=(o.order_no||'').trim().toLowerCase();return ok===k||ok.replace(/ · (ngrd|puspha)$/,'')===k;})||null;}
+  function _renderBatch(){
+    const B=window._batch;if(!B||window._batchIdx!=null)return;
+    const sv=B.filter(b=>b.st==='saved').length,ok=B.filter(b=>b.st==='ok').length,busy=B.filter(b=>b.st==='run'||b.st==='wait').length;
+    const rows=B.map((b,i)=>{const r=b.rec||{};const sell=Number(r.total_amount)||(r.items||[]).reduce((a,x)=>a+(Number(x.total)||0),0);
+      const dup=b.st==='ok'?_batchDup(r):null;
+      const act=b.st==='saved'?'<span style="color:var(--green);font-weight:800">✅ Save ஆச்சு</span>'
+        :b.st==='ok'?`<button class="btn gold" data-bopen="${i}" style="margin:0;width:auto;padding:7px 14px">👁️ பாரு → Save</button>`
+        :b.st==='err'?`<span style="color:#b00;font-size:11px">⚠️ ${esc(b.err)}</span> <button class="btn" data-bretry="${i}" style="margin:0;width:auto;padding:6px 10px;background:#8a8f98">🔁 மறுபடி</button>`
+        :'<span style="color:var(--muted);font-size:11.5px"><span class="spin"></span>'+(b.st==='run'?'படிக்கிறேன்...':'wait...')+'</span>';
+      return `<div style="border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin:7px 0;background:${b.st==='saved'?'#eefaf1':'#fff'}">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+          <div style="min-width:0"><div style="font-weight:800;color:var(--navy);word-break:break-all">${i+1}. ${esc(b.savedNo||r.order_no||b.hint||'Order No ?')}</div>
+          <div style="font-size:11px;color:var(--muted)">📄 page ${b.pages.join(', ')}${r.file_no?' · File '+esc(r.file_no):''}${r.naha_no?' · '+esc(r.naha_no):''}${r.model?' · 🚗 '+esc(r.model):''}${b.rec?' · '+(r.items||[]).length+' item · Rs '+fmt(sell):''}</div>
+          ${dup?'<div style="font-size:11px;color:#a35a00;font-weight:700">⚠️ இந்த No ஏற்கனவே save ஆயிருக்கு</div>':''}</div>
+          <div>${act}</div></div></div>`;}).join('');
+    $('result').innerHTML=`<div class="card" style="padding:12px"><div style="font-weight:800;color:var(--navy);font-size:14px">📚 ${B.length} order கிடைச்சுது · ${sv} save ஆச்சு${busy?' · '+busy+' படிக்கிறேன்':''}</div>
+      <div style="font-size:11px;color:var(--muted);margin:3px 0 4px">ஒவ்வொன்னா 👁️ பாரு → AI படிச்சது சரியா-னு paper PO-ஓட check பண்ணி Save பண்ணு.${ok?' இன்னும் '+ok+' save பண்ணணும்.':''}</div>${rows}</div>`;
+    $('result').querySelectorAll('[data-bopen]').forEach(bt=>bt.onclick=()=>_openBatch(+bt.dataset.bopen));
+    $('result').querySelectorAll('[data-bretry]').forEach(bt=>bt.onclick=()=>window._batchRetry(+bt.dataset.bretry));
+  }
+  function _openBatch(i){const B=window._batch;const b=B&&B[i];if(!b||!b.rec)return;
+    window._batchIdx=i;current=b.rec;showForm();
+    $('result').insertAdjacentHTML('afterbegin',`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fffaf0;border:1.5px solid #c9a227;border-radius:10px;padding:8px 11px;margin-bottom:8px;font-size:12.5px;font-weight:700;color:#7a5a00">📚 Order ${i+1} / ${B.length} <a href="#" id="batchBack" style="color:var(--navy)">⬅️ List-க்கு போ</a></div>`);
+    $('batchBack').onclick=e=>{e.preventDefault();window._batchIdx=null;current=null;_renderBatch();};
+    try{$('result').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}}
+  // saveOrder success → batch-la irundhaa list-ku thirumbu
+  function _batchAfterSave(o){const B=window._batch,i=window._batchIdx;if(!B||i==null||!B[i])return false;
+    B[i].st='saved';B[i].savedNo=o.order_no;window._batchIdx=null;_renderBatch();
+    if(B.every(b=>b.st==='saved'))$('result').insertAdjacentHTML('afterbegin','<div class="empty" style="border-color:var(--green);background:var(--green-bg);color:#155;margin-bottom:8px">🎉 எல்லா '+B.length+' order-um save ஆச்சு!</div>');
+    return true;}
 
   // Army/Police/STF temporary Job Order-ku Order No kidaiyaadhu, File No (வேலை எண்) mattum dhaan.
   // System-la ellam order_no vechu thedudhu, adhanaala File No-ve key-aa vechu order_temp flag podrom.
@@ -1429,7 +1515,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     }
     if(dup){
       if(confirm('⚠️ இந்த PO Number ("'+order_no+'") ஏற்கனவே save ஆயிருக்கு!\n\nஅந்த order-ஐ இப்போ பாக்கணுமா?\n(OK = அந்த order-ஐ பாரு · Cancel = வேண்டாம், திரும்ப check பண்ணு)')){
-        current=null;try{_openOrderEdit(dup.id);}catch(e){setTab('list');renderList();}
+        current=null;window._batchIdx=null;try{_openOrderEdit(dup.id);}catch(e){setTab('list');renderList();}
       }
       return;
     }
@@ -1446,6 +1532,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     _egpStampOrder(o);
     try{await window.storage.set(o.id,JSON.stringify(o));orders.unshift(o);current=null;
       $('result').innerHTML='<div class="empty" style="border-color:var(--green);background:var(--green-bg);color:#155">✅ Save ஆச்சு! லாபம்: '+profitTxt(o)+'<br><small>"Saved Orders" tab-ல பாக்கலாம்</small></div>';
+      _batchAfterSave(o);
     }catch(e){$('errbox').innerHTML='<div class="err">⚠️ Save fail: '+esc(e.message)+'</div>';}
   }
 
