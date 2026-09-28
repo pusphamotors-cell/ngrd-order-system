@@ -793,13 +793,15 @@
   }
   async function _scanPoll(){
     if(!_scan.dir||_scan.busy)return;_scan.busy=true;
+    let added=0;
     try{for(const h of await _scanList()){const f=await h.getFile();const k=h.name+'|'+f.lastModified;
         if(_scan.seen.has(k))continue;
         // scanner innum ezhudhikittu irukkaa? size 2 poll-ku maaralana ready
         const sz=(_scan.sz=_scan.sz||{});
         if(!f.size||sz[h.name]!==f.size){sz[h.name]=f.size;continue;}
-        delete sz[h.name];_scan.seen.add(k);_scan.pend.push(f);}
-      if(_scan.pend.length){clearTimeout(_scan.pendT);_scan.pendT=setTimeout(_scanFlush,3000);} // pala page JPG-aa vandhaa onna serkka
+        delete sz[h.name];_scan.seen.add(k);_scan.pend.push(f);added++;}
+      // pudhu file vandha poll-la mattum timer reset — illana 2.5s poll 3s timer-a ovvoru thadavaiyum reset panni load aagave aagaadhu
+      if(added){clearTimeout(_scan.pendT);_scan.pendT=setTimeout(_scanFlush,3000);} // pala page JPG-aa vandhaa onna serkka
     }catch(e){_scanStat('⚠️ Folder connection போச்சு — 🖨️ button-ஐ மறுபடி அழுத்து','#b00');clearInterval(_scan.timer);}
     finally{_scan.busy=false;}
   }
