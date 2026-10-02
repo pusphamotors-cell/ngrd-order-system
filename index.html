@@ -869,6 +869,17 @@
 {"service":"","order_no":"","file_no":"","proc_ref":"","naha_no":"","civil_no":"","chassis_no":"","engine_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","camp":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0,"brand":"","country":""}]}
 service = "navy", "army", "stf" or "police" — whichever force issued the order.
 
+ARMY PURCHASE ORDER (Sinhala letter titled "භාණ්ඩ/සේවා සැපයීම සඳහා නිකුත් කරන මිලදීගැනීමේ ඇණවුම", letterhead of an Army unit e.g. "4 BATTALION SRI LANKA ARMY ELECTRICAL & MECHANICAL ENGINEERS, ARMY CAMP, AIYAKACHI") → service = "army". This is the REAL order (not a temporary Job Order):
+- order_no = the "අපගේ යොමුව:" (Our Ref) value at the top-right, e.g. "4BN/TR/26/LP/036" — keep every slash, remove spaces. file_no = "".
+- po_date = the letter date "2026 සැප්තැම්බර් මස 16 දින" → "2026-09-16" (Sinhala months: ජනවාරි=01 පෙබරවාරි=02 මාර්තු=03 අප්‍රේල්=04 මැයි=05 ජූනි=06 ජූලි=07 අගෝස්තු=08 සැප්තැම්බර්=09 ඔක්තෝබර්=10 නොවැම්බර්=11 දෙසැම්බර්=12). Handwritten day digits — read carefully.
+- quotation_date = the date in "යොමුව: ඔබ ආයතනය වෙතින් 2026.08.14 දින ඉදිරිපත් කර ඇති මිල පිරිනැමුම" → "2026-08-14".
+- delivery_date = the last-supply date in paragraph 4 ("...භාරදීමේ අවසාන දිනය 2026.09.27 වන බැවින්...") → "2026-09-27". The day may be handwritten/overwritten — read the final digits.
+- total_amount = the amount in paragraph 3 ("මුළු වටිනාකම රු: 139,295.00") — must equal the table's "එකතුව".
+- Vehicle line just above the table, e.g. "යුහ 29483 දරණ ට්‍රැක්ටරය - 512 පාබලසේනාව": naha_no = the vehicle number keeping the Sinhala prefix ("යුහ 29483"); model = the vehicle type in English ("Tractor").
+- buyer = the unit in English from the letterhead (e.g. "4 Battalion SLEME, Army Camp, Aiyakachi"); camp = the camp town in English (e.g. "Aiyakachi").
+- supplier = the company the letter is addressed to, exactly "NGRD Motors" or "Puspha Motors" (the printed address may be old — go by the name).
+- ITEMS table columns: අ/අ (sn) / විෂය (description) / ප්‍රමාණය (qty) / ඒකක මිල (unit_price) / මුළු එකතුව (total) / භාණ්ඩ වර්ගය හා නිෂ්පාදිත රට (brand). The table often runs onto page 2 — include every row from all pages. The photo may be tilted so numbers sit half a row lower than their description: match each row so that qty × unit_price = total, and all totals add up to total_amount. Skip the එකතුව / වැට් 18% / වැට් සමග එකතුව summary rows.
+
 STF PURCHASE ORDER (letterhead "SPECIAL TASK FORCE · Transport Division · STF Rear Headquarters, Gonahena, Kadawatha", top-left "eGP-QUOTATION NO STF/TPT/DP/521/26", top-right "Ref No / AR NO / DATE") → service = "stf":
 - order_no = the "AR NO" value, e.g. "AR-356-26" — keep every dash, remove spaces ("AR- 356 - 26" → "AR-356-26").
 - file_no = the "eGP-QUOTATION NO" value, e.g. "STF/TPT/DP/521/26" — remove spaces, keep every slash.
@@ -923,7 +934,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         content=[];
         for(const f of pastedImgs){const c=await _compressImg(f);
           content.push(c.pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:c.b64}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.b64}});}
-        content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO, STF Purchase Order or Army/Police/STF Job Order. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
+        content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO, STF / Army Purchase Order or Army/Police/STF Job Order. Item tables often continue on page 2. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
       } else {content=[{type:'text',text:'Sri Lanka Navy PO / Army Job Order text:\n\n'+pasteText+'\n\n'+PROMPT}];}
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+'). மறுபடி try பண்ணு.');
@@ -1516,9 +1527,36 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     $('pvProf').textContent=buy>0?fmt(sell-buy):'—';
     $('pbProf').classList.toggle('neg',buy>0&&(sell-buy)<0);}
 
+  // Army real Purchase Order vandhaa — adhe vehicle + company-ku Temp Job Order irundhaa
+  // pudhu order podaama, andha Temp order-ayae update pannuvom (duplicate aagaama, purchase/bill data pogaama)
+  const _vehKey=v=>String(v||'').replace(/[^0-9]/g,'');
+  async function _linkArmyTemp(order_no){
+    if(!current||current.order_temp||!_isArmy(current))return false;
+    const vk=_vehKey(current.naha_no);if(vk.length<3)return false;
+    const co=_companyOf(current);
+    const t=orders.find(o=>_isTemp(o)&&_isArmy(o)&&_companyOf(o)===co&&_vehKey(o.naha_no)===vk);
+    if(!t)return false;
+    if(!confirm('🪖 இந்த vehicle ('+(current.naha_no||'')+') -க்கு ஏற்கனவே Temp Job Order இருக்கு:\n'+(t.file_no||t.order_no)+'\n\nOK = அந்த order-ஐயே இந்த Order No ('+order_no+') -க்கு update பண்ணு\nCancel = தனி புது order-ஆ save பண்ணு'))return false;
+    const fn=t.file_no||t.order_no;
+    t.file_no=fn;t.order_no=order_no;t.order_temp=false;t.service='army';
+    ['buyer','camp_name','model','quotation_date','delivery_date','proc_ref','egp_ref','company','supplier'].forEach(k=>{if(current[k])t[k]=current[k];});
+    if(current.po_date)t.order_date=current.po_date;
+    const ni=current.items||[],oi=t.items||[];let note='';
+    if(!oi.length)t.items=ni;
+    else if(oi.length===ni.length)oi.forEach((x,i)=>{const n=ni[i];['qty','unit_price','total','brand','country'].forEach(k=>{if(n[k]!=null&&n[k]!=='')x[k]=n[k];});});
+    else note='\n\n⚠️ Item count வேற ('+oi.length+' vs '+ni.length+') — பழைய items அப்படியே இருக்கு, check பண்ணு.';
+    const sell=Number(($('sellIn')||{}).value)||Number(current.total_amount)||0;if(sell){t.sell=sell;t.profit=(Number(t.buy)>0?sell-t.buy:null);}
+    t.savedAt=new Date().toISOString();_armyCampMemo.n=-1;
+    try{await window.storage.set(t.id,JSON.stringify(t));current=null;
+      $('result').innerHTML='<div class="empty" style="border-color:var(--green);background:var(--green-bg);color:#155">✅ Temp order '+esc(fn)+' → '+esc(order_no)+' update ஆச்சு!</div>';
+      if(note)alert(note.trim());_batchAfterSave(t);
+    }catch(e){$('errbox').innerHTML='<div class="err">⚠️ Save fail: '+esc(e.message)+'</div>';}
+    return true;
+  }
   async function saveOrder(){
     let order_no=(current.order_no||'').trim();
     if(!order_no){alert('Order No-um File No-um இல்ல — ✏️ திருத்து-ல ஒன்னு போடு (Army temp order-னா File No போதும்)');return;}
+    if(await _linkArmyTemp(order_no))return;
     // duplicate check — same No + same company = block. Army Job Order ore File No-la
     // NGRD-kum Puspha-kum thani-thaniyaa varum → company vera-na allow.
     const _myCo=_companyOf(current);
