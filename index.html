@@ -865,8 +865,19 @@
     setTimeout(updateGo,0);});
   $('pasteBox').addEventListener('input',updateGo);
 
-  const PROMPT=`Extract details from this Sri Lanka government purchase order — either a Navy PO, or an Army / Police / STF "JOB ORDER" (කාර්ය නියෝගය, often in Sinhala). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
-{"order_no":"","file_no":"","proc_ref":"","naha_no":"","civil_no":"","chassis_no":"","engine_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","camp":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0}]}
+  const PROMPT=`Extract details from this Sri Lanka government purchase order — either a Navy PO, an STF (Special Task Force) Purchase Order, or an Army / Police / STF "JOB ORDER" (කාර්ය නියෝගය, often in Sinhala). Respond ONLY valid JSON, no markdown. Read exactly as printed; never invent. Shape:
+{"service":"","order_no":"","file_no":"","proc_ref":"","naha_no":"","civil_no":"","chassis_no":"","engine_no":"","model":"","quotation_date":"","po_date":"","delivery_date":"","supplier":"","buyer":"","camp":"","total_amount":0,"items":[{"sn":1,"description":"","qty":0,"unit_price":0,"total":0,"brand":"","country":""}]}
+service = "navy", "army", "stf" or "police" — whichever force issued the order.
+
+STF PURCHASE ORDER (letterhead "SPECIAL TASK FORCE · Transport Division · STF Rear Headquarters, Gonahena, Kadawatha", top-left "eGP-QUOTATION NO STF/TPT/DP/521/26", top-right "Ref No / AR NO / DATE") → service = "stf":
+- order_no = the "AR NO" value, e.g. "AR-356-26" — keep every dash, remove spaces ("AR- 356 - 26" → "AR-356-26").
+- file_no = the "eGP-QUOTATION NO" value, e.g. "STF/TPT/DP/521/26" — remove spaces, keep every slash.
+- proc_ref = the "Ref No" long number (e.g. 2026050485821).
+- po_date = the "DATE" value (e.g. 4 June, 2026). delivery_date = the last-supply date in the Sinhala conditions, clause 2 ("...අවසන් දිනය 18-Jun-2026") — NOT the officer's signature date.
+- civil_no = the vehicle number after "SUPPLY OF SPARE PARTS FOR" (e.g. 19-9915); model = the rest of that line (e.g. "Nissan Sunny FB40 Car"). naha_no = "".
+- buyer = "STF Transport Division, Kadawatha"; camp = "Kadawatha" (or the STF unit/town printed in the letterhead if different).
+- supplier = the company at the top-left, written exactly "NGRD Motors" (N.G.R.D.MOTORS / ngrdmotors@gmail.com) or "Puspha Motors".
+- ITEMS: columns NOMENCLATURE / COUNTRY / warranty / BRAND NAME / QY / PRICE. The PRICE column is the LINE TOTAL for that row (all PRICE values add up to SUB TOTAL). So total = PRICE, and unit_price = PRICE ÷ QY. Example: QY 2, PRICE 9,800.00 → qty 2, unit_price 4900, total 9800. brand = BRAND NAME, country = COUNTRY. total_amount = SUB TOTAL. Keep descriptions exactly as printed (even typos like "TID ROD").
 
 IDENTIFIERS — read character-by-character, keep EVERY slash, never shorten or guess:
 - order_no = the PURCHASE ORDER number. Navy format like WNA/APOW/PO/2026/0949 — it contains "/PO/". Labelled "Order No" / "P.O. No".
@@ -912,7 +923,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
         content=[];
         for(const f of pastedImgs){const c=await _compressImg(f);
           content.push(c.pdf?{type:'document',source:{type:'base64',media_type:'application/pdf',data:c.b64}}:{type:'image',source:{type:'base64',media_type:'image/jpeg',data:c.b64}});}
-        content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO or Army/Police/STF Job Order. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
+        content.push({type:'text',text:'The above '+pastedImgs.length+' images are ALL pages of ONE single Sri Lanka Navy PO, STF Purchase Order or Army/Police/STF Job Order. Combine every page into ONE order (all line items from all pages, vehicle block from the last page). '+PROMPT});
       } else {content=[{type:'text',text:'Sri Lanka Navy PO / Army Job Order text:\n\n'+pasteText+'\n\n'+PROMPT}];}
       const resp=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
       if(!resp.ok)throw new Error('AI fail ('+resp.status+'). மறுபடி try பண்ணு.');
@@ -1021,6 +1032,15 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     else r.order_temp=false;
     if(_armyWorkNo(r.file_no)||_armyWorkNo(r.order_no))r.service='army';
     if(r.camp&&!r.camp_name)r.camp_name=String(r.camp).trim();
+    r.service=String(r.service||'').toLowerCase().trim();
+    if(r.service!=='army'&&(r.service==='stf'||_isStf(r))){r.service='stf';
+      // STF Ref No = Promise.lk eGP ref (2026050485821)
+      if(!r.egp_ref&&_egpRefOk(r.proc_ref))r.egp_ref=String(r.proc_ref).trim();}
+    // AI line total-a unit_price-la pottaa (STF PRICE column = line total) → thiruthu
+    const its=Array.isArray(r.items)?r.items:[];const ta=Number(r.total_amount)||0;
+    if(ta>0&&its.length){const sU=its.reduce((a,x)=>a+(Number(x.unit_price)||0),0),sT=its.reduce((a,x)=>a+(Number(x.total)||0),0);
+      if(Math.abs(sU-ta)<1&&Math.abs(sT-ta)>=1&&its.some(x=>(Number(x.qty)||1)>1))
+        its.forEach(x=>{const q=Number(x.qty)||1,t=Number(x.unit_price)||0;x.total=t;x.unit_price=Math.round(t/q*100)/100;});}
     return r;
   }
   function _manualOrderModal(){
@@ -1935,10 +1955,12 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
     {code:'SEC',name:'Pothuvil (South Eastern)'},
     {code:'NNA',name:'KKS (Northern)'},
     {code:'NWC',name:'Puttalam (North Western)'},
-    {code:'CG',name:'Coast Guard'}
+    {code:'CG',name:'Coast Guard'},
+    {code:'STF',name:'STF'}
   ];
   // Army Job Order வேலை எண் = 2BN-12DIV-LV-26-LP-237 madhiri (battalion-division-...)
   function _armyWorkNo(x){return /^\d*[A-Z]{1,5}-\d+\s*DIV-/i.test(String(x||'').trim());}
+  function _isStf(o){return o.service==='stf'||/(^|\s)STF\//i.test(String(o.file_no||''))||/^STF\//i.test(String(o.order_no||''));}
   function _isArmy(o){return o.service==='army'||_armyWorkNo(o.file_no)||_armyWorkNo(o.order_no);}
   // Temp order = Army kudutha File No mattum, real Order No innum varala
   function _isTemp(o){
@@ -1963,6 +1985,7 @@ Never invent any value. If a field is missing or unreadable, use "" for text and
   }
   function _campOf(o){
     if(_isArmy(o))return _armyCampOf(o);
+    if(_isStf(o))return 'STF';
     const s=((o.order_no||'')+' '+(o.file_no||'')).toUpperCase().replace(/\s+/g,'');
     // 1) leading code wins (safest — CG/ORD/876 => Coast Guard, not a mid-string accident)
     const m=s.match(/^([A-Z]{2,4})\//);if(m){const f=_CAMPS.find(c=>c.code===m[1]);if(f)return f.name;}
